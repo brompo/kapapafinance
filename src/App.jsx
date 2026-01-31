@@ -72,13 +72,40 @@ function createLedger({
   accounts = [],
   accountTxns = [],
   categories,
-  categoryMeta
+  categoryMeta,
+  groups
 } = {}){
+  const fallbackGroups = [
+    { id: uid(), name: 'Debit', type: 'debit', collapsed: false },
+    { id: uid(), name: 'Credit', type: 'credit', collapsed: false },
+    { id: uid(), name: 'Investment', type: 'asset', collapsed: false }
+  ]
+  const normalizedGroups = Array.isArray(groups) && groups.length
+    ? groups.map(g => ({
+      id: g.id || uid(),
+      name: g.name || 'Group',
+      type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : 'debit'),
+      collapsed: !!g.collapsed
+    }))
+    : fallbackGroups
+
+  const groupById = new Map(normalizedGroups.map(g => [g.id, g]))
+  const groupByType = new Map(normalizedGroups.map(g => [g.type, g]))
+  const fallbackGroup = normalizedGroups[0]
+
+  const normalizedAccounts = (Array.isArray(accounts) ? accounts : []).map(a => {
+    if (a.groupId && groupById.has(a.groupId)) return a
+    if (a.type && groupByType.has(a.type)) {
+      return { ...a, groupId: groupByType.get(a.type).id }
+    }
+    return { ...a, groupId: fallbackGroup?.id }
+  })
+
   return {
     id,
     name,
     txns: Array.isArray(txns) ? txns : [],
-    accounts: Array.isArray(accounts) ? accounts : [],
+    accounts: normalizedAccounts,
     accountTxns: Array.isArray(accountTxns) ? accountTxns : [],
     categories: {
       expense: Array.isArray(categories?.expense)
@@ -95,7 +122,8 @@ function createLedger({
       income: categoryMeta?.income && typeof categoryMeta.income === 'object'
         ? categoryMeta.income
         : {}
-    }
+    },
+    groups: normalizedGroups
   }
 }
 
@@ -690,12 +718,20 @@ export default function App(){
       ...base
     }
 
-    await persist({
-      ...vault,
+    await persistActiveLedger({
+      ...activeLedger,
       accounts: nextAccounts,
       accountTxns: [inEntry, outEntry, ...accountTxns]
     })
     show('Transfer saved.')
+  }
+
+  async function updateAccountGroups(nextGroups){
+    await persistActiveLedger({ ...activeLedger, groups: nextGroups })
+  }
+
+  async function updateAccounts(nextAccounts){
+    await persistActiveLedger({ ...activeLedger, accounts: nextAccounts })
   }
 
   // ---------- Export/Import/Reset ----------
@@ -1664,10 +1700,13 @@ export default function App(){
         <AccountsScreen
           accounts={accounts}
           accountTxns={accountTxns}
+          groups={activeLedger.groups || []}
           onUpsertAccount={upsertAccount}
           onDeleteAccount={deleteAccount}
           onAddAccountTxn={addAccountTxn}
           onTransferAccount={transferAccount}
+          onUpdateGroups={updateAccountGroups}
+          onUpdateAccounts={updateAccounts}
         />
       )}
 

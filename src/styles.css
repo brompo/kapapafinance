@@ -166,6 +166,15 @@ label{font-size:12px;color:var(--muted)}
   color:#6b70b4;
   pointer-events:none;
 }
+.accGroupBtn{
+  border:1px solid #dfe3f4;
+  background:#f2f4ff;
+  color:#5a5fb0;
+  border-radius:999px;
+  padding:8px 12px;
+  font-weight:600;
+  cursor:pointer;
+}
 
 .fab{
   width:42px;
@@ -253,6 +262,14 @@ label{font-size:12px;color:var(--muted)}
 .sectionRight{color:#1e2232;font-weight:600}
 .sectionRight.owed{color:#e24b4b}
 .sectionCaret{color:#7b80b8;font-size:12px}
+.sectionCollapse{
+  border:none;
+  background:transparent;
+  color:#7b80b8;
+  font-size:14px;
+  cursor:pointer;
+  padding:2px 4px;
+}
 
 .list{padding:6px 10px 10px}
 .rowItem{
@@ -283,6 +300,8 @@ label{font-size:12px;color:var(--muted)}
 .rowAmount.neg{color:#e24b4b}
 .rowItem.clickable{cursor:pointer;transition:background .2s ease}
 .rowItem.clickable:hover{background:#f8f9fd}
+.rowItem.dragging{opacity:.6}
+.rowItem.dragOver{background:#f3f4ff}
 .miniBtn{
   border:1px solid #eceef6;
   background:#f7f8fc;

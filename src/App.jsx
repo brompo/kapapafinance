@@ -909,6 +909,7 @@ export default function App(){
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
     const [selectedSub, setSelectedSub] = useState('')
+    const [selectedTxn, setSelectedTxn] = useState(null)
     const budget = meta?.budget || 0
     const subcats = meta?.subs?.length ? meta.subs : (CATEGORY_SUBS[category.name] || [])
 
@@ -934,6 +935,23 @@ export default function App(){
       return Array.from(map.entries())
     }, [recentTxns])
 
+    function openTxnDetail(t){
+      setSelectedTxn({
+        id: `txn-${t.id}`,
+        date: t.date,
+        title: t.category || (t.type === 'income' ? 'Income' : 'Expense'),
+        sub: t.note || '',
+        amount: Number(t.amount || 0),
+        direction: t.type === 'income' ? 'in' : 'out',
+        type: t.type,
+        category: t.category || '',
+        accountId: t.accountId || '',
+        note: t.note || '',
+        kind: 'txn',
+        raw: t
+      })
+    }
+
     function addSubcategory(){
       const name = prompt('Subcategory name?')
       if (!name) return
@@ -946,6 +964,19 @@ export default function App(){
     function updateBudget(value){
       const nextBudget = Number(value || 0)
       onUpdateMeta?.({ budget: nextBudget, subs: subcats })
+    }
+
+    if (selectedTxn){
+      return (
+        <TransactionDetail
+          txn={selectedTxn}
+          accounts={accounts}
+          expenseCats={expenseCats}
+          incomeCats={incomeCats}
+          onSave={(next) => updateTxn(selectedTxn.raw, next)}
+          onClose={() => setSelectedTxn(null)}
+        />
+      )
     }
 
     return (
@@ -1077,7 +1108,16 @@ export default function App(){
                     {items.map(t => {
                       const acct = t.accountId && accounts.find(a => a.id === t.accountId)
                       return (
-                        <div className="catHistoryRow" key={t.id}>
+                        <div
+                          className="catHistoryRow"
+                          key={t.id}
+                          onClick={() => openTxnDetail(t)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') openTxnDetail(t)
+                          }}
+                        >
                           <div className="catHistoryIcon">{category.name.slice(0,1).toUpperCase()}</div>
                           <div className="catHistoryInfo">
                             <div className="catHistoryTitleRow">{t.note || category.name}</div>

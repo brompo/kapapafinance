@@ -47,21 +47,6 @@ export default function Accounts({
     return accounts.filter((a) => a.type === filter);
   }, [accounts, filter]);
 
-  const selected = accounts.find((a) => a.id === selectedId);
-  if (selected) {
-    return (
-      <AccountDetail
-        account={selected}
-        accounts={accounts}
-        accountTxns={accountTxns}
-        onClose={() => setSelectedId(null)}
-        onAddAccountTxn={onAddAccountTxn}
-        onTransferAccount={onTransferAccount}
-        onUpsertAccount={onUpsertAccount}
-      />
-    );
-  }
-
   const sections = useMemo(
     () => [
       {
@@ -115,6 +100,21 @@ export default function Accounts({
       return next;
     });
     setDragging(null);
+  }
+
+  const selected = accounts.find((a) => a.id === selectedId);
+  if (selected) {
+    return (
+      <AccountDetail
+        account={selected}
+        accounts={accounts}
+        accountTxns={accountTxns}
+        onClose={() => setSelectedId(null)}
+        onAddAccountTxn={onAddAccountTxn}
+        onTransferAccount={onTransferAccount}
+        onUpsertAccount={onUpsertAccount}
+      />
+    );
   }
 
   return (
@@ -227,14 +227,24 @@ function Section({
   return (
     <div
       className={`sectionCard ${isDragging ? "dragging" : ""} ${dragOver ? "dragOver" : ""}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
       <div className="sectionHead">
-        <div className="sectionTitle">{title}</div>
+        <div className="sectionTitle">
+          <button
+            className="sectionDragHandle"
+            type="button"
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
+          >
+            ≡
+          </button>
+          <span>{title}</span>
+        </div>
         <div className="sectionRightWrap">
           <div className={"sectionRight " + (isCredit ? "owed" : "")}>
             {right}

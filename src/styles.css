@@ -227,7 +227,28 @@ label{font-size:12px;color:var(--muted)}
   padding:14px;
   border-bottom:1px solid #f1f2f8;
 }
-.sectionTitle{font-weight:600;color:#5a5fb0}
+.sectionTitle{
+  font-weight:600;
+  color:#5a5fb0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.sectionDragHandle{
+  border:1px solid #e2e4f6;
+  background:#f5f6ff;
+  color:#6a6fb0;
+  width:26px;
+  height:26px;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:grab;
+  font-weight:700;
+  line-height:1;
+}
+.sectionDragHandle:active{cursor:grabbing}
 .sectionRightWrap{display:flex;align-items:center;gap:8px}
 .sectionRight{color:#1e2232;font-weight:600}
 .sectionRight.owed{color:#e24b4b}

@@ -648,8 +648,8 @@ label{font-size:12px;color:var(--muted)}
   border-color:#d8f1df;
 }
 .ledgerSummary.neg{
-  background:#fdeff0;
-  border-color:#f5d7da;
+  background:#fde3e6;
+  border-color:#f1c2c8;
 }
 .ledgerSummaryLabel{color:#8b90b2}
 .ledgerSummaryValue{font-weight:700;color:#1f2332}

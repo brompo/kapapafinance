@@ -13,14 +13,16 @@ export default function Accounts({
   const [selectedId, setSelectedId] = useState(null);
   const [dragging, setDragging] = useState(null);
   const [sectionOrder, setSectionOrder] = useState(() => {
-    const fallback = ["debit", "asset", "credit"];
+    const fallback = ["debit", "credit", "asset"];
     try {
       const raw = localStorage.getItem("accounts_section_order");
       if (!raw) return fallback;
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return fallback;
       const next = parsed.filter((t) => ["debit", "asset", "credit"].includes(t));
-      return next.length ? next : fallback;
+      if (!next.length) return fallback;
+      if (next.join(",") === "debit,asset,credit") return fallback;
+      return next;
     } catch {
       return fallback;
     }

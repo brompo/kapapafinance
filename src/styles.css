@@ -243,6 +243,14 @@ label{font-size:12px;color:var(--muted)}
   align-items:center;
   gap:8px;
 }
+.sectionTitleBtn{
+  border:none;
+  background:transparent;
+  color:#5a5fb0;
+  font-weight:600;
+  cursor:pointer;
+  padding:0;
+}
 .sectionDragHandle{
   border:1px solid #e2e4f6;
   background:#f5f6ff;
@@ -336,6 +344,11 @@ label{font-size:12px;color:var(--muted)}
   padding:8px 14px;
   font-weight:700;
   cursor:pointer;
+}
+.pillBtn.danger{
+  border-color:#f1c2c8;
+  background:#fde3e6;
+  color:#a63b45;
 }
 .accDetailCard{
   background:#eef7f0;

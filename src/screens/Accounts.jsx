@@ -20,21 +20,25 @@ export default function Accounts({
   const [dragOverAccountId, setDragOverAccountId] = useState(null);
 
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+  const visibleAccounts = useMemo(
+    () => accounts.filter((a) => !a.archived),
+    [accounts]
+  );
 
   const totals = useMemo(() => {
-    const assets = accounts
+    const assets = visibleAccounts
       .filter((a) => {
         const g = groupById.get(a.groupId);
         return g?.type === "debit" || g?.type === "asset";
       })
       .reduce((s, a) => s + Number(a.balance || 0), 0);
 
-    const liabilities = accounts
+    const liabilities = visibleAccounts
       .filter((a) => groupById.get(a.groupId)?.type === "credit")
       .reduce((s, a) => s + Number(a.balance || 0), 0);
 
     return { assets, liabilities, netWorth: assets - liabilities };
-  }, [accounts, groupById]);
+  }, [visibleAccounts, groupById]);
 
   const shownGroups = useMemo(() => {
     if (filter === "all") return groups;
@@ -109,8 +113,8 @@ export default function Accounts({
       setDragOverAccountId(null);
       return;
     }
-    const dragged = accounts.find((a) => a.id === draggingAccountId);
-    const target = accounts.find((a) => a.id === targetId);
+    const dragged = visibleAccounts.find((a) => a.id === draggingAccountId);
+    const target = visibleAccounts.find((a) => a.id === targetId);
     if (!dragged || !target || dragged.groupId !== groupId || target.groupId !== groupId) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
@@ -126,7 +130,7 @@ export default function Accounts({
 
   function handleAccountDropToGroup(groupId) {
     if (!draggingAccountId) return;
-    const dragged = accounts.find((a) => a.id === draggingAccountId);
+    const dragged = visibleAccounts.find((a) => a.id === draggingAccountId);
     if (!dragged || dragged.groupId !== groupId) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
@@ -148,18 +152,19 @@ export default function Accounts({
     onUpdateGroups?.(next);
   }
 
-  const selected = accounts.find((a) => a.id === selectedId);
+  const selected = visibleAccounts.find((a) => a.id === selectedId);
   if (selected) {
     return (
       <AccountDetail
         account={selected}
-        accounts={accounts}
+        accounts={visibleAccounts}
         groups={groups}
         accountTxns={accountTxns}
         onClose={() => setSelectedId(null)}
         onAddAccountTxn={onAddAccountTxn}
         onTransferAccount={onTransferAccount}
         onUpsertAccount={onUpsertAccount}
+        onDeleteAccount={onDeleteAccount}
       />
     );
   }
@@ -213,7 +218,7 @@ export default function Accounts({
       </div>
 
       {shownGroups.map((group) => {
-        const items = accounts.filter((a) => a.groupId === group.id);
+        const items = visibleAccounts.filter((a) => a.groupId === group.id);
         const total = items.reduce((s, a) => s + Number(a.balance || 0), 0);
         const right = group.type === "credit" ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
         const handleRenameGroup = () => {
@@ -382,6 +387,7 @@ function AccountDetail({
   onAddAccountTxn,
   onTransferAccount,
   onUpsertAccount,
+  onDeleteAccount,
 }) {
   const [mode, setMode] = useState("adjust"); // adjust | transfer
   const [direction, setDirection] = useState("out"); // in | out
@@ -445,6 +451,22 @@ function AccountDetail({
     setNote("");
   }
 
+  function handleDelete() {
+    const hasTxns = accountTxns.some((t) => t.accountId === account.id);
+    if (!hasTxns) {
+      if (!confirm("Delete this account?")) return;
+      onDeleteAccount?.(account.id);
+      onClose();
+      return;
+    }
+    const ok = confirm(
+      "This account has transactions. You can't delete it unless you remove the transactions first. Archive instead?"
+    );
+    if (!ok) return;
+    onUpsertAccount?.({ ...account, archived: true });
+    onClose();
+  }
+
   function handleEdit() {
     const name = prompt("Rename account?", account.name);
     if (!name) return;
@@ -469,9 +491,14 @@ function AccountDetail({
           ✕
         </button>
         <div className="accDetailTitle">{account.name}</div>
-        <button className="pillBtn" onClick={handleEdit}>
-          Edit
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="pillBtn" onClick={handleEdit}>
+            Edit
+          </button>
+          <button className="pillBtn danger" onClick={handleDelete}>
+            Delete
+          </button>
+        </div>
       </div>
 
       <div className="accDetailCard">

@@ -431,8 +431,12 @@ export default function App(){
   const incomeCats = categories.income || [...DEFAULT_INCOME_CATEGORIES]
 
   function persistActiveLedger(nextLedger){
-    const nextLedgers = ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
-    persist({ ...vault, ledgers: nextLedgers, activeLedgerId: activeLedger.id })
+    const hasActive = ledgers.some(l => l.id === activeLedger.id)
+    const nextLedgers = hasActive
+      ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
+      : [...ledgers, nextLedger]
+    const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
+    persist({ ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId })
   }
 
   function handleAddLedger(){

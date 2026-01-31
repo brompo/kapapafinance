@@ -63,7 +63,7 @@ export default function Accounts({
       },
       {
         type: "asset",
-        title: "Assets",
+        title: "Investment",
         right: `Bal. ${fmtTZS(
           accounts
             .filter((a) => a.type === "asset")
@@ -133,7 +133,7 @@ export default function Accounts({
             >
               <option value="all">All</option>
               <option value="debit">Debit</option>
-              <option value="asset">Assets</option>
+              <option value="asset">Investment</option>
               <option value="credit">Credit</option>
             </select>
             <span className="accFilterCaret">▾</span>
@@ -145,7 +145,7 @@ export default function Accounts({
               const name = prompt("Account name?");
               if (!name) return;
               const type = prompt(
-                'Type "debit", "credit", or "asset"?',
+                'Type "debit", "credit", or "asset" (investment)?',
                 "debit"
               );
               if (
@@ -177,7 +177,7 @@ export default function Accounts({
 
         <div className="netBottom">
           <div className="netMini">
-            <div className="miniLabel">Assets</div>
+            <div className="miniLabel">Investment</div>
             <div className="miniValue">{fmtTZS(totals.assets)}</div>
           </div>
           <div className="netMini">

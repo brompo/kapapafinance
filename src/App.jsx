@@ -65,7 +65,61 @@ function uid(){
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
 
+function createLedger({
+  id = uid(),
+  name = 'Personal',
+  txns = [],
+  accounts = [],
+  accountTxns = [],
+  categories,
+  categoryMeta
+} = {}){
+  return {
+    id,
+    name,
+    txns: Array.isArray(txns) ? txns : [],
+    accounts: Array.isArray(accounts) ? accounts : [],
+    accountTxns: Array.isArray(accountTxns) ? accountTxns : [],
+    categories: {
+      expense: Array.isArray(categories?.expense)
+        ? categories.expense
+        : [...DEFAULT_EXPENSE_CATEGORIES],
+      income: Array.isArray(categories?.income)
+        ? categories.income
+        : [...DEFAULT_INCOME_CATEGORIES]
+    },
+    categoryMeta: {
+      expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object'
+        ? categoryMeta.expense
+        : {},
+      income: categoryMeta?.income && typeof categoryMeta.income === 'object'
+        ? categoryMeta.income
+        : {}
+    }
+  }
+}
+
+function normalizeLedger(data){
+  if (!data || typeof data !== 'object') return createLedger()
+  return createLedger({
+    id: data.id || uid(),
+    name: data.name || 'Personal',
+    txns: data.txns,
+    accounts: data.accounts,
+    accountTxns: data.accountTxns,
+    categories: data.categories,
+    categoryMeta: data.categoryMeta
+  })
+}
+
 function isVaultEmpty(v){
+  if (Array.isArray(v?.ledgers) && v.ledgers.length > 0){
+    return v.ledgers.every(l =>
+      (!l.txns || l.txns.length === 0) &&
+      (!l.accounts || l.accounts.length === 0) &&
+      (!l.accountTxns || l.accountTxns.length === 0)
+    )
+  }
   return (
     (!v.txns || v.txns.length === 0) &&
     (!v.accounts || v.accounts.length === 0) &&
@@ -84,7 +138,8 @@ function getSeedVault(){
   const ruthId = uid()
   const lottusId = uid()
 
-  return {
+  const ledger = createLedger({
+    name: 'Personal',
     txns: [],
     accounts: [
       { id: selcomId, name: 'Selcom Bank', type: 'debit', balance: 150000 },
@@ -137,78 +192,60 @@ function getSeedVault(){
         Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }])
       ),
       income: {}
-    },
-    settings: {
-      pinLockEnabled: false
     }
+  })
+
+  return {
+    ledgers: [ledger],
+    activeLedgerId: ledger.id,
+    settings: { pinLockEnabled: false }
   }
 }
 
 // We now store an object in the encrypted vault (not just an array)
-// { txns: [], accounts: [], accountTxns: [], categories: { expense: [], income: [] }, categoryMeta: { expense: {}, income: {} }, settings: { pinLockEnabled: false } }
+// { ledgers: [{...}], activeLedgerId: '', settings: { pinLockEnabled: false } }
 function normalizeVault(data){
   if (!data) {
+    const ledger = createLedger()
     return {
-      txns: [],
-      accounts: [],
-      accountTxns: [],
-      categories: {
-        expense: [...DEFAULT_EXPENSE_CATEGORIES],
-        income: [...DEFAULT_INCOME_CATEGORIES]
-      },
-      categoryMeta: {
-        expense: {},
-        income: {}
-      },
-      settings: {
-        pinLockEnabled: false
-      }
+      ledgers: [ledger],
+      activeLedgerId: ledger.id,
+      settings: { pinLockEnabled: false }
     }
   }
 
   // Backward compatibility: if old vault is an array, treat it as txns
   if (Array.isArray(data)) {
+    const ledger = createLedger({ txns: data })
     return {
-      txns: data,
-      accounts: [],
-      accountTxns: [],
-      categories: {
-        expense: [...DEFAULT_EXPENSE_CATEGORIES],
-        income: [...DEFAULT_INCOME_CATEGORIES]
-      },
-      categoryMeta: {
-        expense: {},
-        income: {}
-      },
-      settings: {
-        pinLockEnabled: false
-      }
+      ledgers: [ledger],
+      activeLedgerId: ledger.id,
+      settings: { pinLockEnabled: false }
     }
   }
 
-  return {
-    txns: Array.isArray(data.txns) ? data.txns : [],
-    accounts: Array.isArray(data.accounts) ? data.accounts : [],
-    accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    categories: {
-      expense: Array.isArray(data.categories?.expense)
-        ? data.categories.expense
-        : [...DEFAULT_EXPENSE_CATEGORIES],
-      income: Array.isArray(data.categories?.income)
-        ? data.categories.income
-        : [...DEFAULT_INCOME_CATEGORIES]
-    },
-    categoryMeta: {
-      expense: data.categoryMeta?.expense && typeof data.categoryMeta.expense === 'object'
-        ? data.categoryMeta.expense
-        : {},
-      income: data.categoryMeta?.income && typeof data.categoryMeta.income === 'object'
-        ? data.categoryMeta.income
-        : {}
-    },
-    settings: {
-      pinLockEnabled: !!data.settings?.pinLockEnabled
+  if (Array.isArray(data.ledgers)) {
+    const ledgers = data.ledgers.length ? data.ledgers.map(l => normalizeLedger(l)) : [createLedger()]
+    const activeLedgerId = ledgers.find(l => l.id === data.activeLedgerId)?.id || ledgers[0]?.id || ''
+    return {
+      ledgers,
+      activeLedgerId,
+      settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
     }
+  }
+
+  const legacyLedger = createLedger({
+    txns: data.txns,
+    accounts: data.accounts,
+    accountTxns: data.accountTxns,
+    categories: data.categories,
+    categoryMeta: data.categoryMeta
+  })
+
+  return {
+    ledgers: [legacyLedger],
+    activeLedgerId: legacyLedger.id,
+    settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
   }
 }
 
@@ -220,23 +257,9 @@ export default function App(){
   const [pin, setPin] = useState('')
   const [pin2, setPin2] = useState('')
   const [toast, setToast] = useState('')
+  const [showLedgerPicker, setShowLedgerPicker] = useState(false)
 
-  const [vault, setVaultState] = useState({
-    txns: [],
-    accounts: [],
-    accountTxns: [],
-    categories: {
-      expense: [...DEFAULT_EXPENSE_CATEGORIES],
-      income: [...DEFAULT_INCOME_CATEGORIES]
-    },
-    categoryMeta: {
-      expense: {},
-      income: {}
-    },
-    settings: {
-      pinLockEnabled: false
-    }
-  })
+  const [vault, setVaultState] = useState(() => normalizeVault(null))
 
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0,7))
   const [form, setForm] = useState({
@@ -361,19 +384,52 @@ export default function App(){
     }
   }
 
+  const settings = vault.settings || { pinLockEnabled: false }
+  const ledgers = vault.ledgers || []
+  const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
+  const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
+
   // ---------- Transactions ----------
-  const txns = vault.txns
-  const accounts = vault.accounts
-  const accountTxns = vault.accountTxns
-  const categories = vault.categories || {
+  const txns = activeLedger.txns || []
+  const accounts = activeLedger.accounts || []
+  const accountTxns = activeLedger.accountTxns || []
+  const categories = activeLedger.categories || {
     expense: [...DEFAULT_EXPENSE_CATEGORIES],
     income: [...DEFAULT_INCOME_CATEGORIES]
   }
-  const categoryMeta = vault.categoryMeta || { expense: {}, income: {} }
-  const settings = vault.settings || { pinLockEnabled: false }
+  const categoryMeta = activeLedger.categoryMeta || { expense: {}, income: {} }
 
   const expenseCats = categories.expense || [...DEFAULT_EXPENSE_CATEGORIES]
   const incomeCats = categories.income || [...DEFAULT_INCOME_CATEGORIES]
+
+  function persistActiveLedger(nextLedger){
+    const nextLedgers = ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
+    persist({ ...vault, ledgers: nextLedgers, activeLedgerId: activeLedger.id })
+  }
+
+  function handleAddLedger(){
+    const name = prompt('Ledger name?')
+    if (!name) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const nextLedger = createLedger({ name: trimmed })
+    persist({
+      ...vault,
+      ledgers: [...ledgers, nextLedger],
+      activeLedgerId: nextLedger.id
+    })
+    setShowLedgerPicker(false)
+  }
+
+  function handleSelectLedger(id){
+    if (!id || id === activeLedger.id) {
+      setShowLedgerPicker(false)
+      return
+    }
+    persist({ ...vault, activeLedgerId: id })
+    setSelectedCategory(null)
+    setShowLedgerPicker(false)
+  }
 
   function formatMonthLabel(value){
     const d = new Date(`${value}-01`)
@@ -453,7 +509,7 @@ export default function App(){
       }
     }
 
-    await persist({ ...vault, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
+    await persistActiveLedger({ ...activeLedger, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
     setForm(f => ({...f, amount:'', note:'', date: todayISO()}))
     show('Saved.')
   }
@@ -498,7 +554,7 @@ export default function App(){
       }
     }
 
-    await persist({ ...vault, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
+    await persistActiveLedger({ ...activeLedger, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
     show('Saved.')
   }
 
@@ -558,7 +614,7 @@ export default function App(){
 
   async function delTxn(id){
     const next = txns.filter(t => t.id !== id)
-    await persist({ ...vault, txns: next })
+    await persistActiveLedger({ ...activeLedger, txns: next })
     show('Deleted.')
   }
 
@@ -569,14 +625,14 @@ export default function App(){
     const idx = next.findIndex(a => a.id === acc.id)
     if (idx >= 0) next[idx] = { ...next[idx], ...acc }
     else next.unshift(acc)
-    await persist({ ...vault, accounts: next })
+    await persistActiveLedger({ ...activeLedger, accounts: next })
     show('Account saved.')
   }
 
   async function deleteAccount(id){
     const next = accounts.filter(a => a.id !== id)
     const nextAccountTxns = accountTxns.filter(t => t.accountId !== id)
-    await persist({ ...vault, accounts: next, accountTxns: nextAccountTxns })
+    await persistActiveLedger({ ...activeLedger, accounts: next, accountTxns: nextAccountTxns })
     show('Account deleted.')
   }
 
@@ -600,7 +656,7 @@ export default function App(){
       date: todayISO()
     }
 
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })
+    await persistActiveLedger({ ...activeLedger, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })
     show('Saved.')
   }
 
@@ -667,21 +723,10 @@ export default function App(){
       importEncryptedBackup(text)
       show('Imported. Unlock with your PIN.')
       setStage('unlock')
+              const fresh = normalizeVault(null)
               setVaultState({
-                txns: [],
-                accounts: [],
-                accountTxns: [],
-                categories: {
-                  expense: [...DEFAULT_EXPENSE_CATEGORIES],
-                  income: [...DEFAULT_INCOME_CATEGORIES]
-                },
-                categoryMeta: {
-                  expense: {},
-                  income: {}
-                },
-                settings: {
-                  pinLockEnabled: settings.pinLockEnabled
-                }
+                ...fresh,
+                settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
               })
     } catch(e){
       show(e.message || 'Import failed.')
@@ -694,22 +739,7 @@ export default function App(){
     localStorage.removeItem(SEED_KEY)
     localStorage.setItem(PIN_FLOW_KEY, 'false')
     setPin(''); setPin2('')
-    setVaultState({
-      txns: [],
-      accounts: [],
-      accountTxns: [],
-      categories: {
-        expense: [...DEFAULT_EXPENSE_CATEGORIES],
-        income: [...DEFAULT_INCOME_CATEGORIES]
-      },
-      categoryMeta: {
-        expense: {},
-        income: {}
-      },
-      settings: {
-        pinLockEnabled: false
-      }
-    })
+    setVaultState(normalizeVault(null))
     setStage('setpin')
     show('Reset complete.')
   }
@@ -766,7 +796,7 @@ export default function App(){
           [trimmed]: { budget: 0, subs: [] }
         }
       }
-      persist({ ...vault, categories: nextCategories, categoryMeta: nextMeta })
+      persistActiveLedger({ ...activeLedger, categories: nextCategories, categoryMeta: nextMeta })
     }
 
     if (selectedCategory){
@@ -797,7 +827,7 @@ export default function App(){
                 [selectedCategory.name]: next
               }
             }
-            persist({ ...vault, categoryMeta: nextMeta })
+            persistActiveLedger({ ...activeLedger, categoryMeta: nextMeta })
           }}
         />
       )
@@ -806,8 +836,8 @@ export default function App(){
     return (
       <div className="ledgerScreen">
         <div className="ledgerHeader">
-          <button className="ledgerGhost" type="button">
-            Personal ▾
+          <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
+            {activeLedger.name || 'Personal'} ▾
           </button>
           <div className="ledgerPeriod">
             <button className="ledgerNavBtn" onClick={() => shiftMonth(-1)} type="button">
@@ -829,6 +859,30 @@ export default function App(){
           <div className="ledgerSummaryValue">{fmtTZS(kpis.inc - kpis.exp)}</div>
           <span className="ledgerSummaryCaret">▾</span>
         </div>
+
+        {showLedgerPicker && (
+          <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+            <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+              <div className="ledgerPickerTitle">Ledgers</div>
+              <div className="ledgerPickerList">
+                {ledgers.map(l => (
+                  <button
+                    key={l.id}
+                    className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => handleSelectLedger(l.id)}
+                  >
+                    <span className="ledgerPickerName">{l.name}</span>
+                    {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                  </button>
+                ))}
+              </div>
+              <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
+                + Add Ledger
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="ledgerSection">
           <div className="ledgerSectionHead">
@@ -1513,21 +1567,10 @@ export default function App(){
                 return
               }
               setStage('unlock')
+              const fresh = normalizeVault(null)
               setVaultState({
-                txns: [],
-                accounts: [],
-                accountTxns: [],
-                categories: {
-                  expense: [...DEFAULT_EXPENSE_CATEGORIES],
-                  income: [...DEFAULT_INCOME_CATEGORIES]
-                },
-                categoryMeta: {
-                  expense: {},
-                  income: {}
-                },
-                settings: {
-                  pinLockEnabled: settings.pinLockEnabled
-                }
+                ...fresh,
+                settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
               })
               show('Locked.')
             }}

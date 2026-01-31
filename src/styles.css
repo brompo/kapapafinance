@@ -682,6 +682,58 @@ label{font-size:12px;color:var(--muted)}
 .ledgerSummaryValue{font-weight:700;color:#1f2332}
 .ledgerSummaryCaret{color:#9aa0bf}
 
+.ledgerPickerBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(12,16,32,.28);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:90px 16px 16px;
+  z-index:40;
+}
+.ledgerPickerCard{
+  width:100%;
+  max-width:360px;
+  background:#fff;
+  border:1px solid #eceef6;
+  border-radius:18px;
+  box-shadow:0 12px 28px rgba(20,24,50,.18);
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.ledgerPickerTitle{font-weight:700;color:#1f2332;padding:4px 6px}
+.ledgerPickerList{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.ledgerPickerItem{
+  border:1px solid #eceef6;
+  background:#f8f9ff;
+  color:#2b2f4e;
+  border-radius:12px;
+  padding:10px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  cursor:pointer;
+  font-weight:600;
+}
+.ledgerPickerItem.active{
+  background:#eef0ff;
+  border-color:#d9ddff;
+}
+.ledgerPickerName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ledgerPickerCheck{color:#5a5fb0;font-weight:700}
+.ledgerPickerAdd{
+  border:1px dashed #d9dcec;
+  background:#f9faff;
+  color:#5a5fb0;
+  border-radius:12px;
+  padding:10px 12px;
+  cursor:pointer;
+  font-weight:600;
+}
+
 .ledgerSection{display:flex;flex-direction:column;gap:10px}
 .ledgerSectionHead{
   display:flex;align-items:center;justify-content:space-between;

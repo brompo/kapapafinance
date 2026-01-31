@@ -824,15 +824,17 @@ export default function App(){
           </div>
         </div>
 
-        <div className="ledgerSummary">
-          <div className="ledgerSummaryLabel">Expense</div>
-          <div className="ledgerSummaryValue">{fmtTZS(kpis.exp)}</div>
+        <div className={`ledgerSummary ${kpis.inc - kpis.exp < 0 ? 'neg' : 'pos'}`}>
+          <div className="ledgerSummaryLabel">Balance</div>
+          <div className="ledgerSummaryValue">{fmtTZS(kpis.inc - kpis.exp)}</div>
           <span className="ledgerSummaryCaret">▾</span>
         </div>
 
         <div className="ledgerSection">
           <div className="ledgerSectionHead">
-            <div className="ledgerSectionTitle">Expense Categories</div>
+            <div className="ledgerSectionTitle">
+              Expenses <span className="ledgerSectionTotal">{fmtTZS(kpis.exp)}</span>
+            </div>
             <button className="ledgerAddBtn" onClick={() => addCategory('expense')} type="button">
               + Add
             </button>
@@ -871,7 +873,9 @@ export default function App(){
 
         <div className="ledgerSection">
           <div className="ledgerSectionHead">
-            <div className="ledgerSectionTitle">Income Categories</div>
+            <div className="ledgerSectionTitle">
+              Income <span className="ledgerSectionTotal">{fmtTZS(kpis.inc)}</span>
+            </div>
             <button className="ledgerAddBtn" onClick={() => addCategory('income')} type="button">
               + Add
             </button>

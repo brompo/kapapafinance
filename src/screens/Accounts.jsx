@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fmtTZS } from "../money.js";
 
 export default function Accounts({
@@ -11,6 +11,24 @@ export default function Accounts({
 }) {
   const [filter, setFilter] = useState("all"); // all | debit | credit | asset
   const [selectedId, setSelectedId] = useState(null);
+  const [dragging, setDragging] = useState(null);
+  const [sectionOrder, setSectionOrder] = useState(() => {
+    const fallback = ["debit", "asset", "credit"];
+    try {
+      const raw = localStorage.getItem("accounts_section_order");
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return fallback;
+      const next = parsed.filter((t) => ["debit", "asset", "credit"].includes(t));
+      return next.length ? next : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("accounts_section_order", JSON.stringify(sectionOrder));
+  }, [sectionOrder]);
 
   const totals = useMemo(() => {
     const assets = accounts
@@ -42,6 +60,61 @@ export default function Accounts({
         onUpsertAccount={onUpsertAccount}
       />
     );
+  }
+
+  const sections = useMemo(
+    () => [
+      {
+        type: "debit",
+        title: "Debit",
+        right: `Bal. ${fmtTZS(
+          accounts
+            .filter((a) => a.type === "debit")
+            .reduce((s, a) => s + Number(a.balance || 0), 0)
+        )}`,
+        items: shown.filter((a) => a.type === "debit"),
+      },
+      {
+        type: "asset",
+        title: "Assets",
+        right: `Bal. ${fmtTZS(
+          accounts
+            .filter((a) => a.type === "asset")
+            .reduce((s, a) => s + Number(a.balance || 0), 0)
+        )}`,
+        items: shown.filter((a) => a.type === "asset"),
+      },
+      {
+        type: "credit",
+        title: "Credit",
+        right: `Owed ${fmtTZS(
+          accounts
+            .filter((a) => a.type === "credit")
+            .reduce((s, a) => s + Number(a.balance || 0), 0)
+        )}`,
+        items: shown.filter((a) => a.type === "credit"),
+        isCredit: true,
+      },
+    ],
+    [accounts, shown]
+  );
+
+  function handleDragStart(type) {
+    setDragging(type);
+  }
+
+  function handleDrop(type) {
+    if (!dragging || dragging === type) {
+      setDragging(null);
+      return;
+    }
+    setSectionOrder((order) => {
+      const next = order.filter((t) => t !== dragging);
+      const targetIndex = next.indexOf(type);
+      next.splice(targetIndex, 0, dragging);
+      return next;
+    });
+    setDragging(null);
   }
 
   return (
@@ -112,49 +185,54 @@ export default function Accounts({
         </div>
       </div>
 
-      <Section
-        title="Debit"
-        right={`Bal. ${fmtTZS(
-          accounts
-            .filter((a) => a.type === "debit")
-            .reduce((s, a) => s + Number(a.balance || 0), 0)
-        )}`}
-        items={shown.filter((a) => a.type === "debit")}
-        onDeleteAccount={onDeleteAccount}
-        onSelectAccount={(id) => setSelectedId(id)}
-      />
-
-      <Section
-        title="Assets"
-        right={`Bal. ${fmtTZS(
-          accounts
-            .filter((a) => a.type === "asset")
-            .reduce((s, a) => s + Number(a.balance || 0), 0)
-        )}`}
-        items={shown.filter((a) => a.type === "asset")}
-        onDeleteAccount={onDeleteAccount}
-        onSelectAccount={(id) => setSelectedId(id)}
-      />
-
-      <Section
-        title="Credit"
-        right={`Owed ${fmtTZS(
-          accounts
-            .filter((a) => a.type === "credit")
-            .reduce((s, a) => s + Number(a.balance || 0), 0)
-        )}`}
-        items={shown.filter((a) => a.type === "credit")}
-        onDeleteAccount={onDeleteAccount}
-        onSelectAccount={(id) => setSelectedId(id)}
-        isCredit
-      />
+      {sectionOrder.map((key) => {
+        const section = sections.find((s) => s.type === key);
+        if (!section) return null;
+        return (
+          <Section
+            key={section.type}
+            title={section.title}
+            right={section.right}
+            items={section.items}
+            onDeleteAccount={onDeleteAccount}
+            onSelectAccount={(id) => setSelectedId(id)}
+            isCredit={section.isCredit}
+            isDragging={dragging === section.type}
+            dragOver={dragging && dragging !== section.type}
+            onDragStart={() => handleDragStart(section.type)}
+            onDragEnd={() => setDragging(null)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleDrop(section.type)}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function Section({ title, right, items, onDeleteAccount, onSelectAccount, isCredit }) {
+function Section({
+  title,
+  right,
+  items,
+  onDeleteAccount,
+  onSelectAccount,
+  isCredit,
+  isDragging,
+  dragOver,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}) {
   return (
-    <div className="sectionCard">
+    <div
+      className={`sectionCard ${isDragging ? "dragging" : ""} ${dragOver ? "dragOver" : ""}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <div className="sectionHead">
         <div className="sectionTitle">{title}</div>
         <div className="sectionRightWrap">

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   hasPin,
   setNewPin,
@@ -213,7 +213,7 @@ function getSeedVault(){
       let groupId = GROUP_IDS.debit
       if (a.type === 'credit') groupId = GROUP_IDS.credit
       else if (a.type === 'asset') groupId = a.id === realEstateId ? GROUP_IDS.realEstate : GROUP_IDS.shares
-      return { ...a, groupType: a.type, groupId }
+      return { ...a, groupType: a.type, groupId, ledgerId: ledger.id }
     }),
     accountTxns: [
       {
@@ -438,8 +438,41 @@ export default function App(){
   const ledgers = vault.ledgers || []
   const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
   const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
-  const accounts = normalizeAccountsWithGroups(vault.accounts, activeLedger.groups)
-  const accountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
+  const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
+  const normalizedActiveAccounts = normalizeAccountsWithGroups(
+    rawAccounts.filter(a => a.ledgerId === activeLedger.id),
+    activeLedger.groups
+  )
+  const normalizedById = useMemo(
+    () => new Map(normalizedActiveAccounts.map(a => [a.id, a])),
+    [normalizedActiveAccounts]
+  )
+  const allAccounts = rawAccounts.map(a => normalizedById.get(a.id) || a)
+  const allAccountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
+  const ledgerAccountIds = useMemo(
+    () => new Set(allAccounts.filter(a => a.ledgerId === activeLedger.id).map(a => a.id)),
+    [allAccounts, activeLedger.id]
+  )
+  const accounts = normalizedActiveAccounts
+  const accountTxns = allAccountTxns.filter(t => ledgerAccountIds.has(t.accountId))
+
+  const didMigrateLedgerIds = useRef(false)
+  useEffect(() => {
+    if (didMigrateLedgerIds.current) return
+    const needs = allAccounts.some(a => !a.ledgerId)
+    if (!needs) return
+    didMigrateLedgerIds.current = true
+    const nextAccounts = allAccounts.map(a => (
+      a.ledgerId ? a : {
+        ...a,
+        ledgerId: activeLedger.id,
+        subAccounts: Array.isArray(a.subAccounts)
+          ? a.subAccounts.map(s => ({ ...s, ledgerId: activeLedger.id }))
+          : a.subAccounts
+      }
+    ))
+    persist({ ...vault, accounts: nextAccounts })
+  }, [allAccounts, activeLedger.id, vault])
 
   // ---------- Transactions ----------
   const txns = activeLedger.txns || []
@@ -471,8 +504,8 @@ export default function App(){
       ...vault,
       ledgers: nextLedgers,
       activeLedgerId: nextActiveId,
-      accounts: nextAccounts ?? accounts,
-      accountTxns: nextAccountTxns ?? accountTxns
+      accounts: nextAccounts ?? allAccounts,
+      accountTxns: nextAccountTxns ?? allAccountTxns
     })
   }
 
@@ -552,16 +585,16 @@ export default function App(){
       accountId: form.accountId || ''
     }
 
-    let nextAccounts = accounts
-    let nextAccountTxns = accountTxns
+    let nextAccounts = allAccounts
+    let nextAccountTxns = allAccountTxns
     if (t.accountId){
-      const acct = accounts.find(a => a.id === t.accountId || a.name === t.accountId)
+      const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId)
       if (acct){
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
         const targetSubId = subs.length ? subs[0]?.id : null
-        nextAccounts = accounts.map(a => {
+        nextAccounts = allAccounts.map(a => {
           if (a.id !== targetId) return a
           if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
           const nextSubs = subs.map(s => (
@@ -580,7 +613,7 @@ export default function App(){
           note: t.note || t.category,
           date: t.date
         }
-        nextAccountTxns = [entry, ...accountTxns]
+        nextAccountTxns = [entry, ...allAccountTxns]
       } else {
         show('Account not found for this transaction.')
       }
@@ -609,16 +642,16 @@ export default function App(){
       accountId: accountId || ''
     }
 
-    let nextAccounts = accounts
-    let nextAccountTxns = accountTxns
+    let nextAccounts = allAccounts
+    let nextAccountTxns = allAccountTxns
     if (t.accountId){
-      const acct = accounts.find(a => a.id === t.accountId || a.name === t.accountId)
+      const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId)
       if (acct){
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
         const targetSubId = subs.length ? subs[0]?.id : null
-        nextAccounts = accounts.map(a => {
+        nextAccounts = allAccounts.map(a => {
           if (a.id !== targetId) return a
           if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
           const nextSubs = subs.map(s => (
@@ -637,7 +670,7 @@ export default function App(){
           note: t.note || t.category,
           date: t.date
         }
-        nextAccountTxns = [entry, ...accountTxns]
+        nextAccountTxns = [entry, ...allAccountTxns]
       } else {
         show('Account not found for this transaction.')
       }
@@ -653,13 +686,13 @@ export default function App(){
 
   function findAccountByIdOrName(idOrName){
     if (!idOrName) return null
-    return accounts.find(a => a.id === idOrName || a.name === idOrName) || null
+    return allAccounts.find(a => a.id === idOrName || a.name === idOrName) || null
   }
 
   async function updateTxn(original, next){
     const nextTxns = txns.map(t => (t.id === original.id ? next : t))
 
-    let nextAccounts = accounts
+    let nextAccounts = allAccounts
     const oldAccount = findAccountByIdOrName(original.accountId)
     const newAccount = findAccountByIdOrName(next.accountId)
 
@@ -691,7 +724,10 @@ export default function App(){
       })
     }
 
-    const nonTxnEntries = accountTxns.filter(t => t.kind !== 'txn')
+    const nonTxnEntries = allAccountTxns.filter(t => t.kind !== 'txn')
+    const otherTxnEntries = allAccountTxns.filter(
+      t => t.kind === 'txn' && !ledgerAccountIds.has(t.accountId)
+    )
     const txnEntries = nextTxns
       .filter(t => t.accountId)
       .map(t => {
@@ -716,7 +752,7 @@ export default function App(){
     persistLedgerAndAccounts({
       nextLedger: { ...activeLedger, txns: nextTxns },
       nextAccounts,
-      nextAccountTxns: [...txnEntries, ...nonTxnEntries]
+      nextAccountTxns: [...txnEntries, ...otherTxnEntries, ...nonTxnEntries]
     })
     show('Updated.')
   }
@@ -730,17 +766,18 @@ export default function App(){
   // ---------- Accounts ----------
 
   async function upsertAccount(acc){
-    const next = [...accounts]
-    const idx = next.findIndex(a => a.id === acc.id)
-    if (idx >= 0) next[idx] = { ...next[idx], ...acc }
-    else next.unshift(acc)
+    const normalized = acc.ledgerId ? acc : { ...acc, ledgerId: activeLedger.id }
+    const next = [...allAccounts]
+    const idx = next.findIndex(a => a.id === normalized.id)
+    if (idx >= 0) next[idx] = { ...next[idx], ...normalized }
+    else next.unshift(normalized)
     await persist({ ...vault, accounts: next })
     show('Account saved.')
   }
 
   async function deleteAccount(id){
-    const next = accounts.filter(a => a.id !== id)
-    const nextAccountTxns = accountTxns.filter(t => t.accountId !== id)
+    const next = allAccounts.filter(a => a.id !== id)
+    const nextAccountTxns = allAccountTxns.filter(t => t.accountId !== id)
     await persist({ ...vault, accounts: next, accountTxns: nextAccountTxns })
     show('Account deleted.')
   }
@@ -758,14 +795,14 @@ export default function App(){
     receiveDate = null,
     interestStartDate = null
   }){
-    const acct = accounts.find(a => a.id === accountId)
+    const acct = allAccounts.find(a => a.id === accountId)
     if (!acct) return
 
     const delta = direction === 'in' ? amount : -amount
     const subAccounts = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
     const targetSubId = subAccounts.length ? (subAccountId || subAccounts[0]?.id) : null
 
-    const nextAccounts = accounts.map(a => {
+    const nextAccounts = allAccounts.map(a => {
       if (a.id !== accountId) return a
       if (!subAccounts.length) return { ...a, balance: Number(a.balance || 0) + delta }
       const nextSubs = subAccounts.map(s => (
@@ -790,7 +827,7 @@ export default function App(){
       interestStartDate
     }
 
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...allAccountTxns] })
     show('Saved.')
   }
 
@@ -807,33 +844,33 @@ export default function App(){
   }
 
   async function deleteAccountTxn(entryId){
-    const entry = accountTxns.find(t => t.id === entryId)
+    const entry = allAccountTxns.find(t => t.id === entryId)
     if (!entry) return
     let targets = [entry]
     if (entry.kind === 'transfer') {
       const baseId = entry.id.replace(/-(in|out)$/, '')
-      targets = accountTxns.filter(t => t.kind === 'transfer' && t.id.startsWith(baseId))
+      targets = allAccountTxns.filter(t => t.kind === 'transfer' && t.id.startsWith(baseId))
     }
-    let nextAccounts = accounts
+    let nextAccounts = allAccounts
     for (const t of targets){
       const delta = t.direction === 'in' ? -Number(t.amount || 0) : Number(t.amount || 0)
       nextAccounts = applyAccountDelta(nextAccounts, t.accountId, t.subAccountId, delta)
     }
     const idsToRemove = new Set(targets.map(t => t.id))
-    const nextAccountTxns = accountTxns.filter(t => !idsToRemove.has(t.id))
+    const nextAccountTxns = allAccountTxns.filter(t => !idsToRemove.has(t.id))
     await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
     show('Deleted.')
   }
 
   async function updateAccountTxn(entryId, next){
-    const entry = accountTxns.find(t => t.id === entryId)
+    const entry = allAccountTxns.find(t => t.id === entryId)
     if (!entry) return
     const oldAmt = Number(entry.amount || 0)
     const newAmt = Number(next.amount || 0)
     if (!newAmt || newAmt <= 0) return
     const delta = entry.direction === 'in' ? (newAmt - oldAmt) : -(newAmt - oldAmt)
-    let nextAccounts = applyAccountDelta(accounts, entry.accountId, entry.subAccountId, delta)
-    const nextAccountTxns = accountTxns.map(t => (
+    let nextAccounts = applyAccountDelta(allAccounts, entry.accountId, entry.subAccountId, delta)
+    const nextAccountTxns = allAccountTxns.map(t => (
       t.id === entryId ? { ...t, ...next } : t
     ))
     await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
@@ -841,8 +878,8 @@ export default function App(){
   }
 
   async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }){
-    const from = accounts.find(a => a.id === fromId)
-    const to = accounts.find(a => a.id === toId)
+    const from = allAccounts.find(a => a.id === fromId)
+    const to = allAccounts.find(a => a.id === toId)
     if (!from || !to) return
     if (fromId === toId && fromSubAccountId === toSubAccountId) return
 
@@ -851,7 +888,7 @@ export default function App(){
     const resolvedFromSub = fromSubs.length ? (fromSubAccountId || fromSubs[0]?.id) : null
     const resolvedToSub = toSubs.length ? (toSubAccountId || toSubs[0]?.id) : null
 
-    const nextAccounts = accounts.map(a => {
+    const nextAccounts = allAccounts.map(a => {
       if (a.id === fromId) {
         if (!fromSubs.length) return { ...a, balance: Number(a.balance || 0) - amount }
         const nextSubs = fromSubs.map(s => (
@@ -890,7 +927,7 @@ export default function App(){
       ...base
     }
 
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: [inEntry, outEntry, ...accountTxns] })
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: [inEntry, outEntry, ...allAccountTxns] })
     show('Transfer saved.')
   }
 
@@ -899,7 +936,9 @@ export default function App(){
   }
 
   async function updateAccounts(nextAccounts){
-    await persist({ ...vault, accounts: nextAccounts })
+    const activeIds = new Set(accounts.map(a => a.id))
+    const otherAccounts = allAccounts.filter(a => !activeIds.has(a.id))
+    await persist({ ...vault, accounts: [...nextAccounts, ...otherAccounts] })
   }
 
   // ---------- Export/Import/Reset ----------
@@ -1620,8 +1659,8 @@ export default function App(){
       <div className="txScreen">
         <div className="txHeader">
           <div className="txLeft">
-            <button className="txGhost" type="button">
-              Kapapa Invest ▾
+            <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
+              {activeLedger.name || 'Personal'} ▾
             </button>
           </div>
 
@@ -1636,6 +1675,30 @@ export default function App(){
             <button className="txIconBtn" type="button" title="Filters">⏳</button>
           </div>
         </div>
+
+        {showLedgerPicker && (
+          <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+            <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+              <div className="ledgerPickerTitle">Ledgers</div>
+              <div className="ledgerPickerList">
+                {ledgers.map(l => (
+                  <button
+                    key={l.id}
+                    className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => handleSelectLedger(l.id)}
+                  >
+                    <span className="ledgerPickerName">{l.name}</span>
+                    {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                  </button>
+                ))}
+              </div>
+              <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
+                + Add Ledger
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="txKpiBar">
           <div className="txKpiItem">
@@ -2084,22 +2147,68 @@ export default function App(){
       {tab === 'home' && <HomeScreen />}
 
       {tab === 'accounts' && (
-        <AccountsScreen
-          accounts={accounts}
-          accountTxns={accountTxns}
-          groups={activeLedger.groups || []}
-          onUpsertAccount={upsertAccount}
-          onDeleteAccount={deleteAccount}
-          onAddAccountTxn={addAccountTxn}
-          onTransferAccount={transferAccount}
-          onUpdateAccountTxn={updateAccountTxn}
-          onDeleteAccountTxn={deleteAccountTxn}
-          onUpdateGroups={updateAccountGroups}
-          onUpdateAccounts={updateAccounts}
-        />
+        <div className="ledgerScreen">
+          <div className="ledgerHeader">
+            <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
+              {activeLedger.name || 'Personal'} ▾
+            </button>
+            <div className="ledgerPeriod">
+              <button className="ledgerNavBtn" type="button" onClick={() => shiftMonth(-1)}>
+                ‹
+              </button>
+              <div className="ledgerPeriodLabel">{formatMonthLabel(month)}</div>
+              <button className="ledgerNavBtn" type="button" onClick={() => shiftMonth(1)}>
+                ›
+              </button>
+            </div>
+          </div>
+
+          {showLedgerPicker && (
+            <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+              <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+                <div className="ledgerPickerTitle">Ledgers</div>
+                <div className="ledgerPickerList">
+                  {ledgers.map(l => (
+                    <button
+                      key={l.id}
+                      className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => handleSelectLedger(l.id)}
+                    >
+                      <span className="ledgerPickerName">{l.name}</span>
+                      {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                    </button>
+                  ))}
+                </div>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
+                  + Add Ledger
+                </button>
+              </div>
+            </div>
+          )}
+
+          <AccountsScreen
+            accounts={accounts}
+            accountTxns={accountTxns}
+            groups={activeLedger.groups || []}
+            activeLedgerId={activeLedger.id}
+            onUpsertAccount={upsertAccount}
+            onDeleteAccount={deleteAccount}
+            onAddAccountTxn={addAccountTxn}
+            onTransferAccount={transferAccount}
+            onUpdateAccountTxn={updateAccountTxn}
+            onDeleteAccountTxn={deleteAccountTxn}
+            onUpdateGroups={updateAccountGroups}
+            onUpdateAccounts={updateAccounts}
+          />
+        </div>
       )}
 
-      {tab === 'tx' && <TransactionsScreen />}
+      {tab === 'tx' && (
+        <div className="ledgerScreen">
+          <TransactionsScreen />
+        </div>
+      )}
 
       {tab === 'settings' && <SettingsScreen />}
       {showBudgetSettings && <BudgetSettings />}

@@ -912,7 +912,7 @@ label{font-size:12px;color:var(--muted)}
   font-weight:600;
 }
 
-.ledgerSection{display:flex;flex-direction:column;gap:10px}
+.ledgerSection{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .ledgerSectionHead{
   display:flex;align-items:center;justify-content:space-between;
 }

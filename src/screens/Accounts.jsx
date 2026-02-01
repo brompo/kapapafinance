@@ -5,6 +5,7 @@ export default function Accounts({
   accounts,
   accountTxns = [],
   groups = [],
+  activeLedgerId = "",
   onUpsertAccount,
   onDeleteAccount,
   onAddAccountTxn,
@@ -125,6 +126,7 @@ export default function Accounts({
       balance,
       groupId: group.id,
       groupType: group.type,
+      ledgerId: activeLedgerId || group.ledgerId,
     });
   }
 
@@ -209,6 +211,7 @@ export default function Accounts({
         accounts={visibleAccounts}
         groups={groups}
         accountTxns={accountTxns}
+        activeLedgerId={activeLedgerId}
         onClose={() => setSelectedId(null)}
         onAddAccountTxn={onAddAccountTxn}
         onTransferAccount={onTransferAccount}
@@ -464,6 +467,7 @@ function AccountDetail({
   accounts,
   groups,
   accountTxns,
+  activeLedgerId,
   onClose,
   onAddAccountTxn,
   onTransferAccount,
@@ -748,7 +752,15 @@ function AccountDetail({
     const trimmed = name.trim();
     if (!trimmed) return;
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    const nextSubs = [...subs, { id: crypto.randomUUID(), name: trimmed, balance: 0 }];
+    const nextSubs = [
+      ...subs,
+      {
+        id: crypto.randomUUID(),
+        name: trimmed,
+        balance: 0,
+        ledgerId: account.ledgerId || activeLedgerId,
+      },
+    ];
     onUpsertAccount({ ...account, subAccounts: nextSubs });
     if (!subAccountId) setSubAccountId(nextSubs[0].id);
   }

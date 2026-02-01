@@ -794,6 +794,52 @@ export default function App(){
     show('Saved.')
   }
 
+  function applyAccountDelta(nextAccounts, accountId, subAccountId, delta){
+    return nextAccounts.map(a => {
+      if (a.id !== accountId) return a
+      const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+      if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
+      const nextSubs = subs.map(s => (
+        s.id === subAccountId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+      ))
+      return { ...a, subAccounts: nextSubs }
+    })
+  }
+
+  async function deleteAccountTxn(entryId){
+    const entry = accountTxns.find(t => t.id === entryId)
+    if (!entry) return
+    let targets = [entry]
+    if (entry.kind === 'transfer') {
+      const baseId = entry.id.replace(/-(in|out)$/, '')
+      targets = accountTxns.filter(t => t.kind === 'transfer' && t.id.startsWith(baseId))
+    }
+    let nextAccounts = accounts
+    for (const t of targets){
+      const delta = t.direction === 'in' ? -Number(t.amount || 0) : Number(t.amount || 0)
+      nextAccounts = applyAccountDelta(nextAccounts, t.accountId, t.subAccountId, delta)
+    }
+    const idsToRemove = new Set(targets.map(t => t.id))
+    const nextAccountTxns = accountTxns.filter(t => !idsToRemove.has(t.id))
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
+    show('Deleted.')
+  }
+
+  async function updateAccountTxn(entryId, next){
+    const entry = accountTxns.find(t => t.id === entryId)
+    if (!entry) return
+    const oldAmt = Number(entry.amount || 0)
+    const newAmt = Number(next.amount || 0)
+    if (!newAmt || newAmt <= 0) return
+    const delta = entry.direction === 'in' ? (newAmt - oldAmt) : -(newAmt - oldAmt)
+    let nextAccounts = applyAccountDelta(accounts, entry.accountId, entry.subAccountId, delta)
+    const nextAccountTxns = accountTxns.map(t => (
+      t.id === entryId ? { ...t, ...next } : t
+    ))
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
+    show('Updated.')
+  }
+
   async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }){
     const from = accounts.find(a => a.id === fromId)
     const to = accounts.find(a => a.id === toId)
@@ -2046,6 +2092,8 @@ export default function App(){
           onDeleteAccount={deleteAccount}
           onAddAccountTxn={addAccountTxn}
           onTransferAccount={transferAccount}
+          onUpdateAccountTxn={updateAccountTxn}
+          onDeleteAccountTxn={deleteAccountTxn}
           onUpdateGroups={updateAccountGroups}
           onUpdateAccounts={updateAccounts}
         />

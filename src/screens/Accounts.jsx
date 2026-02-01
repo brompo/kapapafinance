@@ -9,6 +9,8 @@ export default function Accounts({
   onDeleteAccount,
   onAddAccountTxn,
   onTransferAccount,
+  onUpdateAccountTxn,
+  onDeleteAccountTxn,
   onUpdateGroups,
   onUpdateAccounts,
 }) {
@@ -26,10 +28,55 @@ export default function Accounts({
     [accounts]
   );
 
+  function daysBetween(a, b) {
+    const start = new Date(a);
+    const end = new Date(b);
+    const ms = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) -
+      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+    return Math.max(0, Math.floor(ms / 86400000));
+  }
+
+  function monthsBetween(a, b) {
+    const start = new Date(a);
+    const end = new Date(b);
+    let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    if (end.getDate() < start.getDate()) months -= 1;
+    return Math.max(0, months);
+  }
+
+  function computeAccruedForAccount(account) {
+    const creditEntries = accountTxns.filter((t) => t.accountId === account.id && t.kind === "credit");
+    const today = new Date().toISOString().slice(0, 10);
+    let accrued = 0;
+    creditEntries.forEach((t) => {
+      const rate = Number(t.creditRate || 0) / 100;
+      if (!rate || !t.interestStartDate) return;
+      const start = t.interestStartDate;
+      if (t.creditType === "compound") {
+        const months = monthsBetween(start, today);
+        const monthlyRate = rate / 12;
+        const compounded = Number(t.amount || 0) * Math.pow(1 + monthlyRate, months);
+        const monthStart = new Date(start);
+        monthStart.setMonth(monthStart.getMonth() + months);
+        const remDays = daysBetween(monthStart.toISOString().slice(0, 10), today);
+        const dailyRate = rate / 365;
+        accrued += compounded * dailyRate * remDays + (compounded - Number(t.amount || 0));
+      } else {
+        const days = daysBetween(start, today);
+        accrued += Number(t.amount || 0) * rate * (days / 365);
+      }
+    });
+    return accrued;
+  }
+
   function getAccountBalance(account) {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    if (!subs.length) return Number(account.balance || 0);
-    return subs.reduce((s, sub) => s + Number(sub.balance || 0), 0);
+    const base = subs.length
+      ? subs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+      : Number(account.balance || 0);
+    const groupType = groupById.get(account.groupId)?.type;
+    if (groupType === "credit") return base + computeAccruedForAccount(account);
+    return base;
   }
 
   const totals = useMemo(() => {
@@ -167,6 +214,8 @@ export default function Accounts({
         onTransferAccount={onTransferAccount}
         onUpsertAccount={onUpsertAccount}
         onDeleteAccount={onDeleteAccount}
+        onUpdateAccountTxn={onUpdateAccountTxn}
+        onDeleteAccountTxn={onDeleteAccountTxn}
       />
     );
   }
@@ -420,6 +469,8 @@ function AccountDetail({
   onTransferAccount,
   onUpsertAccount,
   onDeleteAccount,
+  onUpdateAccountTxn,
+  onDeleteAccountTxn,
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
   const [mode, setMode] = useState(null); // adjust | transfer | null
@@ -443,6 +494,14 @@ function AccountDetail({
   const [receiveDate, setReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [interestStartDate, setInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
+  const [selectedTxn, setSelectedTxn] = useState(null);
+  const [editTxnAmount, setEditTxnAmount] = useState("");
+  const [editTxnNote, setEditTxnNote] = useState("");
+  const [editTxnDate, setEditTxnDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editCreditRate, setEditCreditRate] = useState("");
+  const [editCreditType, setEditCreditType] = useState("simple");
+  const [editReceiveDate, setEditReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editInterestStartDate, setEditInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
@@ -458,6 +517,16 @@ function AccountDetail({
     }
     if (!subs.find((s) => s.id === targetSubId)) setTargetSubId(subs[0].id);
   }, [targetId, accounts, targetSubId]);
+  useEffect(() => {
+    if (!selectedTxn) return;
+    setEditTxnAmount(String(selectedTxn.amount || ""));
+    setEditTxnNote(selectedTxn.note || "");
+    setEditTxnDate(selectedTxn.date || new Date().toISOString().slice(0, 10));
+    setEditCreditRate(String(selectedTxn.creditRate ?? ""));
+    setEditCreditType(selectedTxn.creditType || "simple");
+    setEditReceiveDate(selectedTxn.receiveDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
+    setEditInterestStartDate(selectedTxn.interestStartDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
+  }, [selectedTxn]);
 
   const entries = useMemo(() => {
     return accountTxns
@@ -637,6 +706,42 @@ function AccountDetail({
     setShowCreditModal(false);
   }
 
+  function handleSaveTxnEdit() {
+    if (!selectedTxn) return;
+    if (selectedTxn.kind === "transfer") return;
+    const amt = Number(editTxnAmount || 0);
+    if (!amt || amt <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+    if (selectedTxn.kind === "credit") {
+      const rate = Number(editCreditRate || 0);
+      if (rate < 0) {
+        setError("Enter a valid interest rate.");
+        return;
+      }
+    }
+    setError("");
+    if (selectedTxn.kind === "credit") {
+      onUpdateAccountTxn?.(selectedTxn.id, {
+        amount: amt,
+        note: editTxnNote || "",
+        date: editTxnDate || selectedTxn.date,
+        creditRate: Number(editCreditRate || 0),
+        creditType: editCreditType,
+        receiveDate: editReceiveDate || editTxnDate || selectedTxn.date,
+        interestStartDate: editInterestStartDate || editTxnDate || selectedTxn.date
+      });
+    } else {
+      onUpdateAccountTxn?.(selectedTxn.id, {
+        amount: amt,
+        note: editTxnNote || "",
+        date: editTxnDate || selectedTxn.date
+      });
+    }
+    setSelectedTxn(null);
+  }
+
   function handleAddSubAccount() {
     const name = prompt("Sub-account name?");
     if (!name) return;
@@ -654,16 +759,10 @@ function AccountDetail({
         <button className="iconBtn" onClick={onClose} aria-label="Close">
           ✕
         </button>
-        <div className="accDetailTitle">{account.name}</div>
         <div className="row" style={{ gap: 8 }}>
           <button className="pillBtn" onClick={handleEdit}>
             Edit
           </button>
-          {currentGroup?.type === "credit" && (
-            <button className="pillBtn" onClick={() => setShowCreditModal(true)}>
-              Credit
-            </button>
-          )}
           <button className="pillBtn danger" onClick={handleDelete}>
             Delete
           </button>
@@ -676,16 +775,32 @@ function AccountDetail({
           <div className="accDetailName">{account.name}</div>
         </div>
         <div className="accDetailBalance">
-          {fmtTZS(
-            Array.isArray(account.subAccounts) && account.subAccounts.length
+          {(() => {
+            const base = Array.isArray(account.subAccounts) && account.subAccounts.length
               ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
               : account.balance
-          )}
+            if (currentGroup?.type === "credit") {
+              const summary = computeCreditSummary()
+              return fmtTZS(Number(base || 0) + summary.accrued)
+            }
+            return fmtTZS(base)
+          })()}
         </div>
+        {currentGroup?.type === "credit" && (() => {
+          const summary = computeCreditSummary();
+          return (
+            <div className="small" style={{ marginTop: 4 }}>
+              Accrued interest: {fmtTZS(summary.accrued)}
+            </div>
+          );
+        })()}
         <div className="accDetailActions">
           <button
             className={`quickBtn ${mode === "adjust" ? "active" : ""}`}
-            onClick={() => setMode("adjust")}
+            onClick={() => {
+              if (currentGroup?.type === "credit") setShowCreditModal(true);
+              else setMode("adjust");
+            }}
             title="Add or spend"
             type="button"
           >
@@ -935,6 +1050,109 @@ function AccountDetail({
         </div>
       )}
 
+      {selectedTxn && (
+        <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">
+              {selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}
+            </div>
+            {selectedTxn.kind === "transfer" && (
+              <div className="small" style={{ marginBottom: 8 }}>
+                Transfers can be deleted, but not edited here.
+              </div>
+            )}
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={editTxnAmount}
+                  onChange={(e) => setEditTxnAmount(e.target.value)}
+                  disabled={selectedTxn.kind === "transfer"}
+                />
+              </div>
+              {selectedTxn.kind === "credit" && (
+                <div className="field">
+                  <label>Interest Rate (%)</label>
+                  <input
+                    inputMode="decimal"
+                    value={editCreditRate}
+                    onChange={(e) => setEditCreditRate(e.target.value)}
+                  />
+                </div>
+              )}
+              {selectedTxn.kind === "credit" && (
+                <div className="field">
+                  <label>Interest Type</label>
+                  <select value={editCreditType} onChange={(e) => setEditCreditType(e.target.value)}>
+                    <option value="simple">Simple</option>
+                    <option value="compound">Compound</option>
+                  </select>
+                </div>
+              )}
+              {selectedTxn.kind === "credit" && (
+                <div className="field">
+                  <label>Receiving Date</label>
+                  <input
+                    type="date"
+                    value={editReceiveDate}
+                    onChange={(e) => setEditReceiveDate(e.target.value)}
+                  />
+                </div>
+              )}
+              {selectedTxn.kind === "credit" && (
+                <div className="field">
+                  <label>Interest Start Date</label>
+                  <input
+                    type="date"
+                    value={editInterestStartDate}
+                    onChange={(e) => setEditInterestStartDate(e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="field">
+                <label>Note</label>
+                <input
+                  value={editTxnNote}
+                  onChange={(e) => setEditTxnNote(e.target.value)}
+                  disabled={selectedTxn.kind === "transfer"}
+                />
+              </div>
+              <div className="field">
+                <label>Date</label>
+                <input
+                  type="date"
+                  value={editTxnDate}
+                  onChange={(e) => setEditTxnDate(e.target.value)}
+                  disabled={selectedTxn.kind === "transfer"}
+                />
+              </div>
+              {error && <div className="formError">{error}</div>}
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setSelectedTxn(null)}>
+                  Close
+                </button>
+                <button
+                  className="btn danger"
+                  type="button"
+                  onClick={() => {
+                    onDeleteAccountTxn?.(selectedTxn.id);
+                    setSelectedTxn(null);
+                  }}
+                >
+                  Delete
+                </button>
+                {selectedTxn.kind !== "transfer" && (
+                  <button className="btn primary" type="button" onClick={handleSaveTxnEdit}>
+                    Save
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="accHistory">
         <div className="accHistoryTitle">Recent activity</div>
         {grouped.length === 0 ? (
@@ -965,21 +1183,30 @@ function AccountDetail({
                     const title = t.note || "Balance update";
                     const meta = subName || (t.kind === "transfer" ? "Transfer" : "Account");
                     return (
-                      <div className="accHistoryRow" key={t.id}>
+                      <div
+                        className="accHistoryRow"
+                        key={t.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedTxn(t)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") setSelectedTxn(t);
+                        }}
+                      >
                         <div className="accHistoryIcon">
                           {(title || "A").slice(0, 1).toUpperCase()}
                         </div>
-                        <div className="accHistoryInfo">
-                          <div className="accHistoryTitleRow">{title}</div>
-                          <div className="accHistoryMeta">{meta}</div>
-                        </div>
-                        <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
-                          {t.direction === "in" ? "+" : "-"}
-                          {fmtTZS(t.amount)}
-                        </div>
+                      <div className="accHistoryInfo">
+                        <div className="accHistoryTitleRow">{title}</div>
+                        <div className="accHistoryMeta">{meta}</div>
                       </div>
-                    );
-                  })}
+                      <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
+                        {t.direction === "in" ? "+" : "-"}
+                        {fmtTZS(t.amount)}
+                      </div>
+                    </div>
+                  );
+                })}
                 </div>
               </div>
             );

@@ -919,6 +919,7 @@ label{font-size:12px;color:var(--muted)}
 }
 
 .ledgerSection{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.ledgerSection + .ledgerSection{margin-top:18px}
 .ledgerSectionHead{
   display:flex;align-items:center;justify-content:space-between;
 }

@@ -300,6 +300,8 @@ label{font-size:12px;color:var(--muted)}
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  display:inline-flex;
+  align-items:center;
   cursor:pointer;
   font-weight:700;
 }

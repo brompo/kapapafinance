@@ -293,12 +293,12 @@ function Section({
           <button className="sectionTitleBtn" type="button" onClick={onRenameGroup}>
             {group.name}
           </button>
-          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
-            +
-          </button>
         </div>
         <div className="sectionRightWrap">
           <div className={`sectionRight ${group.type === "credit" ? "owed" : ""}`}>{right}</div>
+          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
+            +
+          </button>
           <button className="sectionCollapse" type="button" onClick={onToggleCollapse}>
             {group.collapsed ? "▸" : "▾"}
           </button>
@@ -421,6 +421,7 @@ function AccountDetail({
   onUpsertAccount,
   onDeleteAccount,
 }) {
+  const currentGroup = groups.find((g) => g.id === account.groupId);
   const [mode, setMode] = useState(null); // adjust | transfer | null
   const [direction, setDirection] = useState("in"); // in | out
   const [amount, setAmount] = useState("");
@@ -435,6 +436,12 @@ function AccountDetail({
   );
   const [targetSubId, setTargetSubId] = useState("");
   const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditRate, setCreditRate] = useState("");
+  const [creditType, setCreditType] = useState("simple");
+  const [receiveDate, setReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [interestStartDate, setInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -547,7 +554,6 @@ function AccountDetail({
   function handleEdit() {
     const name = prompt("Rename account?", account.name);
     if (!name) return;
-    const currentGroup = groups.find((g) => g.id === account.groupId);
     const sameTypeGroups = groups.filter((g) => g.type === currentGroup?.type);
     let nextGroupId = account.groupId;
     if (sameTypeGroups.length > 1) {
@@ -559,6 +565,76 @@ function AccountDetail({
       if (sameTypeGroups[idx]) nextGroupId = sameTypeGroups[idx].id;
     }
     onUpsertAccount({ ...account, name, groupId: nextGroupId, groupType: currentGroup?.type });
+  }
+
+  function daysBetween(a, b) {
+    const start = new Date(a);
+    const end = new Date(b);
+    const ms = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) -
+      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+    return Math.max(0, Math.floor(ms / 86400000));
+  }
+
+  function monthsBetween(a, b) {
+    const start = new Date(a);
+    const end = new Date(b);
+    let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    if (end.getDate() < start.getDate()) months -= 1;
+    return Math.max(0, months);
+  }
+
+  function computeCreditSummary() {
+    const creditEntries = accountTxns.filter((t) => t.accountId === account.id && t.kind === "credit");
+    const principal = creditEntries.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const today = new Date().toISOString().slice(0, 10);
+    let accrued = 0;
+    creditEntries.forEach((t) => {
+      const rate = Number(t.creditRate || 0) / 100;
+      if (!rate || !t.interestStartDate) return;
+      const start = t.interestStartDate;
+      if (t.creditType === "compound") {
+        const months = monthsBetween(start, today);
+        const monthlyRate = rate / 12;
+        const compounded = Number(t.amount || 0) * Math.pow(1 + monthlyRate, months);
+        const monthStart = new Date(start);
+        monthStart.setMonth(monthStart.getMonth() + months);
+        const remDays = daysBetween(monthStart.toISOString().slice(0, 10), today);
+        const dailyRate = rate / 365;
+        accrued += compounded * dailyRate * remDays + (compounded - Number(t.amount || 0));
+      } else {
+        const days = daysBetween(start, today);
+        accrued += Number(t.amount || 0) * rate * (days / 365);
+      }
+    });
+    return { principal, accrued };
+  }
+
+  async function handleAddCredit() {
+    const amt = Number(creditAmount || 0);
+    const rate = Number(creditRate || 0);
+    if (!amt || amt <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+    if (rate < 0) {
+      setError("Enter a valid interest rate.");
+      return;
+    }
+    setError("");
+    await onAddAccountTxn({
+      accountId: account.id,
+      amount: amt,
+      direction: "in",
+      note: "",
+      kind: "credit",
+      creditRate: rate,
+      creditType,
+      receiveDate,
+      interestStartDate
+    });
+    setCreditAmount("");
+    setCreditRate("");
+    setShowCreditModal(false);
   }
 
   function handleAddSubAccount() {
@@ -583,6 +659,11 @@ function AccountDetail({
           <button className="pillBtn" onClick={handleEdit}>
             Edit
           </button>
+          {currentGroup?.type === "credit" && (
+            <button className="pillBtn" onClick={() => setShowCreditModal(true)}>
+              Credit
+            </button>
+          )}
           <button className="pillBtn danger" onClick={handleDelete}>
             Delete
           </button>
@@ -620,6 +701,23 @@ function AccountDetail({
           </button>
         </div>
       </div>
+
+      {currentGroup?.type === "credit" && (() => {
+        const summary = computeCreditSummary();
+        return (
+          <div className="accHistory">
+            <div className="accHistoryTitle">Credit Summary</div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <div className="small">Principal Received</div>
+              <div style={{ fontWeight: 700 }}>{fmtTZS(summary.principal)}</div>
+            </div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <div className="small">Accrued Interest</div>
+              <div style={{ fontWeight: 700 }}>{fmtTZS(summary.accrued)}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="accHistory">
         <div className="accHistoryTitle">Sub-accounts</div>
@@ -770,6 +868,66 @@ function AccountDetail({
                   onClick={mode === "transfer" ? handleTransfer : handleAdjust}
                 >
                   {mode === "transfer" ? "Transfer" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreditModal && (
+        <div className="modalBackdrop" onClick={() => setShowCreditModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Add Credit</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  placeholder="e.g. 100000"
+                />
+              </div>
+              <div className="field">
+                <label>Interest Rate (%)</label>
+                <input
+                  inputMode="decimal"
+                  value={creditRate}
+                  onChange={(e) => setCreditRate(e.target.value)}
+                  placeholder="e.g. 2"
+                />
+              </div>
+              <div className="field">
+                <label>Interest Type</label>
+                <select value={creditType} onChange={(e) => setCreditType(e.target.value)}>
+                  <option value="simple">Simple</option>
+                  <option value="compound">Compound</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Receiving Date</label>
+                <input
+                  type="date"
+                  value={receiveDate}
+                  onChange={(e) => setReceiveDate(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Interest Start Date</label>
+                <input
+                  type="date"
+                  value={interestStartDate}
+                  onChange={(e) => setInterestStartDate(e.target.value)}
+                />
+              </div>
+              {error && <div className="formError">{error}</div>}
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowCreditModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={handleAddCredit}>
+                  Save Credit
                 </button>
               </div>
             </div>

@@ -745,7 +745,19 @@ export default function App(){
     show('Account deleted.')
   }
 
-  async function addAccountTxn({ accountId, amount, direction, note, kind = 'adjust', relatedAccountId = null, subAccountId = null }){
+  async function addAccountTxn({
+    accountId,
+    amount,
+    direction,
+    note,
+    kind = 'adjust',
+    relatedAccountId = null,
+    subAccountId = null,
+    creditRate = null,
+    creditType = null,
+    receiveDate = null,
+    interestStartDate = null
+  }){
     const acct = accounts.find(a => a.id === accountId)
     if (!acct) return
 
@@ -771,7 +783,11 @@ export default function App(){
       kind,
       relatedAccountId,
       note: note || '',
-      date: todayISO()
+      date: receiveDate || todayISO(),
+      creditRate,
+      creditType,
+      receiveDate,
+      interestStartDate
     }
 
     await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })

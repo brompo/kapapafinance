@@ -335,6 +335,7 @@ label{font-size:12px;color:var(--muted)}
   border-radius:12px;
   margin-left:22px;
   border:1px solid #f5d7da;
+  padding:9px;
 }
 .avatar.subAvatar{
   width:28px;

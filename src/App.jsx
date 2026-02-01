@@ -777,7 +777,7 @@ export default function App(){
     show('Saved.')
   }
 
-  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId }){
+  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }){
     const from = accounts.find(a => a.id === fromId)
     const to = accounts.find(a => a.id === toId)
     if (!from || !to) return
@@ -807,7 +807,7 @@ export default function App(){
     })
 
     const transferId = uid()
-    const base = { kind: 'transfer', note: note || '', date: todayISO() }
+    const base = { kind: 'transfer', note: note || '', date: date || todayISO() }
     const outEntry = {
       id: transferId + '-out',
       accountId: fromId,

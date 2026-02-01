@@ -59,27 +59,18 @@ export default function Accounts({
     onUpdateGroups?.(next);
   }
 
-  function handleAddAccount() {
+  function handleAddAccount(group) {
     const name = prompt("Account name?");
     if (!name) return;
     const bal = prompt("Balance (number)?", "0");
     const balance = Number(bal || 0);
-    if (groups.length === 0) {
-      alert("Create a group first.");
-      return;
-    }
-    const list = groups
-      .map((g, i) => `${i + 1}) ${g.name} (${g.type})`)
-      .join("\n");
-    const pick = prompt(`Select group:\n${list}`, "1");
-    const idx = Number(pick || 0) - 1;
-    const group = groups[idx];
     if (!group) return;
     onUpsertAccount?.({
       id: crypto.randomUUID(),
       name,
       balance,
       groupId: group.id,
+      groupType: group.type,
     });
   }
 
@@ -191,30 +182,6 @@ export default function Accounts({
 
       <div className="accHeader">
         <div className="accTitle">Accounts</div>
-
-        <div className="row" style={{ alignItems: "center" }}>
-          <label className="accFilter">
-            <select
-              className="accFilterSelect"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="all">All</option>
-              <option value="debit">Debit</option>
-              <option value="asset">Investment</option>
-              <option value="credit">Credit</option>
-            </select>
-            <span className="accFilterCaret">▾</span>
-          </label>
-
-          <button className="accGroupBtn" onClick={handleAddGroup} type="button">
-            + Group
-          </button>
-
-          <button className="fab" onClick={handleAddAccount} title="Add account">
-            +
-          </button>
-        </div>
       </div>
 
       {shownGroups.map((group) => {
@@ -239,6 +206,7 @@ export default function Accounts({
             onSelectAccount={(id) => setSelectedId(id)}
             onToggleCollapse={() => toggleGroupCollapse(group)}
             onRenameGroup={handleRenameGroup}
+            onAddAccount={() => handleAddAccount(group)}
             isDragging={draggingGroupId === group.id}
             dragOver={dragOverGroupId === group.id}
             onDragStart={() => handleGroupDragStart(group.id)}
@@ -272,6 +240,7 @@ function Section({
   onSelectAccount,
   onToggleCollapse,
   onRenameGroup,
+  onAddAccount,
   isDragging,
   dragOver,
   onDragStart,
@@ -306,6 +275,9 @@ function Section({
           </button>
           <button className="sectionTitleBtn" type="button" onClick={onRenameGroup}>
             {group.name}
+          </button>
+          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
+            +
           </button>
         </div>
         <div className="sectionRightWrap">
@@ -481,7 +453,7 @@ function AccountDetail({
       const idx = Number(pick || 0) - 1;
       if (sameTypeGroups[idx]) nextGroupId = sameTypeGroups[idx].id;
     }
-    onUpsertAccount({ ...account, name, groupId: nextGroupId });
+    onUpsertAccount({ ...account, name, groupId: nextGroupId, groupType: currentGroup?.type });
   }
 
   return (

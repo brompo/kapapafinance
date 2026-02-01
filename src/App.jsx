@@ -65,48 +65,66 @@ function uid(){
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
 
+const GROUP_IDS = {
+  debit: 'group-debit',
+  credit: 'group-credit',
+  shares: 'group-shares',
+  realEstate: 'group-real-estate'
+}
+
+function normalizeAccountsWithGroups(inputAccounts, groups){
+  const accounts = Array.isArray(inputAccounts) ? inputAccounts : []
+  const groupById = new Map((groups || []).map(g => [g.id, g]))
+  const groupByType = new Map((groups || []).map(g => [g.type, g]))
+  const fallbackGroup = (groups || [])[0]
+  return accounts.map(a => {
+    if (a.groupId && groupById.has(a.groupId)) return a
+    const typeHint = a.groupType || a.type
+    if (typeHint && groupByType.has(typeHint)) {
+      const g = groupByType.get(typeHint)
+      return { ...a, groupId: g.id, groupType: g.type }
+    }
+    return fallbackGroup ? { ...a, groupId: fallbackGroup.id, groupType: fallbackGroup.type } : a
+  })
+}
+
 function createLedger({
   id = uid(),
   name = 'Personal',
   txns = [],
-  accounts = [],
-  accountTxns = [],
   categories,
   categoryMeta,
   groups
 } = {}){
   const fallbackGroups = [
-    { id: uid(), name: 'Debit', type: 'debit', collapsed: false },
-    { id: uid(), name: 'Credit', type: 'credit', collapsed: false },
-    { id: uid(), name: 'Investment', type: 'asset', collapsed: false }
+    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
+    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
+    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
   ]
+
   const normalizedGroups = Array.isArray(groups) && groups.length
-    ? groups.map(g => ({
-      id: g.id || uid(),
-      name: g.name || 'Group',
-      type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : 'debit'),
-      collapsed: !!g.collapsed
-    }))
+    ? groups.map(g => {
+      const name = g.name || 'Group'
+      const normalizedName = name.toLowerCase()
+      let id = g.id || uid()
+      if (normalizedName === 'debit') id = GROUP_IDS.debit
+      else if (normalizedName === 'credit') id = GROUP_IDS.credit
+      else if (normalizedName === 'shares') id = GROUP_IDS.shares
+      else if (normalizedName === 'real estate') id = GROUP_IDS.realEstate
+      return {
+        id,
+        name,
+        type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : 'debit'),
+        collapsed: !!g.collapsed
+      }
+    })
     : fallbackGroups
-
-  const groupById = new Map(normalizedGroups.map(g => [g.id, g]))
-  const groupByType = new Map(normalizedGroups.map(g => [g.type, g]))
-  const fallbackGroup = normalizedGroups[0]
-
-  const normalizedAccounts = (Array.isArray(accounts) ? accounts : []).map(a => {
-    if (a.groupId && groupById.has(a.groupId)) return a
-    if (a.type && groupByType.has(a.type)) {
-      return { ...a, groupId: groupByType.get(a.type).id }
-    }
-    return { ...a, groupId: fallbackGroup?.id }
-  })
 
   return {
     id,
     name,
     txns: Array.isArray(txns) ? txns : [],
-    accounts: normalizedAccounts,
-    accountTxns: Array.isArray(accountTxns) ? accountTxns : [],
     categories: {
       expense: Array.isArray(categories?.expense)
         ? categories.expense
@@ -133,8 +151,6 @@ function normalizeLedger(data){
     id: data.id || uid(),
     name: data.name || 'Personal',
     txns: data.txns,
-    accounts: data.accounts,
-    accountTxns: data.accountTxns,
     categories: data.categories,
     categoryMeta: data.categoryMeta
   })
@@ -144,8 +160,7 @@ function isVaultEmpty(v){
   if (Array.isArray(v?.ledgers) && v.ledgers.length > 0){
     return v.ledgers.every(l =>
       (!l.txns || l.txns.length === 0) &&
-      (!l.accounts || l.accounts.length === 0) &&
-      (!l.accountTxns || l.accountTxns.length === 0)
+      true
     )
   }
   return (
@@ -169,6 +184,21 @@ function getSeedVault(){
   const ledger = createLedger({
     name: 'Personal',
     txns: [],
+    categories: {
+      expense: [...DEFAULT_EXPENSE_CATEGORIES],
+      income: [...DEFAULT_INCOME_CATEGORIES]
+    },
+    categoryMeta: {
+      expense: Object.fromEntries(
+        Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }])
+      ),
+      income: {}
+    }
+  })
+
+  return {
+    ledgers: [ledger],
+    activeLedgerId: ledger.id,
     accounts: [
       { id: selcomId, name: 'Selcom Bank', type: 'debit', balance: 150000 },
       { id: absaId, name: 'Absa Account', type: 'debit', balance: 0 },
@@ -179,7 +209,12 @@ function getSeedVault(){
       { id: stockId, name: 'CRDB Stock', type: 'asset', balance: 0 },
       { id: ruthId, name: 'Ruth Mnyampi', type: 'credit', balance: 1000000 },
       { id: lottusId, name: 'Lottus', type: 'credit', balance: 100000 },
-    ],
+    ].map(a => {
+      let groupId = GROUP_IDS.debit
+      if (a.type === 'credit') groupId = GROUP_IDS.credit
+      else if (a.type === 'asset') groupId = a.id === realEstateId ? GROUP_IDS.realEstate : GROUP_IDS.shares
+      return { ...a, groupType: a.type, groupId }
+    }),
     accountTxns: [
       {
         id: uid(),
@@ -211,21 +246,6 @@ function getSeedVault(){
         date: todayISO()
       },
     ],
-    categories: {
-      expense: [...DEFAULT_EXPENSE_CATEGORIES],
-      income: [...DEFAULT_INCOME_CATEGORIES]
-    },
-    categoryMeta: {
-      expense: Object.fromEntries(
-        Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }])
-      ),
-      income: {}
-    }
-  })
-
-  return {
-    ledgers: [ledger],
-    activeLedgerId: ledger.id,
     settings: { pinLockEnabled: false }
   }
 }
@@ -258,14 +278,14 @@ function normalizeVault(data){
     return {
       ledgers,
       activeLedgerId,
+      accounts: Array.isArray(data.accounts) ? data.accounts : [],
+      accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
       settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
     }
   }
 
   const legacyLedger = createLedger({
     txns: data.txns,
-    accounts: data.accounts,
-    accountTxns: data.accountTxns,
     categories: data.categories,
     categoryMeta: data.categoryMeta
   })
@@ -273,6 +293,8 @@ function normalizeVault(data){
   return {
     ledgers: [legacyLedger],
     activeLedgerId: legacyLedger.id,
+    accounts: Array.isArray(data.accounts) ? data.accounts : [],
+    accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
     settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
   }
 }
@@ -366,8 +388,7 @@ export default function App(){
 
       let data = normalizeVault(await loadVault(pin))
       if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)){
-        data = getSeedVault()
-        localStorage.setItem(SEED_KEY, '1')
+        localStorage.setItem(SEED_KEY, '0')
       }
       data = { ...data, settings: { ...data.settings, pinLockEnabled: true } }
       await saveVault(pin, data)
@@ -386,8 +407,7 @@ export default function App(){
     try{
       let data = normalizeVault(await loadVault(pin))
       if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)){
-        data = getSeedVault()
-        localStorage.setItem(SEED_KEY, '1')
+        localStorage.setItem(SEED_KEY, '0')
       }
       data = { ...data, settings: { ...data.settings, pinLockEnabled: true } }
       await saveVault(pin, data)
@@ -405,7 +425,8 @@ export default function App(){
   async function persist(nextVault){
     setVaultState(nextVault)
     try{
-      if (settings.pinLockEnabled) await saveVault(pin, nextVault)
+      const pinFlowEnabled = localStorage.getItem(PIN_FLOW_KEY) !== 'false'
+      if (pinFlowEnabled) await saveVault(pin, nextVault)
       else saveVaultPlain(nextVault)
     } catch(e){
       show('Could not save (are you locked?)')
@@ -416,11 +437,11 @@ export default function App(){
   const ledgers = vault.ledgers || []
   const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
   const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
+  const accounts = normalizeAccountsWithGroups(vault.accounts, activeLedger.groups)
+  const accountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
 
   // ---------- Transactions ----------
   const txns = activeLedger.txns || []
-  const accounts = activeLedger.accounts || []
-  const accountTxns = activeLedger.accountTxns || []
   const categories = activeLedger.categories || {
     expense: [...DEFAULT_EXPENSE_CATEGORIES],
     income: [...DEFAULT_INCOME_CATEGORIES]
@@ -437,6 +458,21 @@ export default function App(){
       : [...ledgers, nextLedger]
     const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
     persist({ ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId })
+  }
+
+  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns }){
+    const hasActive = ledgers.some(l => l.id === activeLedger.id)
+    const nextLedgers = hasActive
+      ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
+      : [...ledgers, nextLedger]
+    const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
+    persist({
+      ...vault,
+      ledgers: nextLedgers,
+      activeLedgerId: nextActiveId,
+      accounts: nextAccounts ?? accounts,
+      accountTxns: nextAccountTxns ?? accountTxns
+    })
   }
 
   function handleAddLedger(){
@@ -541,7 +577,11 @@ export default function App(){
       }
     }
 
-    await persistActiveLedger({ ...activeLedger, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
+    persistLedgerAndAccounts({
+      nextLedger: { ...activeLedger, txns: [t, ...txns] },
+      nextAccounts,
+      nextAccountTxns
+    })
     setForm(f => ({...f, amount:'', note:'', date: todayISO()}))
     show('Saved.')
   }
@@ -586,7 +626,11 @@ export default function App(){
       }
     }
 
-    await persistActiveLedger({ ...activeLedger, txns: [t, ...txns], accounts: nextAccounts, accountTxns: nextAccountTxns })
+    persistLedgerAndAccounts({
+      nextLedger: { ...activeLedger, txns: [t, ...txns] },
+      nextAccounts,
+      nextAccountTxns
+    })
     show('Saved.')
   }
 
@@ -635,11 +679,10 @@ export default function App(){
       })
       .filter(Boolean)
 
-    await persist({
-      ...vault,
-      txns: nextTxns,
-      accounts: nextAccounts,
-      accountTxns: [...txnEntries, ...nonTxnEntries]
+    persistLedgerAndAccounts({
+      nextLedger: { ...activeLedger, txns: nextTxns },
+      nextAccounts,
+      nextAccountTxns: [...txnEntries, ...nonTxnEntries]
     })
     show('Updated.')
   }
@@ -657,14 +700,14 @@ export default function App(){
     const idx = next.findIndex(a => a.id === acc.id)
     if (idx >= 0) next[idx] = { ...next[idx], ...acc }
     else next.unshift(acc)
-    await persistActiveLedger({ ...activeLedger, accounts: next })
+    await persist({ ...vault, accounts: next })
     show('Account saved.')
   }
 
   async function deleteAccount(id){
     const next = accounts.filter(a => a.id !== id)
     const nextAccountTxns = accountTxns.filter(t => t.accountId !== id)
-    await persistActiveLedger({ ...activeLedger, accounts: next, accountTxns: nextAccountTxns })
+    await persist({ ...vault, accounts: next, accountTxns: nextAccountTxns })
     show('Account deleted.')
   }
 
@@ -688,7 +731,7 @@ export default function App(){
       date: todayISO()
     }
 
-    await persistActiveLedger({ ...activeLedger, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...accountTxns] })
     show('Saved.')
   }
 
@@ -722,11 +765,7 @@ export default function App(){
       ...base
     }
 
-    await persistActiveLedger({
-      ...activeLedger,
-      accounts: nextAccounts,
-      accountTxns: [inEntry, outEntry, ...accountTxns]
-    })
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: [inEntry, outEntry, ...accountTxns] })
     show('Transfer saved.')
   }
 
@@ -735,7 +774,7 @@ export default function App(){
   }
 
   async function updateAccounts(nextAccounts){
-    await persistActiveLedger({ ...activeLedger, accounts: nextAccounts })
+    await persist({ ...vault, accounts: nextAccounts })
   }
 
   // ---------- Export/Import/Reset ----------
@@ -782,6 +821,17 @@ export default function App(){
     setVaultState(normalizeVault(null))
     setStage('setpin')
     show('Reset complete.')
+  }
+
+  async function handleWipeAll(){
+    if (!confirm('This will remove all user and demo data and reset the app. Continue?')) return
+    await resetAll()
+    localStorage.removeItem(SEED_KEY)
+    localStorage.setItem(PIN_FLOW_KEY, 'false')
+    setPin(''); setPin2('')
+    setVaultState(normalizeVault(null))
+    setStage('setpin')
+    show('All data cleared.')
   }
 
   async function handleLoadDemo(){
@@ -1562,6 +1612,7 @@ export default function App(){
           </label>
 
           <button className="btn danger" onClick={handleReset}>Reset</button>
+          <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
         </div>
 
         <div className="small" style={{marginTop:10}}>

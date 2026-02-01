@@ -79,7 +79,7 @@ export async function setNewPin(pin){
   })
 
   // initialize empty vault object
-  await saveVault(pin, { txns: [], accounts: [] })
+  await saveVault(pin, { ledgers: [], activeLedgerId: '', settings: { pinLockEnabled: false } })
 }
 
 export async function loadVault(pin){
@@ -103,12 +103,10 @@ export async function loadVault(pin){
   const data = JSON.parse(text)
 
   // support older array vaults
-  if (Array.isArray(data)) return { txns: data, accounts: [] }
+  if (Array.isArray(data)) return data
 
-  return {
-    txns: Array.isArray(data?.txns) ? data.txns : [],
-    accounts: Array.isArray(data?.accounts) ? data.accounts : []
-  }
+  // return as-is; normalization happens in App
+  return data
 }
 
 export async function saveVault(pin, payload){

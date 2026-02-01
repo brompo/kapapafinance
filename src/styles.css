@@ -302,7 +302,7 @@ label{font-size:12px;color:var(--muted)}
   border-bottom:1px solid #f0f1f7;
 }
 .rowItem:last-child{border-bottom:none}
-.rowLeft{display:flex;align-items:center;gap:10px}
+.rowLeft{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .avatar{
   width:34px;
   height:34px;
@@ -315,15 +315,33 @@ label{font-size:12px;color:var(--muted)}
   font-weight:900;
   color:#6c70c1;
 }
-.rowName{font-weight:600;color:#22263a}
+.rowName{font-weight:600;color:#22263a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rowMeta{font-size:12px;color:#8b90b2}
 .rowRight{display:flex;align-items:center;gap:10px}
+.rowRightStack{
+  flex-direction:column;
+  align-items:flex-end;
+  gap:6px;
+}
 .rowAmount{font-weight:600;color:#1e2232}
 .rowAmount.neg{color:#e24b4b}
 .rowItem.clickable{cursor:pointer;transition:background .2s ease}
 .rowItem.clickable:hover{background:#f8f9fd}
 .rowItem.dragging{opacity:.6}
 .rowItem.dragOver{background:#f3f4ff}
+.rowItem.subRow{
+  background:#fdeff0;
+  margin-top:1px;
+  border-radius:12px;
+  margin-left:22px;
+  border:1px solid #f5d7da;
+}
+.avatar.subAvatar{
+  width:28px;
+  height:28px;
+  font-size:12px;
+  background:#eef0ff;
+}
 .miniBtn{
   border:1px solid #eceef6;
   background:#f7f8fc;
@@ -334,6 +352,78 @@ label{font-size:12px;color:var(--muted)}
 }
 .emptyRow{padding:14px;color:#8b90b2;font-size:13px}
 
+/* Account history */
+.accHistory{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-top:12px;
+}
+.accHistoryTitle{font-weight:600;color:#2b2f4e}
+.accHistoryCard{
+  background:#fff;
+  border:1px solid #eceef6;
+  border-radius:18px;
+  box-shadow:0 6px 18px rgba(27,33,62,.05);
+}
+.accHistoryHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid #f1f2f8;
+  font-weight:600;
+  color:#23264a;
+}
+.accHistoryTotals{display:flex;gap:10px;font-size:12px}
+.accHistoryTotals .in{color:#2fbf71}
+.accHistoryTotals .out{color:#e24b4b}
+.accHistoryBody{padding:6px}
+.accHistoryRow{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px;
+  border-bottom:1px solid #f3f4fa;
+}
+.accHistoryRow:last-child{border-bottom:none}
+.accHistoryIcon{
+  width:40px;height:40px;border-radius:999px;
+  background:#f2f3ff;border:1px solid #e4e6f6;
+  display:flex;align-items:center;justify-content:center;
+  color:#6a6fbe;font-size:16px;font-weight:700;
+}
+.accHistoryInfo{flex:1}
+.accHistoryTitleRow{font-weight:600;color:#22263a}
+.accHistoryMeta{font-size:12px;color:#8b90b2;margin-top:2px}
+.accHistoryAmount{font-weight:700}
+.accHistoryAmount.pos{color:#2fbf71}
+.accHistoryAmount.neg{color:#e24b4b}
+
+.modalBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(12,16,32,.35);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  z-index:50;
+}
+.modalCard{
+  width:100%;
+  max-width:420px;
+  background:#fff;
+  border:1px solid #eceef6;
+  border-radius:18px;
+  box-shadow:0 12px 28px rgba(20,24,50,.18);
+  padding:14px;
+}
+.modalTitle{
+  font-weight:700;
+  color:#1f2332;
+  margin-bottom:8px;
+}
 /* =========================
    Account detail screen
    ========================= */

@@ -558,12 +558,20 @@ export default function App(){
       if (acct){
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
-        nextAccounts = accounts.map(a => (
-          a.id === targetId ? { ...a, balance: Number(a.balance || 0) + delta } : a
-        ))
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const targetSubId = subs.length ? subs[0]?.id : null
+        nextAccounts = accounts.map(a => {
+          if (a.id !== targetId) return a
+          if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
+          const nextSubs = subs.map(s => (
+            s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+          ))
+          return { ...a, subAccounts: nextSubs }
+        })
         const entry = {
           id: uid(),
           accountId: targetId,
+          subAccountId: targetSubId,
           amount: amt,
           direction: t.type === 'income' ? 'in' : 'out',
           kind: 'txn',
@@ -607,12 +615,20 @@ export default function App(){
       if (acct){
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
-        nextAccounts = accounts.map(a => (
-          a.id === targetId ? { ...a, balance: Number(a.balance || 0) + delta } : a
-        ))
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const targetSubId = subs.length ? subs[0]?.id : null
+        nextAccounts = accounts.map(a => {
+          if (a.id !== targetId) return a
+          if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
+          const nextSubs = subs.map(s => (
+            s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+          ))
+          return { ...a, subAccounts: nextSubs }
+        })
         const entry = {
           id: uid(),
           accountId: targetId,
+          subAccountId: targetSubId,
           amount: amt,
           direction: t.type === 'income' ? 'in' : 'out',
           kind: 'txn',
@@ -650,14 +666,28 @@ export default function App(){
     const newDelta = next.type === 'income' ? Number(next.amount || 0) : -Number(next.amount || 0)
 
     if (oldAccount){
-      nextAccounts = nextAccounts.map(a => (
-        a.id === oldAccount.id ? { ...a, balance: Number(a.balance || 0) - oldDelta } : a
-      ))
+      nextAccounts = nextAccounts.map(a => {
+        if (a.id !== oldAccount.id) return a
+        const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+        if (!subs.length) return { ...a, balance: Number(a.balance || 0) - oldDelta }
+        const targetSubId = subs[0]?.id
+        const nextSubs = subs.map(s => (
+          s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) - oldDelta } : s
+        ))
+        return { ...a, subAccounts: nextSubs }
+      })
     }
     if (newAccount){
-      nextAccounts = nextAccounts.map(a => (
-        a.id === newAccount.id ? { ...a, balance: Number(a.balance || 0) + newDelta } : a
-      ))
+      nextAccounts = nextAccounts.map(a => {
+        if (a.id !== newAccount.id) return a
+        const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+        if (!subs.length) return { ...a, balance: Number(a.balance || 0) + newDelta }
+        const targetSubId = subs[0]?.id
+        const nextSubs = subs.map(s => (
+          s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + newDelta } : s
+        ))
+        return { ...a, subAccounts: nextSubs }
+      })
     }
 
     const nonTxnEntries = accountTxns.filter(t => t.kind !== 'txn')
@@ -666,9 +696,12 @@ export default function App(){
       .map(t => {
         const acct = findAccountByIdOrName(t.accountId)
         if (!acct) return null
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const targetSubId = subs.length ? subs[0]?.id : null
         return {
           id: `txn-${t.id}`,
           accountId: acct.id,
+          subAccountId: targetSubId,
           amount: Number(t.amount || 0),
           direction: t.type === 'income' ? 'in' : 'out',
           kind: 'txn',
@@ -711,18 +744,27 @@ export default function App(){
     show('Account deleted.')
   }
 
-  async function addAccountTxn({ accountId, amount, direction, note, kind = 'adjust', relatedAccountId = null }){
+  async function addAccountTxn({ accountId, amount, direction, note, kind = 'adjust', relatedAccountId = null, subAccountId = null }){
     const acct = accounts.find(a => a.id === accountId)
     if (!acct) return
 
     const delta = direction === 'in' ? amount : -amount
-    const nextAccounts = accounts.map(a => (
-      a.id === accountId ? { ...a, balance: Number(a.balance || 0) + delta } : a
-    ))
+    const subAccounts = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+    const targetSubId = subAccounts.length ? (subAccountId || subAccounts[0]?.id) : null
+
+    const nextAccounts = accounts.map(a => {
+      if (a.id !== accountId) return a
+      if (!subAccounts.length) return { ...a, balance: Number(a.balance || 0) + delta }
+      const nextSubs = subAccounts.map(s => (
+        s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+      ))
+      return { ...a, subAccounts: nextSubs }
+    })
 
     const entry = {
       id: uid(),
       accountId,
+      subAccountId: targetSubId,
       amount,
       direction,
       kind,
@@ -735,14 +777,32 @@ export default function App(){
     show('Saved.')
   }
 
-  async function transferAccount({ fromId, toId, amount, note }){
+  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId }){
     const from = accounts.find(a => a.id === fromId)
     const to = accounts.find(a => a.id === toId)
-    if (!from || !to || fromId === toId) return
+    if (!from || !to) return
+    if (fromId === toId && fromSubAccountId === toSubAccountId) return
+
+    const fromSubs = Array.isArray(from.subAccounts) ? from.subAccounts : []
+    const toSubs = Array.isArray(to.subAccounts) ? to.subAccounts : []
+    const resolvedFromSub = fromSubs.length ? (fromSubAccountId || fromSubs[0]?.id) : null
+    const resolvedToSub = toSubs.length ? (toSubAccountId || toSubs[0]?.id) : null
 
     const nextAccounts = accounts.map(a => {
-      if (a.id === fromId) return { ...a, balance: Number(a.balance || 0) - amount }
-      if (a.id === toId) return { ...a, balance: Number(a.balance || 0) + amount }
+      if (a.id === fromId) {
+        if (!fromSubs.length) return { ...a, balance: Number(a.balance || 0) - amount }
+        const nextSubs = fromSubs.map(s => (
+          s.id === resolvedFromSub ? { ...s, balance: Number(s.balance || 0) - amount } : s
+        ))
+        return { ...a, subAccounts: nextSubs }
+      }
+      if (a.id === toId) {
+        if (!toSubs.length) return { ...a, balance: Number(a.balance || 0) + amount }
+        const nextSubs = toSubs.map(s => (
+          s.id === resolvedToSub ? { ...s, balance: Number(s.balance || 0) + amount } : s
+        ))
+        return { ...a, subAccounts: nextSubs }
+      }
       return a
     })
 
@@ -751,6 +811,7 @@ export default function App(){
     const outEntry = {
       id: transferId + '-out',
       accountId: fromId,
+      subAccountId: resolvedFromSub,
       amount,
       direction: 'out',
       relatedAccountId: toId,
@@ -759,6 +820,7 @@ export default function App(){
     const inEntry = {
       id: transferId + '-in',
       accountId: toId,
+      subAccountId: resolvedToSub,
       amount,
       direction: 'in',
       relatedAccountId: fromId,

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fmtTZS } from "../money.js";
 
 export default function Accounts({
@@ -18,6 +18,7 @@ export default function Accounts({
   const [draggingAccountId, setDraggingAccountId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const [dragOverAccountId, setDragOverAccountId] = useState(null);
+  const [expandedAccounts, setExpandedAccounts] = useState({});
 
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   const visibleAccounts = useMemo(
@@ -25,17 +26,23 @@ export default function Accounts({
     [accounts]
   );
 
+  function getAccountBalance(account) {
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+    if (!subs.length) return Number(account.balance || 0);
+    return subs.reduce((s, sub) => s + Number(sub.balance || 0), 0);
+  }
+
   const totals = useMemo(() => {
     const assets = visibleAccounts
       .filter((a) => {
         const g = groupById.get(a.groupId);
         return g?.type === "debit" || g?.type === "asset";
       })
-      .reduce((s, a) => s + Number(a.balance || 0), 0);
+      .reduce((s, a) => s + getAccountBalance(a), 0);
 
     const liabilities = visibleAccounts
       .filter((a) => groupById.get(a.groupId)?.type === "credit")
-      .reduce((s, a) => s + Number(a.balance || 0), 0);
+      .reduce((s, a) => s + getAccountBalance(a), 0);
 
     return { assets, liabilities, netWorth: assets - liabilities };
   }, [visibleAccounts, groupById]);
@@ -143,6 +150,10 @@ export default function Accounts({
     onUpdateGroups?.(next);
   }
 
+  function toggleAccountExpand(id) {
+    setExpandedAccounts((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
   const selected = visibleAccounts.find((a) => a.id === selectedId);
   if (selected) {
     return (
@@ -186,7 +197,7 @@ export default function Accounts({
 
       {shownGroups.map((group) => {
         const items = visibleAccounts.filter((a) => a.groupId === group.id);
-        const total = items.reduce((s, a) => s + Number(a.balance || 0), 0);
+        const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
         const right = group.type === "credit" ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
         const handleRenameGroup = () => {
           const name = prompt("Rename group?", group.name);
@@ -225,6 +236,9 @@ export default function Accounts({
             onAccountDropToGroup={handleAccountDropToGroup}
             draggingAccountId={draggingAccountId}
             dragOverAccountId={dragOverAccountId}
+            getAccountBalance={getAccountBalance}
+            expandedAccounts={expandedAccounts}
+            onToggleAccountExpand={toggleAccountExpand}
           />
         );
       })}
@@ -253,6 +267,9 @@ function Section({
   onAccountDropToGroup,
   draggingAccountId,
   dragOverAccountId,
+  getAccountBalance,
+  expandedAccounts,
+  onToggleAccountExpand,
 }) {
   return (
     <div
@@ -297,42 +314,79 @@ function Section({
           {items.length === 0 ? (
             <div className="emptyRow">No accounts</div>
           ) : (
-            items.map((a) => (
-              <div
-                className={`rowItem clickable ${
-                  draggingAccountId === a.id ? "dragging" : ""
-                } ${dragOverAccountId === a.id ? "dragOver" : ""}`}
-                key={a.id}
-                onClick={() => onSelectAccount?.(a.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") onSelectAccount?.(a.id);
-                }}
-                role="button"
-                tabIndex={0}
-                draggable
-                onDragStart={() => onAccountDragStart?.(a.id)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  onAccountDragOver?.(a.id);
-                }}
-                onDrop={() => onAccountDrop?.(a.id, group.id)}
-                onDragEnd={() => onAccountDragOver?.(null)}
-              >
-                <div className="rowLeft">
-                  <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
-                  <div>
-                    <div className="rowName">{a.name}</div>
-                    <div className="rowMeta">{group.type}</div>
+            items.reduce((nodes, a) => {
+              nodes.push(
+                <div
+                  className={`rowItem clickable ${
+                    draggingAccountId === a.id ? "dragging" : ""
+                  } ${dragOverAccountId === a.id ? "dragOver" : ""}`}
+                  key={a.id}
+                  onClick={() => onSelectAccount?.(a.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") onSelectAccount?.(a.id);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  draggable
+                  onDragStart={() => onAccountDragStart?.(a.id)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    onAccountDragOver?.(a.id);
+                  }}
+                  onDrop={() => onAccountDrop?.(a.id, group.id)}
+                  onDragEnd={() => onAccountDragOver?.(null)}
+                >
+                  <div className="rowLeft">
+                    <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
+                    <div>
+                      <div className="rowName">{a.name}</div>
+                      <div className="rowMeta">{group.type}</div>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rowRight">
-                  <div className={`rowAmount ${group.type === "credit" ? "neg" : ""}`}>
-                    {fmtTZS(a.balance)}
+                  <div className={`rowRight ${Array.isArray(a.subAccounts) && a.subAccounts.length ? "rowRightStack" : ""}`}>
+                    <div className={`rowAmount ${group.type === "credit" ? "neg" : ""}`}>
+                      {fmtTZS(getAccountBalance(a))}
+                    </div>
+                    {Array.isArray(a.subAccounts) && a.subAccounts.length > 0 && (
+                      <button
+                        className="miniBtn"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleAccountExpand?.(a.id);
+                        }}
+                      >
+                        {expandedAccounts?.[a.id] ? "Hide Sub Accounts" : "Show Sub Accounts"}
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))
+              );
+
+              const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
+              if (subs.length && expandedAccounts?.[a.id]) {
+                subs.forEach((s) => {
+                  nodes.push(
+                    <div className="rowItem subRow" key={`${a.id}-${s.id}`}>
+                      <div className="rowLeft">
+                        <div className="avatar subAvatar">
+                          {s.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="rowName">{s.name}</div>
+                          <div className="rowMeta">Sub-account</div>
+                        </div>
+                      </div>
+                      <div className="rowRight">
+                        <div className="rowAmount">{fmtTZS(s.balance)}</div>
+                      </div>
+                    </div>
+                  );
+                });
+              }
+              return nodes;
+            }, [])
           )}
         </div>
       )}
@@ -361,14 +415,35 @@ function AccountDetail({
   onUpsertAccount,
   onDeleteAccount,
 }) {
-  const [mode, setMode] = useState("adjust"); // adjust | transfer
-  const [direction, setDirection] = useState("out"); // in | out
+  const [mode, setMode] = useState(null); // adjust | transfer | null
+  const [direction, setDirection] = useState("in"); // in | out
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [targetId, setTargetId] = useState(
     accounts.find((a) => a.id !== account.id)?.id || ""
   );
+  const [subAccountId, setSubAccountId] = useState(
+    Array.isArray(account.subAccounts) && account.subAccounts.length
+      ? account.subAccounts[0].id
+      : ""
+  );
+  const [targetSubId, setTargetSubId] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+    if (subs.length && !subAccountId) setSubAccountId(subs[0].id);
+  }, [account.subAccounts, subAccountId]);
+
+  useEffect(() => {
+    const target = accounts.find((a) => a.id === targetId);
+    const subs = Array.isArray(target?.subAccounts) ? target.subAccounts : [];
+    if (!subs.length) {
+      setTargetSubId("");
+      return;
+    }
+    if (!subs.find((s) => s.id === targetSubId)) setTargetSubId(subs[0].id);
+  }, [targetId, accounts, targetSubId]);
 
   const entries = useMemo(() => {
     return accountTxns
@@ -391,15 +466,21 @@ function AccountDetail({
       setError("Enter a valid amount.");
       return;
     }
+    if (Array.isArray(account.subAccounts) && account.subAccounts.length && !subAccountId) {
+      setError("Select a sub-account.");
+      return;
+    }
     setError("");
     await onAddAccountTxn({
       accountId: account.id,
+      subAccountId: subAccountId || null,
       amount: amt,
       direction,
       note,
     });
     setAmount("");
     setNote("");
+    setMode(null);
   }
 
   async function handleTransfer() {
@@ -408,8 +489,21 @@ function AccountDetail({
       setError("Enter a valid amount.");
       return;
     }
-    if (!targetId || targetId === account.id) {
-      setError("Select a different account.");
+    if (!targetId) {
+      setError("Select a target account.");
+      return;
+    }
+    if (Array.isArray(account.subAccounts) && account.subAccounts.length && !subAccountId) {
+      setError("Select a sub-account.");
+      return;
+    }
+    const target = accounts.find((a) => a.id === targetId);
+    if (Array.isArray(target?.subAccounts) && target.subAccounts.length && !targetSubId) {
+      setError("Select a target sub-account.");
+      return;
+    }
+    if (targetId === account.id && subAccountId === targetSubId) {
+      setError("Select a different sub-account.");
       return;
     }
     setError("");
@@ -418,9 +512,12 @@ function AccountDetail({
       toId: targetId,
       amount: amt,
       note,
+      fromSubAccountId: subAccountId || null,
+      toSubAccountId: targetSubId || null,
     });
     setAmount("");
     setNote("");
+    setMode(null);
   }
 
   function handleDelete() {
@@ -456,6 +553,17 @@ function AccountDetail({
     onUpsertAccount({ ...account, name, groupId: nextGroupId, groupType: currentGroup?.type });
   }
 
+  function handleAddSubAccount() {
+    const name = prompt("Sub-account name?");
+    if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+    const nextSubs = [...subs, { id: crypto.randomUUID(), name: trimmed, balance: 0 }];
+    onUpsertAccount({ ...account, subAccounts: nextSubs });
+    if (!subAccountId) setSubAccountId(nextSubs[0].id);
+  }
+
   return (
     <div className="accountsScreen accountDetail">
       <div className="accDetailHeader">
@@ -478,7 +586,13 @@ function AccountDetail({
           <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
           <div className="accDetailName">{account.name}</div>
         </div>
-        <div className="accDetailBalance">{fmtTZS(account.balance)}</div>
+        <div className="accDetailBalance">
+          {fmtTZS(
+            Array.isArray(account.subAccounts) && account.subAccounts.length
+              ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+              : account.balance
+          )}
+        </div>
         <div className="accDetailActions">
           <button
             className={`quickBtn ${mode === "adjust" ? "active" : ""}`}
@@ -499,74 +613,169 @@ function AccountDetail({
         </div>
       </div>
 
-      <div className="accQuickForm">
-        <div className="field">
-          <label>Amount (TZS)</label>
-          <input
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g. 10000"
-          />
-        </div>
-        <div className="field">
-          <label>Note (optional)</label>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Bus fare"
-          />
-        </div>
-
-        {mode === "transfer" && (
-          <div className="field">
-            <label>To account</label>
-            <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-              {accounts
-                .filter((a) => a.id !== account.id)
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-            </select>
+      <div className="accHistory">
+        <div className="accHistoryTitle">Sub-accounts</div>
+        {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
+          <div className="list">
+            {account.subAccounts.map((s) => (
+              <div className="rowItem subRow" key={s.id}>
+                <div className="rowLeft">
+                  <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
+                  <div>
+                    <div className="rowName">{s.name}</div>
+                    <div className="rowMeta">Sub-account</div>
+                  </div>
+                </div>
+                <div className="rowRight">
+                  <div className="rowAmount">{fmtTZS(s.balance)}</div>
+                </div>
+              </div>
+            ))}
           </div>
+        ) : (
+          <div className="emptyRow">No sub-accounts yet.</div>
         )}
-
-        {error && <div className="formError">{error}</div>}
-
-        <button
-          className="btn primary"
-          type="button"
-          onClick={mode === "transfer" ? handleTransfer : handleAdjust}
-        >
-          {mode === "transfer" ? "Transfer" : "Save"}
+        <button className="btn" type="button" onClick={handleAddSubAccount}>
+          Add Sub-account
         </button>
       </div>
+
+      {mode && (
+        <div className="modalBackdrop" onClick={() => setMode(null)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">{mode === "transfer" ? "Transfer" : "Add Money"}</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 10000"
+                />
+              </div>
+              <div className="field">
+                <label>Note (optional)</label>
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="e.g. Bus fare"
+                />
+              </div>
+
+              {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
+                <div className="field">
+                  <label>Sub-account</label>
+                  <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
+                    <option value="">Select</option>
+                    {account.subAccounts.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {mode === "transfer" && (
+                <div className="field">
+                  <label>To account</label>
+                  <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {mode === "transfer" && (() => {
+                const target = accounts.find((a) => a.id === targetId);
+                if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
+                return (
+                  <div className="field">
+                    <label>To sub-account</label>
+                    <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
+                      <option value="">Select</option>
+                      {target.subAccounts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
+
+              {error && <div className="formError">{error}</div>}
+
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setMode(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={mode === "transfer" ? handleTransfer : handleAdjust}
+                >
+                  {mode === "transfer" ? "Transfer" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="accHistory">
         <div className="accHistoryTitle">Recent activity</div>
         {grouped.length === 0 ? (
           <div className="emptyRow">No activity yet.</div>
         ) : (
-          grouped.map(([date, items]) => (
-            <div className="accHistoryDay" key={date}>
-              <div className="accHistoryHead">
-                <div>{formatDay(date)}</div>
-              </div>
-              <div className="accHistoryBody">
-                {items.map((t) => (
-                  <div className="accHistoryRow" key={t.id}>
-                    <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
-                      {t.direction === "in" ? "+" : "-"}
-                      {fmtTZS(t.amount)}
-                    </div>
-                    <div className="accHistoryNote">{t.note || "Balance update"}</div>
+          grouped.map(([date, items]) => {
+            const totals = items.reduce(
+              (s, t) => {
+                if (t.direction === "in") s.in += Number(t.amount || 0);
+                else s.out += Number(t.amount || 0);
+                return s;
+              },
+              { in: 0, out: 0 }
+            );
+            return (
+              <div className="accHistoryCard" key={date}>
+                <div className="accHistoryHead">
+                  <div>{formatDay(date)}</div>
+                  <div className="accHistoryTotals">
+                    {totals.out > 0 && <span className="out">OUT {fmtTZS(totals.out)}</span>}
+                    {totals.in > 0 && <span className="in">IN {fmtTZS(totals.in)}</span>}
                   </div>
-                ))}
+                </div>
+                <div className="accHistoryBody">
+                  {items.map((t) => {
+                    const subName =
+                      account.subAccounts?.find((s) => s.id === t.subAccountId)?.name || "";
+                    const title = t.note || "Balance update";
+                    const meta = subName || (t.kind === "transfer" ? "Transfer" : "Account");
+                    return (
+                      <div className="accHistoryRow" key={t.id}>
+                        <div className="accHistoryIcon">
+                          {(title || "A").slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="accHistoryInfo">
+                          <div className="accHistoryTitleRow">{title}</div>
+                          <div className="accHistoryMeta">{meta}</div>
+                        </div>
+                        <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
+                          {t.direction === "in" ? "+" : "-"}
+                          {fmtTZS(t.amount)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -308,6 +308,7 @@ export default function App(){
   const [pin2, setPin2] = useState('')
   const [toast, setToast] = useState('')
   const [showLedgerPicker, setShowLedgerPicker] = useState(false)
+  const [showBudgetSettings, setShowBudgetSettings] = useState(false)
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
@@ -907,6 +908,12 @@ export default function App(){
   // ---------- Screens ----------
   function HomeScreen(){
     const monthLabel = useMemo(() => formatMonthLabel(month), [month])
+    const [collapseExpense, setCollapseExpense] = useState(() => {
+      try { return localStorage.getItem('collapse_expense') === 'true' } catch { return false }
+    })
+    const [collapseIncome, setCollapseIncome] = useState(() => {
+      try { return localStorage.getItem('collapse_income') === 'true' } catch { return false }
+    })
     const expenseTotals = useMemo(() => {
       const map = new Map()
       for (const c of expenseCats) map.set(c, 0)
@@ -929,6 +936,14 @@ export default function App(){
       return map
     }, [filteredTxns, incomeCats])
 
+    useEffect(() => {
+      try { localStorage.setItem('collapse_expense', String(collapseExpense)) } catch {}
+    }, [collapseExpense])
+
+    useEffect(() => {
+      try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch {}
+    }, [collapseIncome])
+
     function addCategory(type){
       const name = prompt(`New ${type} category name?`)
       if (!name) return
@@ -949,6 +964,47 @@ export default function App(){
         }
       }
       persistActiveLedger({ ...activeLedger, categories: nextCategories, categoryMeta: nextMeta })
+    }
+
+    function editCategory(type){
+      const list = type === 'expense' ? expenseCats : incomeCats
+      if (!list.length) return
+      const from = prompt(`Rename which ${type} category?\n${list.join(', ')}`)
+      if (!from) return
+      const oldName = from.trim()
+      if (!oldName || !list.includes(oldName)) return
+      const to = prompt(`Rename "${oldName}" to?`)
+      if (!to) return
+      const newName = to.trim()
+      if (!newName || newName === oldName) return
+      if (list.some(c => c.toLowerCase() === newName.toLowerCase())) return
+
+      const nextList = list.map(c => (c === oldName ? newName : c))
+      const nextCategories = {
+        ...categories,
+        [type]: nextList
+      }
+      const nextMeta = {
+        ...categoryMeta,
+        [type]: {
+          ...categoryMeta[type]
+        }
+      }
+      if (nextMeta[type]?.[oldName]) {
+        nextMeta[type][newName] = nextMeta[type][oldName]
+        delete nextMeta[type][oldName]
+      }
+      const nextTxns = txns.map(t => (
+        t.type === type && t.category === oldName
+          ? { ...t, category: newName }
+          : t
+      ))
+      persistActiveLedger({
+        ...activeLedger,
+        txns: nextTxns,
+        categories: nextCategories,
+        categoryMeta: nextMeta
+      })
     }
 
     if (selectedCategory){
@@ -1039,73 +1095,95 @@ export default function App(){
         <div className="ledgerSection">
           <div className="ledgerSectionHead">
             <div className="ledgerSectionTitle">
-              Expenses <span className="ledgerSectionTotal">{fmtTZS(kpis.exp)}</span>
+              Income <span className="ledgerSectionTotal">{fmtTZS(kpis.inc)}</span>
             </div>
-            <button className="ledgerAddBtn" onClick={() => addCategory('expense')} type="button">
-              + Add
-            </button>
-          </div>
-          <div className="ledgerGrid">
-            {expenseCats.map((c, i) => {
-              const meta = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
-              const spent = expenseTotals.get(c) || 0
-              const ratio = meta.budget > 0 ? spent / meta.budget : 0
-              const progress = Math.min(ratio * 100, 100)
-              const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
-              return (
-              <div
-                className={`ledgerCard theme-${(i % 9) + 1}`}
-                key={c}
-                style={{
-                  '--progress': `${progress}%`,
-                  '--progress-color': progressColor
-                }}
-                onClick={() => setSelectedCategory({ type: 'expense', name: c })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setSelectedCategory({ type: 'expense', name: c })
-                  }
-                }}
+            <div className="ledgerSectionActions">
+              <button className="ledgerAddBtn" onClick={() => addCategory('income')} type="button">
+                + Add
+              </button>
+              <button
+                className="ledgerCollapseBtn"
+                type="button"
+                onClick={() => setCollapseIncome(v => !v)}
               >
-                <div className="ledgerCardTitle">{c}</div>
-                <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
-                <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
-              </div>
-            )})}
+                {collapseIncome ? '▸' : '▾'}
+              </button>
+            </div>
           </div>
+          {!collapseIncome && (
+            <div className="ledgerGrid">
+              {incomeCats.map((c, i) => (
+                <div
+                  className={`ledgerCard theme-${(i % 6) + 4}`}
+                  key={c}
+                  onClick={() => setSelectedCategory({ type: 'income', name: c })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setSelectedCategory({ type: 'income', name: c })
+                    }
+                  }}
+                >
+                  <div className="ledgerCardTitle">{c}</div>
+                  <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
+                  <div className="ledgerCardValue">{fmtTZS(incomeTotals.get(c) || 0)}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="ledgerSection">
           <div className="ledgerSectionHead">
             <div className="ledgerSectionTitle">
-              Income <span className="ledgerSectionTotal">{fmtTZS(kpis.inc)}</span>
+              Expenses <span className="ledgerSectionTotal">{fmtTZS(kpis.exp)}</span>
             </div>
-            <button className="ledgerAddBtn" onClick={() => addCategory('income')} type="button">
-              + Add
-            </button>
-          </div>
-          <div className="ledgerGrid">
-            {incomeCats.map((c, i) => (
-              <div
-                className={`ledgerCard theme-${(i % 6) + 4}`}
-                key={c}
-                onClick={() => setSelectedCategory({ type: 'income', name: c })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setSelectedCategory({ type: 'income', name: c })
-                  }
-                }}
+            <div className="ledgerSectionActions">
+              <button className="ledgerAddBtn" onClick={() => addCategory('expense')} type="button">
+                + Add
+              </button>
+              <button
+                className="ledgerCollapseBtn"
+                type="button"
+                onClick={() => setCollapseExpense(v => !v)}
               >
-                <div className="ledgerCardTitle">{c}</div>
-                <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
-                <div className="ledgerCardValue">{fmtTZS(incomeTotals.get(c) || 0)}</div>
-              </div>
-            ))}
+                {collapseExpense ? '▸' : '▾'}
+              </button>
+            </div>
           </div>
+          {!collapseExpense && (
+            <div className="ledgerGrid">
+              {expenseCats.map((c, i) => {
+                const meta = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
+                const spent = expenseTotals.get(c) || 0
+                const ratio = meta.budget > 0 ? spent / meta.budget : 0
+                const progress = Math.min(ratio * 100, 100)
+                const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
+                return (
+                <div
+                  className={`ledgerCard theme-${(i % 9) + 1}`}
+                  key={c}
+                  style={{
+                    '--progress': `${progress}%`,
+                    '--progress-color': progressColor
+                  }}
+                  onClick={() => setSelectedCategory({ type: 'expense', name: c })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setSelectedCategory({ type: 'expense', name: c })
+                    }
+                  }}
+                >
+                  <div className="ledgerCardTitle">{c}</div>
+                  <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
+                  <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
+                </div>
+              )})}
+            </div>
+          )}
         </div>
 
         {toast && <div className="toast">{toast}</div>}
@@ -1171,6 +1249,73 @@ export default function App(){
       onUpdateMeta?.({ budget, subs: next })
     }
 
+    function renameCategory(){
+      const nextName = prompt('Rename category?', category.name)
+      if (!nextName) return
+      const trimmed = nextName.trim()
+      if (!trimmed || trimmed === category.name) return
+      const list = category.type === 'expense' ? expenseCats : incomeCats
+      if (list.some(c => c.toLowerCase() === trimmed.toLowerCase())) return
+      const nextList = list.map(c => (c === category.name ? trimmed : c))
+      const nextCategories = {
+        ...categories,
+        [category.type]: nextList
+      }
+      const nextMeta = {
+        ...categoryMeta,
+        [category.type]: {
+          ...categoryMeta[category.type]
+        }
+      }
+      if (nextMeta[category.type]?.[category.name]) {
+        nextMeta[category.type][trimmed] = nextMeta[category.type][category.name]
+        delete nextMeta[category.type][category.name]
+      }
+      const nextTxns = txns.map(t => (
+        t.type === category.type && t.category === category.name
+          ? { ...t, category: trimmed }
+          : t
+      ))
+      persistActiveLedger({
+        ...activeLedger,
+        txns: nextTxns,
+        categories: nextCategories,
+        categoryMeta: nextMeta
+      })
+      onClose()
+    }
+
+    function deleteCategory(){
+      if (!confirm(`Delete "${category.name}"?`)) return
+      const list = category.type === 'expense' ? expenseCats : incomeCats
+      const nextList = list.filter(c => c !== category.name)
+      const nextCategories = {
+        ...categories,
+        [category.type]: nextList
+      }
+      const nextMeta = {
+        ...categoryMeta,
+        [category.type]: {
+          ...categoryMeta[category.type]
+        }
+      }
+      if (nextMeta[category.type]?.[category.name]) {
+        delete nextMeta[category.type][category.name]
+      }
+      const nextTxns = txns.map(t => (
+        t.type === category.type && t.category === category.name
+          ? { ...t, category: '' }
+          : t
+      ))
+      persistActiveLedger({
+        ...activeLedger,
+        txns: nextTxns,
+        categories: nextCategories,
+        categoryMeta: nextMeta
+      })
+      onClose()
+    }
+
     function updateBudget(value){
       const nextBudget = Number(value || 0)
       onUpdateMeta?.({ budget: nextBudget, subs: subcats })
@@ -1194,7 +1339,10 @@ export default function App(){
         <div className="catDetailHeader">
           <button className="iconBtn" onClick={onClose} type="button">✕</button>
           <div className="catDetailTitle">{category.name}</div>
-          <button className="iconBtn" type="button">☰</button>
+          <div className="catDetailActions">
+            <button className="pillBtn" type="button" onClick={renameCategory}>Edit</button>
+            <button className="pillBtn danger" type="button" onClick={deleteCategory}>Delete</button>
+          </div>
         </div>
 
         <div className="catDetailTotal">{fmtTZS(total)}</div>
@@ -1233,16 +1381,6 @@ export default function App(){
             <button className="catChip gear" type="button" onClick={addSubcategory}>+ Add subcategory</button>
           </div>
         )}
-
-        <div className="catDetailBudget">
-          <label>Monthly budget (TZS)</label>
-          <input
-            inputMode="decimal"
-            value={budget || ''}
-            onChange={e => updateBudget(e.target.value)}
-            placeholder="e.g. 500000"
-          />
-        </div>
 
         <div className="catDetailForm">
           <div className="field">
@@ -1684,6 +1822,14 @@ export default function App(){
 
         <div className="hr" />
 
+        <div className="row">
+          <button className="btn" onClick={() => setShowBudgetSettings(true)}>
+            Monthly Budget
+          </button>
+        </div>
+
+        <div className="hr" />
+
         <div className="row" style={{ alignItems:'center', justifyContent:'space-between' }}>
           <div>
             <div style={{ fontWeight:600 }}>PIN lock</div>
@@ -1733,6 +1879,68 @@ export default function App(){
         </div>
 
         {toast && <div className="toast">{toast}</div>}
+      </div>
+    )
+  }
+
+  function BudgetSettings(){
+    const [draftBudgets, setDraftBudgets] = useState(() => {
+      const map = {}
+      expenseCats.forEach(c => {
+        const meta = categoryMeta.expense?.[c] || { budget: 0 }
+        map[c] = meta.budget || 0
+      })
+      return map
+    })
+    const totalBudget = Object.values(draftBudgets).reduce((s, v) => s + Number(v || 0), 0)
+
+    function handleSaveBudgets(){
+      const nextMeta = {
+        ...categoryMeta,
+        expense: {
+          ...categoryMeta.expense
+        }
+      }
+      expenseCats.forEach(c => {
+        const current = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
+        const nextBudget = Number(draftBudgets[c] || 0)
+        nextMeta.expense[c] = { ...current, budget: nextBudget }
+      })
+      persistActiveLedger({ ...activeLedger, categoryMeta: nextMeta })
+      setShowBudgetSettings(false)
+      show('Budgets saved.')
+    }
+
+    return (
+      <div className="modalBackdrop" onClick={() => setShowBudgetSettings(false)}>
+        <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+          <div className="modalTitle">Monthly Budgets</div>
+          <div className="budgetPill">Total budget: {fmtTZS(totalBudget)}</div>
+          <div className="row" style={{ flexDirection: 'column', gap: 0 }}>
+            {expenseCats.map(c => (
+              <div className="field budgetRow" key={`budget-exp-${c}`}>
+                <label>{c}</label>
+                <input
+                  inputMode="decimal"
+                  value={draftBudgets[c] ?? ''}
+                  onChange={e => {
+                    const value = e.target.value
+                    setDraftBudgets(prev => ({ ...prev, [c]: value }))
+                  }}
+                  placeholder="e.g. 500,000"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="row" style={{ justifyContent:'flex-end', marginTop: 10 }}>
+            <button className="btn" type="button" onClick={() => setShowBudgetSettings(false)}>
+              Cancel
+            </button>
+            <button className="btn primary" type="button" onClick={handleSaveBudgets}>
+              Save Budgets
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -1830,6 +2038,7 @@ export default function App(){
       {tab === 'tx' && <TransactionsScreen />}
 
       {tab === 'settings' && <SettingsScreen />}
+      {showBudgetSettings && <BudgetSettings />}
 
       {/* Bottom tabs */}
       <BottomNav tab={tab} setTab={setTab} variant="light" />

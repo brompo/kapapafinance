@@ -345,7 +345,11 @@ function Section({
                   </div>
 
                   <div className={`rowRight ${Array.isArray(a.subAccounts) && a.subAccounts.length ? "rowRightStack" : ""}`}>
-                    <div className={`rowAmount ${group.type === "credit" ? "neg" : ""}`}>
+                    <div
+                      className={`rowAmount ${
+                        group.type === "credit" || getAccountBalance(a) < 0 ? "neg" : ""
+                      }`}
+                    >
                       {fmtTZS(getAccountBalance(a))}
                     </div>
                     {Array.isArray(a.subAccounts) && a.subAccounts.length > 0 && (
@@ -379,7 +383,9 @@ function Section({
                         </div>
                       </div>
                       <div className="rowRight">
-                        <div className="rowAmount">{fmtTZS(s.balance)}</div>
+                        <div className={`rowAmount ${Number(s.balance || 0) < 0 ? "neg" : ""}`}>
+                          {fmtTZS(s.balance)}
+                        </div>
                       </div>
                     </div>
                   );

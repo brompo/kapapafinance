@@ -425,6 +425,31 @@ label{font-size:12px;color:var(--muted)}
   color:#1f2332;
   margin-bottom:8px;
 }
+.budgetRow{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-direction: row;
+}
+.budgetRow label{
+  min-width:140px;
+  text-align:right;
+}
+.budgetRow input{
+  flex:1;
+}
+.budgetPill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 12px;
+  border-radius:999px;
+  background:#eef0ff;
+  border:1px solid #dfe3ff;
+  color:#4f57b0;
+  font-weight:700;
+  margin:6px 0 10px;
+}
 /* =========================
    Account detail screen
    ========================= */
@@ -875,6 +900,20 @@ label{font-size:12px;color:var(--muted)}
 .ledgerSectionHead{
   display:flex;align-items:center;justify-content:space-between;
 }
+.ledgerSectionActions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.ledgerCollapseBtn{
+  border:1px solid #e2e4f6;
+  background:#f7f8ff;
+  color:#5a5fb0;
+  border-radius:999px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-weight:600;
+}
 .ledgerSectionTitle{font-weight:600;color:#2b2f4e}
 .ledgerSectionTotal{
   font-weight:700;
@@ -955,6 +994,11 @@ label{font-size:12px;color:var(--muted)}
   align-items:center;
   justify-content:space-between;
   gap:10px;
+}
+.catDetailActions{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
 .catDetailTitle{
   font-weight:600;

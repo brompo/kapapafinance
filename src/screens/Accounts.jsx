@@ -528,6 +528,8 @@ function AccountDetail({
   const [creditType, setCreditType] = useState("simple");
   const [receiveDate, setReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [interestStartDate, setInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [creditToAccountId, setCreditToAccountId] = useState("");
+  const [creditToSubId, setCreditToSubId] = useState("");
   const [error, setError] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [editTxnAmount, setEditTxnAmount] = useState("");
@@ -561,6 +563,24 @@ function AccountDetail({
     setEditName(account.name || "");
     setEditLedgerId(account.ledgerId || activeLedgerId);
   }, [account.id, account.name, account.ledgerId, activeLedgerId]);
+
+  useEffect(() => {
+    if (!showCreditModal) return;
+    if (!creditToAccountId) {
+      const firstTarget = accounts.find((a) => a.id !== account.id);
+      if (firstTarget) setCreditToAccountId(firstTarget.id);
+    }
+  }, [showCreditModal, creditToAccountId, accounts, account.id]);
+
+  useEffect(() => {
+    const target = accounts.find((a) => a.id === creditToAccountId);
+    const subs = Array.isArray(target?.subAccounts) ? target.subAccounts : [];
+    if (!subs.length) {
+      setCreditToSubId("");
+      return;
+    }
+    if (!subs.find((s) => s.id === creditToSubId)) setCreditToSubId(subs[0].id);
+  }, [creditToAccountId, accounts, creditToSubId]);
   useEffect(() => {
     if (!selectedTxn) return;
     setEditTxnAmount(String(selectedTxn.amount || ""));
@@ -753,6 +773,16 @@ function AccountDetail({
       setError("Enter a valid interest rate.");
       return;
     }
+    if (!creditToAccountId) {
+      setError("Select the account to receive the money.");
+      return;
+    }
+    const target = accounts.find((a) => a.id === creditToAccountId);
+    const subs = Array.isArray(target?.subAccounts) ? target.subAccounts : [];
+    if (subs.length && !creditToSubId) {
+      setError("Select a sub-account for the receiving account.");
+      return;
+    }
     setError("");
     await onAddAccountTxn({
       accountId: account.id,
@@ -763,10 +793,14 @@ function AccountDetail({
       creditRate: rate,
       creditType,
       receiveDate,
-      interestStartDate
+      interestStartDate,
+      creditToAccountId,
+      creditToSubAccountId: creditToSubId || null
     });
     setCreditAmount("");
     setCreditRate("");
+    setCreditToAccountId("");
+    setCreditToSubId("");
     setShowCreditModal(false);
   }
 
@@ -1100,6 +1134,36 @@ function AccountDetail({
                   onChange={(e) => setReceiveDate(e.target.value)}
                 />
               </div>
+              <div className="field">
+                <label>To account</label>
+                <select value={creditToAccountId} onChange={(e) => setCreditToAccountId(e.target.value)}>
+                  <option value="">Select account</option>
+                  {accounts
+                    .filter((a) => a.id !== account.id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {(() => {
+                const target = accounts.find((a) => a.id === creditToAccountId);
+                if (!target || !Array.isArray(target.subAccounts) || !target.subAccounts.length) return null;
+                return (
+                  <div className="field">
+                    <label>To sub-account</label>
+                    <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
+                      <option value="">Select sub-account</option>
+                      {target.subAccounts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
               <div className="field">
                 <label>Interest Start Date</label>
                 <input

@@ -802,7 +802,9 @@ export default function App(){
     creditRate = null,
     creditType = null,
     receiveDate = null,
-    interestStartDate = null
+    interestStartDate = null,
+    creditToAccountId = null,
+    creditToSubAccountId = null
   }){
     const acct = allAccounts.find(a => a.id === accountId)
     if (!acct) return
@@ -811,7 +813,7 @@ export default function App(){
     const subAccounts = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
     const targetSubId = subAccounts.length ? (subAccountId || subAccounts[0]?.id) : null
 
-    const nextAccounts = allAccounts.map(a => {
+    let nextAccounts = allAccounts.map(a => {
       if (a.id !== accountId) return a
       if (!subAccounts.length) return { ...a, balance: Number(a.balance || 0) + delta }
       const nextSubs = subAccounts.map(s => (
@@ -827,7 +829,7 @@ export default function App(){
       amount,
       direction,
       kind,
-      relatedAccountId,
+      relatedAccountId: relatedAccountId || creditToAccountId || null,
       note: note || '',
       date: receiveDate || todayISO(),
       creditRate,
@@ -836,7 +838,29 @@ export default function App(){
       interestStartDate
     }
 
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: [entry, ...allAccountTxns] })
+    let extraEntry = null
+    if (kind === 'credit' && creditToAccountId && creditToAccountId !== accountId) {
+      const toAcct = allAccounts.find(a => a.id === creditToAccountId)
+      if (toAcct) {
+        const toSubs = Array.isArray(toAcct.subAccounts) ? toAcct.subAccounts : []
+        const resolvedToSub = toSubs.length ? (creditToSubAccountId || toSubs[0]?.id) : null
+        nextAccounts = applyAccountDelta(nextAccounts, creditToAccountId, resolvedToSub, Number(amount || 0))
+        extraEntry = {
+          id: uid(),
+          accountId: creditToAccountId,
+          subAccountId: resolvedToSub,
+          amount,
+          direction: 'in',
+          kind: 'credit',
+          relatedAccountId: accountId,
+          note: note || `Credit received from ${acct.name}`,
+          date: receiveDate || todayISO()
+        }
+      }
+    }
+
+    const nextEntries = extraEntry ? [entry, extraEntry, ...allAccountTxns] : [entry, ...allAccountTxns]
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: nextEntries })
     show('Saved.')
   }
 

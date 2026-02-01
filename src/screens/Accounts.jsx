@@ -6,6 +6,13 @@ export default function Accounts({
   accountTxns = [],
   groups = [],
   activeLedgerId = "",
+  ledgers = [],
+  focusAccountId,
+  onFocusAccountUsed,
+  onSwitchLedger,
+  onDetailOpen,
+  onDetailClose,
+  onToast,
   onUpsertAccount,
   onDeleteAccount,
   onAddAccountTxn,
@@ -23,11 +30,22 @@ export default function Accounts({
   const [dragOverAccountId, setDragOverAccountId] = useState(null);
   const [expandedAccounts, setExpandedAccounts] = useState({});
 
+  useEffect(() => {
+    setSelectedId(null);
+  }, [activeLedgerId]);
+
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   const visibleAccounts = useMemo(
     () => accounts.filter((a) => !a.archived),
     [accounts]
   );
+
+  useEffect(() => {
+    if (!focusAccountId) return;
+    const target = visibleAccounts.find((a) => a.id === focusAccountId);
+    if (target) setSelectedId(target.id);
+    onFocusAccountUsed?.();
+  }, [focusAccountId, visibleAccounts, onFocusAccountUsed]);
 
   function daysBetween(a, b) {
     const start = new Date(a);
@@ -204,6 +222,10 @@ export default function Accounts({
   }
 
   const selected = visibleAccounts.find((a) => a.id === selectedId);
+  useEffect(() => {
+    if (selected) onDetailOpen?.();
+    else onDetailClose?.();
+  }, [selected, onDetailOpen, onDetailClose]);
   if (selected) {
     return (
       <AccountDetail
@@ -212,6 +234,8 @@ export default function Accounts({
         groups={groups}
         accountTxns={accountTxns}
         activeLedgerId={activeLedgerId}
+        ledgers={ledgers}
+        onSwitchLedger={onSwitchLedger}
         onClose={() => setSelectedId(null)}
         onAddAccountTxn={onAddAccountTxn}
         onTransferAccount={onTransferAccount}
@@ -468,6 +492,13 @@ function AccountDetail({
   groups,
   accountTxns,
   activeLedgerId,
+  ledgers,
+  focusAccountId,
+  onFocusAccountUsed,
+  onSwitchLedger,
+  onDetailOpen,
+  onDetailClose,
+  onToast,
   onClose,
   onAddAccountTxn,
   onTransferAccount,
@@ -506,6 +537,10 @@ function AccountDetail({
   const [editCreditType, setEditCreditType] = useState("simple");
   const [editReceiveDate, setEditReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [editInterestStartDate, setEditInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState(account.name || "");
+  const [editLedgerId, setEditLedgerId] = useState(account.ledgerId || activeLedgerId);
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
@@ -521,6 +556,11 @@ function AccountDetail({
     }
     if (!subs.find((s) => s.id === targetSubId)) setTargetSubId(subs[0].id);
   }, [targetId, accounts, targetSubId]);
+
+  useEffect(() => {
+    setEditName(account.name || "");
+    setEditLedgerId(account.ledgerId || activeLedgerId);
+  }, [account.id, account.name, account.ledgerId, activeLedgerId]);
   useEffect(() => {
     if (!selectedTxn) return;
     setEditTxnAmount(String(selectedTxn.amount || ""));
@@ -625,19 +665,39 @@ function AccountDetail({
   }
 
   function handleEdit() {
-    const name = prompt("Rename account?", account.name);
-    if (!name) return;
-    const sameTypeGroups = groups.filter((g) => g.type === currentGroup?.type);
-    let nextGroupId = account.groupId;
-    if (sameTypeGroups.length > 1) {
-      const list = sameTypeGroups
-        .map((g, i) => `${i + 1}) ${g.name}`)
-        .join("\n");
-      const pick = prompt(`Move to group (same type):\n${list}`, "1");
-      const idx = Number(pick || 0) - 1;
-      if (sameTypeGroups[idx]) nextGroupId = sameTypeGroups[idx].id;
+    setEditError("");
+    setShowEditModal(true);
+  }
+
+  async function handleSaveEdit() {
+    const name = (editName || "").trim();
+    if (!name) {
+      setEditError("Enter a name.");
+      return;
     }
-    onUpsertAccount({ ...account, name, groupId: nextGroupId, groupType: currentGroup?.type });
+    const nextLedgerId = editLedgerId || account.ledgerId || activeLedgerId;
+    const targetLedger = ledgers.find((l) => l.id === nextLedgerId);
+    const targetGroups = Array.isArray(targetLedger?.groups) ? targetLedger.groups : [];
+    const type = currentGroup?.type || account.groupType || "debit";
+    const targetGroup = targetGroups.find((g) => g.type === type) || targetGroups[0] || currentGroup;
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+    const nextSubs = subs.map((s) => ({ ...s, ledgerId: nextLedgerId }));
+    await onUpsertAccount?.({
+      ...account,
+      name,
+      ledgerId: nextLedgerId,
+      groupId: targetGroup?.id || account.groupId,
+      groupType: targetGroup?.type || account.groupType,
+      subAccounts: nextSubs
+    });
+    setShowEditModal(false);
+    if (nextLedgerId && nextLedgerId !== activeLedgerId) {
+      const ledgerName = ledgers.find((l) => l.id === nextLedgerId)?.name || "selected ledger";
+      onToast?.(`Account moved to ${ledgerName}.`);
+    } else {
+      onToast?.("Account updated.");
+    }
+    // Do not switch active ledger when editing; only update the account's ledger assignment.
   }
 
   function daysBetween(a, b) {
@@ -798,14 +858,14 @@ function AccountDetail({
             return fmtTZS(base)
           })()}
         </div>
-        {currentGroup?.type === "credit" && (() => {
-          const summary = computeCreditSummary();
-          return (
-            <div className="small" style={{ marginTop: 4 }}>
-              Accrued interest: {fmtTZS(summary.accrued)}
-            </div>
-          );
-        })()}
+      {currentGroup?.type === "credit" && (() => {
+        const summary = computeCreditSummary();
+        return (
+          <div className="small" style={{ marginTop: 4 }}>
+            Accrued interest: {fmtTZS(summary.accrued)}
+          </div>
+        );
+      })()}
         <div className="accDetailActions">
           <button
             className={`quickBtn ${mode === "adjust" ? "active" : ""}`}
@@ -1160,6 +1220,42 @@ function AccountDetail({
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Edit Account</div>
+            <div className="field">
+              <label>Name</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Account name"
+              />
+            </div>
+            <div className="field">
+              <label>Ledger</label>
+              <select value={editLedgerId} onChange={(e) => setEditLedgerId(e.target.value)}>
+                {ledgers.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {editError && <div className="small" style={{ color: "#d25b5b" }}>{editError}</div>}
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
+                Cancel
+              </button>
+              <button className="btn primary" type="button" onClick={handleSaveEdit}>
+                Save
+              </button>
             </div>
           </div>
         </div>

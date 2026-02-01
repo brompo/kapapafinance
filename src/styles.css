@@ -441,6 +441,12 @@ label{font-size:12px;color:var(--muted)}
   color:#1f2332;
   margin-bottom:8px;
 }
+.modalActions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:12px;
+}
 .budgetRow{
   display:flex;
   align-items:center;

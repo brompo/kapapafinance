@@ -308,6 +308,8 @@ export default function App(){
   const [pin2, setPin2] = useState('')
   const [toast, setToast] = useState('')
   const [showLedgerPicker, setShowLedgerPicker] = useState(false)
+  const [focusAccountId, setFocusAccountId] = useState(null)
+  const [showAccountsHeader, setShowAccountsHeader] = useState(true)
   const [showBudgetSettings, setShowBudgetSettings] = useState(false)
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
@@ -531,6 +533,13 @@ export default function App(){
     persist({ ...vault, activeLedgerId: id })
     setSelectedCategory(null)
     setShowLedgerPicker(false)
+  }
+
+  async function handleSwitchLedgerToAccounts(id, accountId){
+    if (!id || id === activeLedger.id) return
+    await persist({ ...vault, activeLedgerId: id })
+    setTab('accounts')
+    setFocusAccountId(accountId || null)
   }
 
   function formatMonthLabel(value){
@@ -2148,43 +2157,38 @@ export default function App(){
 
       {tab === 'accounts' && (
         <div className="ledgerScreen">
-          <div className="ledgerHeader">
-            <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
-              {activeLedger.name || 'Personal'} ▾
-            </button>
-            <div className="ledgerPeriod">
-              <button className="ledgerNavBtn" type="button" onClick={() => shiftMonth(-1)}>
-                ‹
-              </button>
-              <div className="ledgerPeriodLabel">{formatMonthLabel(month)}</div>
-              <button className="ledgerNavBtn" type="button" onClick={() => shiftMonth(1)}>
-                ›
-              </button>
-            </div>
-          </div>
-
-          {showLedgerPicker && (
-            <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
-              <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
-                <div className="ledgerPickerTitle">Ledgers</div>
-                <div className="ledgerPickerList">
-                  {ledgers.map(l => (
-                    <button
-                      key={l.id}
-                      className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
-                      type="button"
-                      onClick={() => handleSelectLedger(l.id)}
-                    >
-                      <span className="ledgerPickerName">{l.name}</span>
-                      {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
-                    </button>
-                  ))}
-                </div>
-                <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
-                  + Add Ledger
+          {showAccountsHeader && (
+            <>
+              <div className="ledgerHeader">
+                <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
+                  {activeLedger.name || 'Personal'} ▾
                 </button>
               </div>
-            </div>
+
+              {showLedgerPicker && (
+                <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+                  <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+                    <div className="ledgerPickerTitle">Ledgers</div>
+                    <div className="ledgerPickerList">
+                      {ledgers.map(l => (
+                        <button
+                          key={l.id}
+                          className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                          type="button"
+                          onClick={() => handleSelectLedger(l.id)}
+                        >
+                          <span className="ledgerPickerName">{l.name}</span>
+                          {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
+                      + Add Ledger
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <AccountsScreen
@@ -2192,7 +2196,14 @@ export default function App(){
             accountTxns={accountTxns}
             groups={activeLedger.groups || []}
             activeLedgerId={activeLedger.id}
-            onUpsertAccount={upsertAccount}
+          ledgers={ledgers}
+          focusAccountId={focusAccountId}
+          onFocusAccountUsed={() => setFocusAccountId(null)}
+          onSwitchLedger={handleSwitchLedgerToAccounts}
+          onDetailOpen={() => setShowAccountsHeader(false)}
+          onDetailClose={() => setShowAccountsHeader(true)}
+          onToast={show}
+          onUpsertAccount={upsertAccount}
             onDeleteAccount={deleteAccount}
             onAddAccountTxn={addAccountTxn}
             onTransferAccount={transferAccount}

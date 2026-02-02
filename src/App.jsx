@@ -1250,6 +1250,7 @@ export default function App(){
                 <div
                   className={`ledgerCard theme-${(i % 6) + 4}`}
                   key={c}
+                  style={categoryMeta.income?.[c]?.color ? { background: categoryMeta.income[c].color } : undefined}
                   onClick={() => setSelectedCategory({ type: 'income', name: c })}
                   role="button"
                   tabIndex={0}
@@ -1300,7 +1301,8 @@ export default function App(){
                   key={c}
                   style={{
                     '--progress': `${progress}%`,
-                    '--progress-color': progressColor
+                    '--progress-color': progressColor,
+                    ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
                   }}
                   onClick={() => setSelectedCategory({ type: 'expense', name: c })}
                   role="button"
@@ -1332,8 +1334,22 @@ export default function App(){
     const [accountId, setAccountId] = useState('')
     const [selectedSub, setSelectedSub] = useState('')
     const [selectedTxn, setSelectedTxn] = useState(null)
+    const [showEditModal, setShowEditModal] = useState(false)
+    const [editName, setEditName] = useState(category.name)
+    const [editColor, setEditColor] = useState(meta?.color || '')
     const budget = meta?.budget || 0
     const subcats = meta?.subs?.length ? meta.subs : (CATEGORY_SUBS[category.name] || [])
+    const colorOptions = [
+      '#ffe8b6',
+      '#ffe0cf',
+      '#ffd9ec',
+      '#e8dcff',
+      '#dbeaff',
+      '#e6f3ff',
+      '#dff5e1',
+      '#fff1c9',
+      '#f0efe9'
+    ]
 
     const spent = total
     const ratio = budget > 0 ? spent / budget : 0
@@ -1383,14 +1399,24 @@ export default function App(){
       onUpdateMeta?.({ budget, subs: next })
     }
 
-    function renameCategory(){
-      const nextName = prompt('Rename category?', category.name)
-      if (!nextName) return
-      const trimmed = nextName.trim()
-      if (!trimmed || trimmed === category.name) return
+    function openEditModal(){
+      setEditName(category.name)
+      setEditColor(meta?.color || '')
+      setShowEditModal(true)
+    }
+
+    function saveCategoryEdit(){
+      const trimmed = editName.trim()
+      if (!trimmed) return
       const list = category.type === 'expense' ? expenseCats : incomeCats
-      if (list.some(c => c.toLowerCase() === trimmed.toLowerCase())) return
-      const nextList = list.map(c => (c === category.name ? trimmed : c))
+      if (
+        trimmed !== category.name &&
+        list.some(c => c.toLowerCase() === trimmed.toLowerCase())
+      ) return
+
+      const nextList = trimmed === category.name
+        ? list
+        : list.map(c => (c === category.name ? trimmed : c))
       const nextCategories = {
         ...categories,
         [category.type]: nextList
@@ -1401,22 +1427,28 @@ export default function App(){
           ...categoryMeta[category.type]
         }
       }
-      if (nextMeta[category.type]?.[category.name]) {
-        nextMeta[category.type][trimmed] = nextMeta[category.type][category.name]
+      const prevMeta = nextMeta[category.type]?.[category.name] || { budget, subs: subcats }
+      if (trimmed !== category.name) {
+        nextMeta[category.type][trimmed] = { ...prevMeta, color: editColor || '' }
         delete nextMeta[category.type][category.name]
+      } else {
+        nextMeta[category.type][category.name] = { ...prevMeta, color: editColor || '' }
       }
-      const nextTxns = txns.map(t => (
-        t.type === category.type && t.category === category.name
-          ? { ...t, category: trimmed }
-          : t
-      ))
+      const nextTxns = trimmed === category.name
+        ? txns
+        : txns.map(t => (
+          t.type === category.type && t.category === category.name
+            ? { ...t, category: trimmed }
+            : t
+        ))
       persistActiveLedger({
         ...activeLedger,
         txns: nextTxns,
         categories: nextCategories,
         categoryMeta: nextMeta
       })
-      onClose()
+      setShowEditModal(false)
+      if (trimmed !== category.name) onClose()
     }
 
     function deleteCategory(){
@@ -1474,7 +1506,7 @@ export default function App(){
           <button className="iconBtn" onClick={onClose} type="button">✕</button>
           <div className="catDetailTitle">{category.name}</div>
           <div className="catDetailActions">
-            <button className="pillBtn" type="button" onClick={renameCategory}>Edit</button>
+            <button className="pillBtn" type="button" onClick={openEditModal}>Edit</button>
             <button className="pillBtn danger" type="button" onClick={deleteCategory}>Delete</button>
           </div>
         </div>
@@ -1619,6 +1651,48 @@ export default function App(){
             })
           )}
         </div>
+
+        {showEditModal && (
+          <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Edit Category</div>
+              <div className="field">
+                <label>Name</label>
+                <input value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Background color</label>
+                <div className="colorPickerRow">
+                  {colorOptions.map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`colorSwatch ${editColor === color ? 'active' : ''}`}
+                      style={{ background: color }}
+                      onClick={() => setEditColor(color)}
+                      aria-label={`Pick ${color}`}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className={`colorSwatch custom ${!editColor ? 'active' : ''}`}
+                    onClick={() => setEditColor('')}
+                  >
+                    None
+                  </button>
+                </div>
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={saveCategoryEdit}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

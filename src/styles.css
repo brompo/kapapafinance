@@ -1104,6 +1104,33 @@ label{font-size:12px;color:var(--muted)}
   border-radius:16px;
   box-shadow:0 6px 18px rgba(27,33,62,.05);
 }
+.colorPickerRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.colorSwatch{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  border:1px solid #e0e3f2;
+  box-shadow:0 4px 10px rgba(20,24,50,.1);
+  cursor:pointer;
+}
+.colorSwatch.active{
+  outline:2px solid #6b74ff;
+  outline-offset:2px;
+}
+.colorSwatch.custom{
+  width:auto;
+  padding:0 10px;
+  height:28px;
+  border-radius:999px;
+  background:#f4f5fa;
+  color:#5a5f7a;
+  font-weight:600;
+  box-shadow:none;
+}
 .catHistoryHead{
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 14px;border-bottom:1px solid #f1f2f8;

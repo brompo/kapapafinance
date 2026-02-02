@@ -23,16 +23,30 @@
 
 
 
-# 1st Feb 
 
 ## TODO: 
-- Impliment the ability Collapse the entire Expense and Income Sections, in the Home Tab
+- On Category Edit, Impliment a Modal, that also allows you to change the background color of the particular category
+- Impliment a Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
+- Add the ability for deleting a transaction, also from the Accounts Page
+- Implement the Ability to make the Categories Draggable, so that one can sort them how they want 
+- 
+
+
+## 2nd Feb
+- Make the Add Expense/Income button to be on the Right, on the Individual Expense Category Card, in Home Page and Maybe Yellow, so that its very 
+visible 
+
+
+
+
+## 1st Feb 
+- When you add a credit, you should specify which account to money should go to
+- Add abit of Space between the Income and Expense Sections, so that they are abit distinct 
+- Add an ability to create Credit under Credit Account
 - Fix the Date and Date Dropdowns Looks abit wierd in the phones 
 - Add the Capability to Edit the Income and Expense Categories 
 - Add the Capability to Delete the Income and Expense Categories 
-
-
-## Done 
+- Impliment the ability Collapse the entire Expense and Income Sections, in the Home Tab
 - Remove the Monthly Budget from the top of the card as its not changed all the time., the Budget Should should be set separately
 - Currently when you start typing the the pages zoom in and that is annoying just keep it simple 
 

@@ -1551,22 +1551,24 @@ export default function App(){
               placeholder="e.g. Bus fare"
             />
           </div>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={() => {
-              const combinedNote = selectedSub
-                ? `${selectedSub}${note ? ` • ${note}` : ''}`
-                : note
-              onAdd(amount, combinedNote, accountId, date)
-              setAmount('')
-              setNote('')
-              setDate(todayISO())
-              setAccountId('')
-            }}
-          >
-            Add {category.type === 'expense' ? 'Expense' : 'Income'}
-          </button>
+          <div className="catDetailActionsRow">
+            <button
+              className="btn addTxnBtn"
+              type="button"
+              onClick={() => {
+                const combinedNote = selectedSub
+                  ? `${selectedSub}${note ? ` • ${note}` : ''}`
+                  : note
+                onAdd(amount, combinedNote, accountId, date)
+                setAmount('')
+                setNote('')
+                setDate(todayISO())
+                setAccountId('')
+              }}
+            >
+              Add {category.type === 'expense' ? 'Expense' : 'Income'}
+            </button>
+          </div>
         </div>
 
         <div className="catDetailHistory">

@@ -60,9 +60,33 @@ const CATEGORY_SUBS = {
 }
 const SEED_KEY = 'lf_seeded_v1'
 const PIN_FLOW_KEY = 'lf_pinlock_enabled'
+const CLOUD_BACKUP_WARN_DAYS_DEFAULT = 7
+const GOOGLE_CLIENT_ID = '767480942107-j1efssrp3cjvmtlpdue951ogsv3kb52t.apps.googleusercontent.com'
+const GOOGLE_REDIRECT_URI = 'https://brompo.site/kapapafinance/auth/google'
+const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata'
+const CLOUD_BACKUP_LATEST_NAME = 'kapapa-finance-backup-latest.json'
+const CLOUD_BACKUP_PREFIX = 'kapapa-finance-backup-'
 
 function uid(){
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
+}
+
+function base64UrlEncode(buf){
+  const bytes = new Uint8Array(buf)
+  let s = ''
+  for (let i=0;i<bytes.length;i++) s += String.fromCharCode(bytes[i])
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function sha256(data){
+  const enc = new TextEncoder()
+  return crypto.subtle.digest('SHA-256', enc.encode(data))
+}
+
+function randomString(len = 64){
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~'
+  const arr = crypto.getRandomValues(new Uint8Array(len))
+  return Array.from(arr, x => chars[x % chars.length]).join('')
 }
 
 const GROUP_IDS = {
@@ -280,7 +304,7 @@ function normalizeVault(data){
       activeLedgerId,
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
+      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled }
     }
   }
 
@@ -295,7 +319,7 @@ function normalizeVault(data){
     activeLedgerId: legacyLedger.id,
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    settings: { pinLockEnabled: !!data.settings?.pinLockEnabled }
+    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled }
   }
 }
 
@@ -311,6 +335,14 @@ export default function App(){
   const [focusAccountId, setFocusAccountId] = useState(null)
   const [showAccountsHeader, setShowAccountsHeader] = useState(true)
   const [showBudgetSettings, setShowBudgetSettings] = useState(false)
+  const [cloudBusy, setCloudBusy] = useState(false)
+  const [cloudError, setCloudError] = useState('')
+  const [cloudAccessToken, setCloudAccessToken] = useState('')
+  const [cloudAccessExpiry, setCloudAccessExpiry] = useState(0)
+  const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [restoreFiles, setRestoreFiles] = useState([])
+  const [restorePin, setRestorePin] = useState('')
+  const [selectedRestoreId, setSelectedRestoreId] = useState('')
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
@@ -323,6 +355,53 @@ export default function App(){
     date: todayISO(),
     accountId: ''
   })
+
+  const settings = vault.settings || { pinLockEnabled: false }
+  const cloudBackup = settings.cloudBackup || {
+    enabled: false,
+    provider: 'google',
+    warnDays: CLOUD_BACKUP_WARN_DAYS_DEFAULT,
+    google: {}
+  }
+  const cloudGoogle = cloudBackup.google || {}
+  const ledgers = vault.ledgers || []
+  const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
+  const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
+  const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
+  const normalizedActiveAccounts = normalizeAccountsWithGroups(
+    rawAccounts.filter(a => a.ledgerId === activeLedger.id),
+    activeLedger.groups
+  )
+  const normalizedById = useMemo(
+    () => new Map(normalizedActiveAccounts.map(a => [a.id, a])),
+    [normalizedActiveAccounts]
+  )
+  const allAccounts = rawAccounts.map(a => normalizedById.get(a.id) || a)
+  const allAccountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
+  const ledgerAccountIds = useMemo(
+    () => new Set(allAccounts.filter(a => a.ledgerId === activeLedger.id).map(a => a.id)),
+    [allAccounts, activeLedger.id]
+  )
+  const accounts = normalizedActiveAccounts
+  const accountTxns = allAccountTxns.filter(t => ledgerAccountIds.has(t.accountId))
+
+  const didMigrateLedgerIds = useRef(false)
+  useEffect(() => {
+    if (didMigrateLedgerIds.current) return
+    const needs = allAccounts.some(a => !a.ledgerId)
+    if (!needs) return
+    didMigrateLedgerIds.current = true
+    const nextAccounts = allAccounts.map(a => (
+      a.ledgerId ? a : {
+        ...a,
+        ledgerId: activeLedger.id,
+        subAccounts: Array.isArray(a.subAccounts)
+          ? a.subAccounts.map(s => ({ ...s, ledgerId: activeLedger.id }))
+          : a.subAccounts
+      }
+    ))
+    persist({ ...vault, accounts: nextAccounts })
+  }, [allAccounts, activeLedger.id, vault])
 
   useEffect(() => {
     if (localStorage.getItem(PIN_FLOW_KEY) === null) {
@@ -339,9 +418,203 @@ export default function App(){
     setStage(hasPin() ? 'unlock' : 'setpin')
   }, [])
 
+  useEffect(() => {
+    async function handleAuthRedirect(){
+      if (!window.location.pathname.endsWith('/auth/google')) return
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      const state = params.get('state')
+      const err = params.get('error')
+      if (err) {
+        show('Google sign-in cancelled.')
+        window.history.replaceState({}, '', window.location.origin + '/kapapafinance/')
+        return
+      }
+      if (!code) return
+      const storedState = sessionStorage.getItem('gdrive_oauth_state')
+      const verifier = sessionStorage.getItem('gdrive_oauth_verifier')
+      if (!verifier || !storedState || storedState !== state) {
+        show('Google sign-in failed.')
+        window.history.replaceState({}, '', window.location.origin + '/kapapafinance/')
+        return
+      }
+      try{
+        const token = await exchangeGoogleCode(code, verifier)
+        const pending = {
+          refreshToken: token.refresh_token || '',
+          accessToken: token.access_token || '',
+          expiresIn: token.expires_in || 0
+        }
+        sessionStorage.setItem('gdrive_pending_token', JSON.stringify(pending))
+        show('Google Drive connected. Unlock to finish.')
+      } catch (e){
+        show('Google sign-in failed.')
+      } finally {
+        sessionStorage.removeItem('gdrive_oauth_state')
+        sessionStorage.removeItem('gdrive_oauth_verifier')
+        window.history.replaceState({}, '', window.location.origin + '/kapapafinance/')
+      }
+    }
+    handleAuthRedirect()
+  }, [])
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem('gdrive_pending_token')
+    if (!pending) return
+    if (stage !== 'app') return
+    try{
+      const data = JSON.parse(pending)
+      if (data.refreshToken) {
+        const next = {
+          ...settings,
+          cloudBackup: {
+            ...(settings.cloudBackup || {}),
+            enabled: true,
+            provider: 'google',
+            warnDays: settings.cloudBackup?.warnDays || CLOUD_BACKUP_WARN_DAYS_DEFAULT,
+            google: {
+              ...(settings.cloudBackup?.google || {}),
+              refreshToken: data.refreshToken,
+              lastBackupAt: settings.cloudBackup?.google?.lastBackupAt || null,
+              latestFileId: settings.cloudBackup?.google?.latestFileId || null
+            }
+          }
+        }
+        persist({ ...vault, settings: next })
+        show('Google Drive connected.')
+      }
+    } catch {}
+    sessionStorage.removeItem('gdrive_pending_token')
+  }, [stage, settings, vault])
+
   function show(msg){
     setToast(msg)
     setTimeout(() => setToast(''), 3800)
+  }
+
+  async function startGoogleAuth(){
+    const verifier = randomString(64)
+    const challenge = base64UrlEncode(await sha256(verifier))
+    const state = randomString(24)
+    sessionStorage.setItem('gdrive_oauth_state', state)
+    sessionStorage.setItem('gdrive_oauth_verifier', verifier)
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
+    authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI)
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('scope', GOOGLE_SCOPES)
+    authUrl.searchParams.set('access_type', 'offline')
+    authUrl.searchParams.set('prompt', 'consent')
+    authUrl.searchParams.set('code_challenge', challenge)
+    authUrl.searchParams.set('code_challenge_method', 'S256')
+    authUrl.searchParams.set('state', state)
+    window.location.href = authUrl.toString()
+  }
+
+  async function exchangeGoogleCode(code, verifier){
+    const body = new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code',
+      code_verifier: verifier
+    })
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    })
+    if (!res.ok) throw new Error('Token exchange failed.')
+    return res.json()
+  }
+
+  async function refreshGoogleToken(refreshToken){
+    const body = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken
+    })
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    })
+    if (!res.ok) throw new Error('Token refresh failed.')
+    return res.json()
+  }
+
+  async function getGoogleAccessToken(){
+    const cloud = settings.cloudBackup || {}
+    const refreshToken = cloud.google?.refreshToken
+    if (!refreshToken) throw new Error('Not connected to Google Drive.')
+    const now = Date.now()
+    if (cloudAccessToken && cloudAccessExpiry && now < cloudAccessExpiry - 30000) {
+      return cloudAccessToken
+    }
+    const token = await refreshGoogleToken(refreshToken)
+    const expiresAt = Date.now() + (Number(token.expires_in || 0) * 1000)
+    setCloudAccessToken(token.access_token || '')
+    setCloudAccessExpiry(expiresAt)
+    return token.access_token
+  }
+
+  async function driveUploadFile({ content, name, fileId }){
+    const accessToken = await getGoogleAccessToken()
+    const boundary = '-------kapapa' + Math.random().toString(16).slice(2)
+    const metadata = {
+      name,
+      parents: ['appDataFolder']
+    }
+    const body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      content,
+      `--${boundary}--`,
+      ''
+    ].join('\r\n')
+    const endpoint = fileId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'
+    const res = await fetch(endpoint, {
+      method: fileId ? 'PATCH' : 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body
+    })
+    if (!res.ok) throw new Error('Upload failed.')
+    return res.json()
+  }
+
+  async function driveListBackups(){
+    const accessToken = await getGoogleAccessToken()
+    const q = "name contains 'kapapa-finance-backup' and trashed=false"
+    const url = new URL('https://www.googleapis.com/drive/v3/files')
+    url.searchParams.set('spaces', 'appDataFolder')
+    url.searchParams.set('q', q)
+    url.searchParams.set('fields', 'files(id,name,modifiedTime)')
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+    if (!res.ok) throw new Error('List failed.')
+    const data = await res.json()
+    return Array.isArray(data.files) ? data.files : []
+  }
+
+  async function driveDownloadFile(fileId){
+    const accessToken = await getGoogleAccessToken()
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+    if (!res.ok) throw new Error('Download failed.')
+    return res.text()
   }
 
   async function handlePinToggle(nextEnabled){
@@ -436,45 +709,9 @@ export default function App(){
     }
   }
 
-  const settings = vault.settings || { pinLockEnabled: false }
-  const ledgers = vault.ledgers || []
-  const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
-  const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
-  const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
-  const normalizedActiveAccounts = normalizeAccountsWithGroups(
-    rawAccounts.filter(a => a.ledgerId === activeLedger.id),
-    activeLedger.groups
-  )
-  const normalizedById = useMemo(
-    () => new Map(normalizedActiveAccounts.map(a => [a.id, a])),
-    [normalizedActiveAccounts]
-  )
-  const allAccounts = rawAccounts.map(a => normalizedById.get(a.id) || a)
-  const allAccountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
-  const ledgerAccountIds = useMemo(
-    () => new Set(allAccounts.filter(a => a.ledgerId === activeLedger.id).map(a => a.id)),
-    [allAccounts, activeLedger.id]
-  )
-  const accounts = normalizedActiveAccounts
-  const accountTxns = allAccountTxns.filter(t => ledgerAccountIds.has(t.accountId))
-
-  const didMigrateLedgerIds = useRef(false)
-  useEffect(() => {
-    if (didMigrateLedgerIds.current) return
-    const needs = allAccounts.some(a => !a.ledgerId)
-    if (!needs) return
-    didMigrateLedgerIds.current = true
-    const nextAccounts = allAccounts.map(a => (
-      a.ledgerId ? a : {
-        ...a,
-        ledgerId: activeLedger.id,
-        subAccounts: Array.isArray(a.subAccounts)
-          ? a.subAccounts.map(s => ({ ...s, ledgerId: activeLedger.id }))
-          : a.subAccounts
-      }
-    ))
-    persist({ ...vault, accounts: nextAccounts })
-  }, [allAccounts, activeLedger.id, vault])
+  function updateSettings(next){
+    persist({ ...vault, settings: next })
+  }
 
   // ---------- Transactions ----------
   const txns = activeLedger.txns || []
@@ -578,6 +815,150 @@ export default function App(){
     }
     return { inc, exp, bal: inc - exp }
   }, [filteredTxns])
+
+  const cloudLastBackup = cloudGoogle.lastBackupAt ? new Date(cloudGoogle.lastBackupAt) : null
+  const cloudWarnDays = cloudBackup.warnDays || CLOUD_BACKUP_WARN_DAYS_DEFAULT
+  const cloudStale = cloudLastBackup
+    ? (Date.now() - cloudLastBackup.getTime()) > cloudWarnDays * 86400000
+    : cloudBackup.enabled
+
+  async function backupNow({ silent = false } = {}){
+    if (!cloudBackup.enabled) {
+      if (!silent) show('Cloud backup is disabled.')
+      return
+    }
+    if (!cloudGoogle.refreshToken) {
+      if (!silent) show('Connect Google Drive first.')
+      return
+    }
+    if (cloudBusy) return
+    setCloudBusy(true)
+    setCloudError('')
+    try{
+      const content = exportEncryptedBackup()
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const versionedName = `${CLOUD_BACKUP_PREFIX}${stamp}.json`
+      await driveUploadFile({ content, name: versionedName })
+
+      let latestId = cloudGoogle.latestFileId
+      if (!latestId) {
+        const files = await driveListBackups()
+        const found = files.find(f => f.name === CLOUD_BACKUP_LATEST_NAME)
+        latestId = found?.id || null
+      }
+      const latestRes = await driveUploadFile({
+        content,
+        name: CLOUD_BACKUP_LATEST_NAME,
+        fileId: latestId || undefined
+      })
+      const next = {
+        ...settings,
+        cloudBackup: {
+          ...cloudBackup,
+          enabled: true,
+          provider: 'google',
+          warnDays: cloudWarnDays,
+          google: {
+            ...cloudGoogle,
+            latestFileId: latestRes?.id || latestId || null,
+            lastBackupAt: new Date().toISOString(),
+            lastBackupError: ''
+          }
+        }
+      }
+      updateSettings(next)
+      if (!silent) show('Backup complete.')
+    } catch (e){
+      setCloudError('Backup failed.')
+      const next = {
+        ...settings,
+        cloudBackup: {
+          ...cloudBackup,
+          google: {
+            ...cloudGoogle,
+            lastBackupError: 'Backup failed.'
+          }
+        }
+      }
+      updateSettings(next)
+      if (!silent) show('Backup failed.')
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function openRestorePicker(){
+    if (!cloudGoogle.refreshToken) {
+      show('Connect Google Drive first.')
+      return
+    }
+    setCloudBusy(true)
+    setCloudError('')
+    try{
+      const files = await driveListBackups()
+      const sorted = files.sort((a, b) => (a.modifiedTime < b.modifiedTime ? 1 : -1))
+      setRestoreFiles(sorted)
+      setSelectedRestoreId(sorted[0]?.id || '')
+      setRestorePin('')
+      setShowRestoreModal(true)
+    } catch (e){
+      setCloudError('Could not load backups.')
+      show('Could not load backups.')
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  async function restoreFromCloud(){
+    if (!selectedRestoreId) return
+    if (!restorePin) {
+      show('Enter your PIN to restore.')
+      return
+    }
+    setCloudBusy(true)
+    setCloudError('')
+    try{
+      const prevMeta = localStorage.getItem('lf_meta_v1')
+      const prevVault = localStorage.getItem('lf_vault_v1')
+      const text = await driveDownloadFile(selectedRestoreId)
+      importEncryptedBackup(text)
+      const data = normalizeVault(await loadVault(restorePin))
+      setPin(restorePin)
+      setVaultState(data)
+      setStage('app')
+      setShowRestoreModal(false)
+      setRestorePin('')
+      show('Restore complete.')
+    } catch (e){
+      if (typeof prevMeta === 'string') localStorage.setItem('lf_meta_v1', prevMeta)
+      if (typeof prevVault === 'string') localStorage.setItem('lf_vault_v1', prevVault)
+      show('Restore failed. Check your PIN.')
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (stage !== 'app') return
+    if (!cloudBackup.enabled || !cloudGoogle.refreshToken) return
+    let lastAuto = 0
+    const minInterval = 5 * 60 * 1000
+    const handler = () => {
+      const now = Date.now()
+      if (now - lastAuto < minInterval) return
+      lastAuto = now
+      backupNow({ silent: true })
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') handler()
+    }
+    window.addEventListener('beforeunload', handler)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('beforeunload', handler)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [stage, cloudBackup.enabled, cloudGoogle.refreshToken, cloudGoogle.lastBackupAt])
 
   async function addTxn(e){
     e.preventDefault()
@@ -2066,6 +2447,77 @@ export default function App(){
 
         <div className="row" style={{ alignItems:'center', justifyContent:'space-between' }}>
           <div>
+            <div style={{ fontWeight:600 }}>Cloud Backup (Google Drive)</div>
+            <div className="small">Encrypted backup stored in your Google Drive app folder.</div>
+            {cloudLastBackup && (
+              <div className="small">Last backup: {cloudLastBackup.toLocaleString()}</div>
+            )}
+            {cloudStale && (
+              <div className="small" style={{ color:'#d27b00' }}>
+                Backup hasn’t run in {cloudWarnDays} days.
+              </div>
+            )}
+            {cloudError && <div className="small" style={{ color:'#d25b5b' }}>{cloudError}</div>}
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={!!cloudBackup.enabled}
+              onChange={e => {
+                const enabled = e.target.checked
+                if (enabled && !cloudGoogle.refreshToken){
+                  startGoogleAuth()
+                  return
+                }
+                updateSettings({
+                  ...settings,
+                  cloudBackup: {
+                    ...cloudBackup,
+                    enabled
+                  }
+                })
+              }}
+            />
+            <span className="toggleTrack" />
+          </label>
+        </div>
+
+        <div className="row" style={{ gap:8, marginTop:10, flexWrap:'wrap' }}>
+          {!cloudGoogle.refreshToken ? (
+            <button className="btn" onClick={startGoogleAuth} disabled={cloudBusy}>
+              Connect Google Drive
+            </button>
+          ) : (
+            <button
+              className="btn"
+              onClick={() => {
+                updateSettings({
+                  ...settings,
+                  cloudBackup: {
+                    ...cloudBackup,
+                    enabled: false,
+                    google: { ...cloudGoogle, refreshToken: '', latestFileId: null }
+                  }
+                })
+                show('Disconnected from Google Drive.')
+              }}
+              disabled={cloudBusy}
+            >
+              Disconnect
+            </button>
+          )}
+          <button className="btn" onClick={() => backupNow()} disabled={!cloudBackup.enabled || cloudBusy}>
+            {cloudBusy ? 'Backing up…' : 'Backup now'}
+          </button>
+          <button className="btn" onClick={openRestorePicker} disabled={cloudBusy || !cloudGoogle.refreshToken}>
+            Restore
+          </button>
+        </div>
+
+        <div className="hr" />
+
+        <div className="row" style={{ alignItems:'center', justifyContent:'space-between' }}>
+          <div>
             <div style={{ fontWeight:600 }}>PIN lock</div>
             <div className="small">Require PIN to unlock the app.</div>
           </div>
@@ -2113,6 +2565,41 @@ export default function App(){
         </div>
 
         {toast && <div className="toast">{toast}</div>}
+
+        {showRestoreModal && (
+          <div className="modalBackdrop" onClick={() => setShowRestoreModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Restore from Cloud</div>
+              <div className="field">
+                <label>Select backup</label>
+                <select value={selectedRestoreId} onChange={e => setSelectedRestoreId(e.target.value)}>
+                  {restoreFiles.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} • {new Date(f.modifiedTime).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>PIN</label>
+                <input
+                  type="password"
+                  value={restorePin}
+                  onChange={e => setRestorePin(e.target.value)}
+                  placeholder="Enter your PIN"
+                />
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowRestoreModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={restoreFromCloud} disabled={!selectedRestoreId || cloudBusy}>
+                  Restore
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

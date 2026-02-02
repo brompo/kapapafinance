@@ -25,18 +25,18 @@
 
 
 ## TODO: 
-- On Category Edit, Impliment a Modal, that also allows you to change the background color of the particular category
-- Impliment a Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
+- Impliment ability to Update Asset Valuation as per a certain Date, this should then show the Appreciation Value (New Valuation - Purchased Amount)
+- Impliment a way to backup data so that I don't have to remember backing up data all the time, suggesting to use Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
 - Add the ability for deleting a transaction, also from the Accounts Page
 - Implement the Ability to make the Categories Draggable, so that one can sort them how they want 
 - 
 
 
 ## 2nd Feb
+- Adding Money in Accounts, one has to specific the date
+- On Category Edit, Impliment a Modal, that also allows you to change the background color of the particular category
 - Make the Add Expense/Income button to be on the Right, on the Individual Expense Category Card, in Home Page and Maybe Yellow, so that its very 
 visible 
-
-
 
 
 ## 1st Feb 

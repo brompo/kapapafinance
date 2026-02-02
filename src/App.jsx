@@ -92,6 +92,7 @@ function randomString(len = 64){
 const GROUP_IDS = {
   debit: 'group-debit',
   credit: 'group-credit',
+  investment: 'group-invest',
   shares: 'group-shares',
   realEstate: 'group-real-estate'
 }
@@ -123,6 +124,7 @@ function createLedger({
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
     { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
+    { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', collapsed: false },
     { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
     { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
   ]
@@ -134,6 +136,7 @@ function createLedger({
       let id = g.id || uid()
       if (normalizedName === 'debit') id = GROUP_IDS.debit
       else if (normalizedName === 'credit') id = GROUP_IDS.credit
+      else if (normalizedName === 'investment' || normalizedName === 'invest') id = GROUP_IDS.investment
       else if (normalizedName === 'shares') id = GROUP_IDS.shares
       else if (normalizedName === 'real estate') id = GROUP_IDS.realEstate
       return {
@@ -402,6 +405,25 @@ export default function App(){
     ))
     persist({ ...vault, accounts: nextAccounts })
   }, [allAccounts, activeLedger.id, vault])
+
+  const didMigrateGroups = useRef(false)
+  useEffect(() => {
+    if (didMigrateGroups.current) return
+    if (!Array.isArray(ledgers) || !ledgers.length) return
+    const needs = ledgers.some(l => !Array.isArray(l.groups) || !l.groups.find(g => g.id === GROUP_IDS.investment))
+    if (!needs) return
+    didMigrateGroups.current = true
+    const nextLedgers = ledgers.map(l => {
+      const groups = Array.isArray(l.groups) ? l.groups : []
+      if (groups.find(g => g.id === GROUP_IDS.investment)) return l
+      const creditIndex = groups.findIndex(g => g.id === GROUP_IDS.credit)
+      const insertAt = creditIndex >= 0 ? creditIndex + 1 : groups.length
+      const nextGroups = [...groups]
+      nextGroups.splice(insertAt, 0, { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', collapsed: false })
+      return { ...l, groups: nextGroups }
+    })
+    persist({ ...vault, ledgers: nextLedgers })
+  }, [ledgers, vault])
 
   useEffect(() => {
     if (localStorage.getItem(PIN_FLOW_KEY) === null) {

@@ -416,7 +416,9 @@ function Section({
                     <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
                     <div>
                       <div className="rowName">{a.name}</div>
-                      <div className="rowMeta">{group.type}</div>
+                      <div className="rowMeta">
+                        {group.type}
+                      </div>
                     </div>
                   </div>
 
@@ -522,6 +524,7 @@ function AccountDetail({
   );
   const [targetSubId, setTargetSubId] = useState("");
   const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [adjustDate, setAdjustDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [creditAmount, setCreditAmount] = useState("");
   const [creditRate, setCreditRate] = useState("");
@@ -613,6 +616,10 @@ function AccountDetail({
       setError("Enter a valid amount.");
       return;
     }
+    if (!adjustDate) {
+      setError("Select a date.");
+      return;
+    }
     if (Array.isArray(account.subAccounts) && account.subAccounts.length && !subAccountId) {
       setError("Select a sub-account.");
       return;
@@ -624,9 +631,11 @@ function AccountDetail({
       amount: amt,
       direction,
       note,
+      receiveDate: adjustDate,
     });
     setAmount("");
     setNote("");
+    setAdjustDate(new Date().toISOString().slice(0, 10));
     setMode(null);
   }
 
@@ -762,6 +771,7 @@ function AccountDetail({
     return { principal, accrued };
   }
 
+
   async function handleAddCredit() {
     const amt = Number(creditAmount || 0);
     const rate = Number(creditRate || 0);
@@ -803,6 +813,7 @@ function AccountDetail({
     setCreditToSubId("");
     setShowCreditModal(false);
   }
+
 
   function handleSaveTxnEdit() {
     if (!selectedTxn) return;
@@ -876,30 +887,32 @@ function AccountDetail({
       </div>
 
       <div className="accDetailCard">
-        <div className="rowLeft">
-          <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
-          <div className="accDetailName">{account.name}</div>
-        </div>
-        <div className="accDetailBalance">
-          {(() => {
-            const base = Array.isArray(account.subAccounts) && account.subAccounts.length
-              ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
-              : account.balance
-            if (currentGroup?.type === "credit") {
-              const summary = computeCreditSummary()
-              return fmtTZS(Number(base || 0) + summary.accrued)
-            }
-            return fmtTZS(base)
-          })()}
-        </div>
-      {currentGroup?.type === "credit" && (() => {
-        const summary = computeCreditSummary();
-        return (
-          <div className="small" style={{ marginTop: 4 }}>
-            Accrued interest: {fmtTZS(summary.accrued)}
+        <div className="accDetailTopRow">
+          <div className="rowLeft">
+            <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
+            <div className="accDetailName">{account.name}</div>
           </div>
-        );
-      })()}
+          <div className="accDetailBalance">
+            {(() => {
+              const base = Array.isArray(account.subAccounts) && account.subAccounts.length
+                ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+                : account.balance
+              if (currentGroup?.type === "credit") {
+                const summary = computeCreditSummary()
+                return fmtTZS(Number(base || 0) + summary.accrued)
+              }
+              return fmtTZS(base)
+            })()}
+          </div>
+        </div>
+        {currentGroup?.type === "credit" && (() => {
+          const summary = computeCreditSummary();
+          return (
+            <div className="small" style={{ marginTop: 4 }}>
+              Accrued interest: {fmtTZS(summary.accrued)}
+            </div>
+          );
+        })()}
         <div className="accDetailActions">
           <button
             className={`quickBtn ${mode === "adjust" ? "active" : ""}`}
@@ -1053,6 +1066,14 @@ function AccountDetail({
               ) : (
                 <>
                   <div className="field">
+                    <label>Date</label>
+                    <input
+                      type="date"
+                      value={adjustDate}
+                      onChange={(e) => setAdjustDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
                     <label>Note (optional)</label>
                     <input
                       value={note}
@@ -1185,6 +1206,7 @@ function AccountDetail({
           </div>
         </div>
       )}
+
 
       {selectedTxn && (
         <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>

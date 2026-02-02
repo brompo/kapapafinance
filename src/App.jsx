@@ -62,7 +62,7 @@ const SEED_KEY = 'lf_seeded_v1'
 const PIN_FLOW_KEY = 'lf_pinlock_enabled'
 const CLOUD_BACKUP_WARN_DAYS_DEFAULT = 7
 const GOOGLE_CLIENT_ID = '767480942107-j1efssrp3cjvmtlpdue951ogsv3kb52t.apps.googleusercontent.com'
-const GOOGLE_REDIRECT_URI = 'https://brompo.site/kapapafinance/auth/google'
+const GOOGLE_REDIRECT_URI = 'https://brompo.site/kapapafinance/'
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata'
 const CLOUD_BACKUP_LATEST_NAME = 'kapapa-finance-backup-latest.json'
 const CLOUD_BACKUP_PREFIX = 'kapapa-finance-backup-'
@@ -420,11 +420,11 @@ export default function App(){
 
   useEffect(() => {
     async function handleAuthRedirect(){
-      if (!window.location.pathname.endsWith('/auth/google')) return
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
       const err = params.get('error')
+      if (!code && !err) return
       if (err) {
         show('Google sign-in cancelled.')
         window.history.replaceState({}, '', window.location.origin + '/kapapafinance/')

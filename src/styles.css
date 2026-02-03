@@ -559,6 +559,11 @@ label{font-size:12px;color:var(--muted)}
   box-shadow:0 10px 18px rgba(255,123,123,.28);
   color:#6b1b1b;
 }
+.quickBtn.purchase{
+  background:#98e6b1;
+  box-shadow:0 10px 18px rgba(152,230,177,.28);
+  color:#1e5e3a;
+}
 .quickBtn.active{outline:2px solid rgba(90,95,176,.35)}
 .accQuickForm{
   background:#fff;

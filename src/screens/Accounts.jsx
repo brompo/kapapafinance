@@ -51,9 +51,9 @@ function getAssetInfo(account, accountTxns, group) {
   const avgPrice = runningQty > 0 ? runningCost / runningQty : 0;
   const qty = runningQty;
 
-  const latestVal = valuations[0];
-  const latestPurchase = purchases.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
-  const latestSale = sales.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const latestVal = valuations.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
+  const latestPurchase = purchases.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
+  const latestSale = sales.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
 
   const unit = latestVal?.unit || latestSale?.unit || latestPurchase?.unit || "";
   const unitPrice = Number(
@@ -326,6 +326,7 @@ export default function Accounts({
         onDeleteAccount={onDeleteAccount}
         onUpdateAccountTxn={onUpdateAccountTxn}
         onDeleteAccountTxn={onDeleteAccountTxn}
+        onToast={onToast}
       />
     );
   }
@@ -1238,9 +1239,9 @@ function AccountDetail({
               <div className="small" style={{ marginTop: 4 }}>
                 Units: {info.qty} {info.unit || ""}
               </div>
-              {info.avgPrice > 0 && (
+              {info.unitPrice > 0 && (
                 <div className="small" style={{ marginTop: 2, opacity: 0.8 }}>
-                  Avg Price: {fmtTZS(info.avgPrice)}
+                  Avg Price: {fmtTZS(info.unitPrice)}
                 </div>
               )}
             </>

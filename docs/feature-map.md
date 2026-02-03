@@ -25,14 +25,24 @@
 
 
 ## TODO: 
+- Impliment the ability to sale an asset
+- On a Asset Page, you currently show Total Value, but can you also show, Units Amount like lets say 10 Acres 
+- Impliment the ability to revaluate an Assset
+- On the Asset Page, can you also show Total Purhase Amount, Profit +- depending it the Revaluation Amount is greater of less than the total Purchase Amount 
+- Show details of the Assets on the Accounts Tab
 - Impliment ability to Update Asset Valuation as per a certain Date, this should then show the Appreciation Value (New Valuation - Purchased Amount)
 - Impliment a way to backup data so that I don't have to remember backing up data all the time, suggesting to use Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
 - Add the ability for deleting a transaction, also from the Accounts Page
 - Implement the Ability to make the Categories Draggable, so that one can sort them how they want 
-- 
+- Implement a way to have subaccounts assigned to ledgers 
+- Add an Investment Group in Accounts Tab
+
+## 3rd Feb
+
 
 
 ## 2nd Feb
+- Impliment the ability to purchase asset 
 - Adding Money in Accounts, one has to specific the date
 - On Category Edit, Impliment a Modal, that also allows you to change the background color of the particular category
 - Make the Add Expense/Income button to be on the Right, on the Individual Expense Category Card, in Home Page and Maybe Yellow, so that its very 

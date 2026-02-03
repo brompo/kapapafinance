@@ -1194,75 +1194,97 @@ export default function App(){
     show('Account deleted.')
   }
 
-  async function addAccountTxn({
-    accountId,
-    amount,
-    direction,
-    note,
-    kind = 'adjust',
-    relatedAccountId = null,
-    subAccountId = null,
-    creditRate = null,
-    creditType = null,
-    receiveDate = null,
-    interestStartDate = null,
-    creditToAccountId = null,
-    creditToSubAccountId = null
-  }){
-    const acct = allAccounts.find(a => a.id === accountId)
-    if (!acct) return
+  async function addAccountTxn(txnOrList){
+    const txns = Array.isArray(txnOrList) ? txnOrList : [txnOrList]
+    if (!txns.length) return
 
-    const delta = direction === 'in' ? amount : -amount
-    const subAccounts = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-    const targetSubId = subAccounts.length ? (subAccountId || subAccounts[0]?.id) : null
+    let nextAccounts = allAccounts
+    const newEntries = []
 
-    let nextAccounts = allAccounts.map(a => {
-      if (a.id !== accountId) return a
-      if (!subAccounts.length) return { ...a, balance: Number(a.balance || 0) + delta }
-      const nextSubs = subAccounts.map(s => (
-        s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
-      ))
-      return { ...a, subAccounts: nextSubs }
-    })
+    for (const txnData of txns) {
+      const {
+        accountId,
+        amount,
+        direction,
+        note,
+        kind = 'adjust',
+        relatedAccountId = null,
+        subAccountId = null,
+        creditRate = null,
+        creditType = null,
+        receiveDate = null,
+        interestStartDate = null,
+        creditToAccountId = null,
+        creditToSubAccountId = null,
+        unit = null,
+        quantity = null,
+        unitPrice = null,
+        fee = null
+      } = txnData
 
-    const entry = {
-      id: uid(),
-      accountId,
-      subAccountId: targetSubId,
-      amount,
-      direction,
-      kind,
-      relatedAccountId: relatedAccountId || creditToAccountId || null,
-      note: note || '',
-      date: receiveDate || todayISO(),
-      creditRate,
-      creditType,
-      receiveDate,
-      interestStartDate
-    }
+      const acct = nextAccounts.find(a => a.id === accountId)
+      if (!acct) continue
 
-    let extraEntry = null
-    if (kind === 'credit' && creditToAccountId && creditToAccountId !== accountId) {
-      const toAcct = allAccounts.find(a => a.id === creditToAccountId)
-      if (toAcct) {
-        const toSubs = Array.isArray(toAcct.subAccounts) ? toAcct.subAccounts : []
-        const resolvedToSub = toSubs.length ? (creditToSubAccountId || toSubs[0]?.id) : null
-        nextAccounts = applyAccountDelta(nextAccounts, creditToAccountId, resolvedToSub, Number(amount || 0))
-        extraEntry = {
-          id: uid(),
-          accountId: creditToAccountId,
-          subAccountId: resolvedToSub,
-          amount,
-          direction: 'in',
-          kind: 'credit',
-          relatedAccountId: accountId,
-          note: note || `Credit received from ${acct.name}`,
-          date: receiveDate || todayISO()
+      const delta = direction === 'in' ? amount : -amount
+      const subAccounts = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+      const targetSubId = subAccounts.length ? (subAccountId || subAccounts[0]?.id) : null
+
+      nextAccounts = nextAccounts.map(a => {
+        if (a.id !== accountId) return a
+        if (kind === 'valuation') return a
+        if (!subAccounts.length) return { ...a, balance: Number(a.balance || 0) + delta }
+        const nextSubs = subAccounts.map(s => (
+          s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+        ))
+        return { ...a, subAccounts: nextSubs }
+      })
+
+      const entry = {
+        id: uid(),
+        accountId,
+        subAccountId: targetSubId,
+        amount,
+        direction,
+        kind,
+        relatedAccountId: relatedAccountId || creditToAccountId || null,
+        note: note || '',
+        date: receiveDate || todayISO(),
+        creditRate,
+        creditType,
+        receiveDate,
+        interestStartDate,
+        unit,
+        quantity,
+        unitPrice,
+        fee
+      }
+      newEntries.push(entry)
+
+      if (kind === 'credit' && creditToAccountId && creditToAccountId !== accountId) {
+        const toAcct = nextAccounts.find(a => a.id === creditToAccountId)
+        if (toAcct) {
+          const toSubs = Array.isArray(toAcct.subAccounts) ? toAcct.subAccounts : []
+          const resolvedToSub = toSubs.length ? (creditToSubAccountId || toSubs[0]?.id) : null
+          nextAccounts = applyAccountDelta(nextAccounts, creditToAccountId, resolvedToSub, Number(amount || 0))
+          const extraEntry = {
+            id: uid(),
+            accountId: creditToAccountId,
+            subAccountId: resolvedToSub,
+            amount,
+            direction: 'in',
+            kind: 'credit',
+            relatedAccountId: accountId,
+            note: note || `Credit received from ${acct.name}`,
+            date: receiveDate || todayISO()
+          }
+          newEntries.push(extraEntry)
         }
       }
     }
 
-    const nextEntries = extraEntry ? [entry, extraEntry, ...allAccountTxns] : [entry, ...allAccountTxns]
+    if (!newEntries.length) return
+
+    const nextEntries = [...newEntries, ...allAccountTxns]
     await persist({ ...vault, accounts: nextAccounts, accountTxns: nextEntries })
     show('Saved.')
   }

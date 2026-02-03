@@ -88,13 +88,55 @@ export default function Accounts({
     return accrued;
   }
 
+  function getAssetInfo(account) {
+    const groupType = groupById.get(account.groupId)?.type;
+    if (groupType !== "asset") return { hasData: false };
+
+    const txns = accountTxns.filter((t) => t.accountId === account.id);
+    const purchases = txns.filter((t) => t.kind === "purchase");
+    const sales = txns.filter((t) => t.kind === "sale");
+    const valuations = txns
+      .filter((t) => t.kind === "valuation")
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    const qty = purchases.reduce((s, t) => s + Number(t.quantity || 0), 0) -
+      sales.reduce((s, t) => s + Number(t.quantity || 0), 0);
+
+    const latestVal = valuations[0];
+    const latestPurchase = purchases.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const latestSale = sales.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+
+    const unit = latestVal?.unit || latestSale?.unit || latestPurchase?.unit || "";
+    const unitPrice = Number(
+      latestVal?.unitPrice ||
+      latestSale?.unitPrice ||
+      latestPurchase?.unitPrice ||
+      0
+    );
+
+    return {
+      hasData: true,
+      qty: Math.max(qty, 0),
+      unit,
+      unitPrice,
+      value: unitPrice * Math.max(qty, 0)
+    };
+  }
+
   function getAccountBalance(account) {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const base = subs.length
       ? subs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
       : Number(account.balance || 0);
+
     const groupType = groupById.get(account.groupId)?.type;
     if (groupType === "credit") return base + computeAccruedForAccount(account);
+
+    if (groupType === "asset") {
+      const info = getAssetInfo(account);
+      if (info.hasData && info.unitPrice > 0) return info.value;
+    }
+
     return base;
   }
 
@@ -313,6 +355,7 @@ export default function Accounts({
             draggingAccountId={draggingAccountId}
             dragOverAccountId={dragOverAccountId}
             getAccountBalance={getAccountBalance}
+            getAssetInfo={getAssetInfo}
             expandedAccounts={expandedAccounts}
             onToggleAccountExpand={toggleAccountExpand}
           />
@@ -344,6 +387,7 @@ function Section({
   draggingAccountId,
   dragOverAccountId,
   getAccountBalance,
+  getAssetInfo,
   expandedAccounts,
   onToggleAccountExpand,
 }) {
@@ -393,9 +437,8 @@ function Section({
             items.reduce((nodes, a) => {
               nodes.push(
                 <div
-                  className={`rowItem clickable ${
-                    draggingAccountId === a.id ? "dragging" : ""
-                  } ${dragOverAccountId === a.id ? "dragOver" : ""}`}
+                  className={`rowItem clickable ${draggingAccountId === a.id ? "dragging" : ""
+                    } ${dragOverAccountId === a.id ? "dragOver" : ""}`}
                   key={a.id}
                   onClick={() => onSelectAccount?.(a.id)}
                   onKeyDown={(e) => {
@@ -413,20 +456,39 @@ function Section({
                   onDragEnd={() => onAccountDragOver?.(null)}
                 >
                   <div className="rowLeft">
+                    <button
+                      className="rowDragHandle"
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        onAccountDragStart?.(a.id);
+                      }}
+                      onDragEnd={(e) => {
+                        e.stopPropagation();
+                        onAccountDragOver?.(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder"
+                    >
+                      ≡
+                    </button>
                     <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
                     <div>
                       <div className="rowName">{a.name}</div>
                       <div className="rowMeta">
-                        {group.type}
+                        {getAssetInfo && getAssetInfo(a).hasData
+                          ? `${getAssetInfo(a).qty} ${getAssetInfo(a).unit || ""}`
+                          : group.type}
                       </div>
                     </div>
                   </div>
 
                   <div className={`rowRight ${Array.isArray(a.subAccounts) && a.subAccounts.length ? "rowRightStack" : ""}`}>
                     <div
-                      className={`rowAmount ${
-                        group.type === "credit" || getAccountBalance(a) < 0 ? "neg" : ""
-                      }`}
+                      className={`rowAmount ${group.type === "credit" || getAccountBalance(a) < 0 ? "neg" : ""
+                        }`}
                     >
                       {fmtTZS(getAccountBalance(a))}
                     </div>
@@ -531,6 +593,20 @@ function AccountDetail({
   const [creditType, setCreditType] = useState("simple");
   const [receiveDate, setReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [interestStartDate, setInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [purchaseUnit, setPurchaseUnit] = useState("");
+  const [purchaseQty, setPurchaseQty] = useState("");
+  const [purchaseTotal, setPurchaseTotal] = useState("");
+  const [purchaseFee, setPurchaseFee] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [saleUnit, setSaleUnit] = useState("");
+  const [saleQty, setSaleQty] = useState("");
+  const [saleTotal, setSaleTotal] = useState("");
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [saleToAccountId, setSaleToAccountId] = useState("");
+  const [saleToSubId, setSaleToSubId] = useState("");
+  const [saleNote, setSaleNote] = useState("");
   const [creditToAccountId, setCreditToAccountId] = useState("");
   const [creditToSubId, setCreditToSubId] = useState("");
   const [error, setError] = useState("");
@@ -637,6 +713,128 @@ function AccountDetail({
     setNote("");
     setAdjustDate(new Date().toISOString().slice(0, 10));
     setMode(null);
+  }
+
+  async function handlePurchaseAsset() {
+    const unit = purchaseUnit.trim();
+    const qty = Number(purchaseQty || 0);
+    const total = Number(purchaseTotal || 0);
+    const fee = Number(purchaseFee || 0);
+    if (!unit) {
+      setError("Enter units.");
+      return;
+    }
+    if (!qty || qty <= 0 || !total || total <= 0) {
+      setError("Enter valid quantity and total.");
+      return;
+    }
+    if (!purchaseDate) {
+      setError("Select a date.");
+      return;
+    }
+    const unitPrice = (total + fee) / qty;
+    setError("");
+    await onAddAccountTxn({
+      accountId: account.id,
+      amount: total + fee,
+      direction: "in",
+      note: `Purchase ${qty} ${unit} @ ${unitPrice.toFixed(2)}${fee ? ` + fee ${fee}` : ""}`,
+      kind: "purchase",
+      receiveDate: purchaseDate,
+      unit,
+      quantity: qty,
+      unitPrice,
+      fee
+    });
+    setPurchaseUnit("");
+    setPurchaseQty("");
+    setPurchaseTotal("");
+    setPurchaseFee("");
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setShowPurchaseModal(false);
+  }
+
+  function getAvailableUnits(accountId) {
+    const txns = accountTxns.filter((t) => t.accountId === accountId);
+    const purchases = txns.filter((t) => t.kind === "purchase");
+    const sales = txns.filter((t) => t.kind === "sale");
+    const qty = purchases.reduce((s, t) => s + Number(t.quantity || 0), 0) -
+      sales.reduce((s, t) => s + Number(t.quantity || 0), 0);
+    const unit = purchases.find((t) => t.unit)?.unit || sales.find((t) => t.unit)?.unit || "";
+    return { qty: Math.max(0, qty), unit };
+  }
+
+  async function handleSaleAsset() {
+    const available = getAvailableUnits(account.id);
+    const qty = Number(saleQty || 0);
+    const total = Number(saleTotal || 0);
+    if (!available.unit) {
+      setError("No units available to sell.");
+      return;
+    }
+    if (!qty || qty <= 0) {
+      setError("Enter a valid units amount.");
+      return;
+    }
+    if (qty > available.qty) {
+      setError(`Max units available: ${available.qty} ${available.unit}`);
+      return;
+    }
+    if (!total || total <= 0) {
+      setError("Enter a valid total.");
+      return;
+    }
+    if (!saleDate) {
+      setError("Select a date.");
+      return;
+    }
+    if (!saleToAccountId) {
+      setError("Select where the money is going.");
+      return;
+    }
+    setError("");
+    const unitPrice = total / qty;
+    const batch = [
+      {
+        accountId: account.id,
+        amount: total,
+        direction: "out",
+        note: saleNote || `Sale ${qty} ${available.unit} for ${total}`,
+        kind: "sale",
+        receiveDate: saleDate,
+        unit: available.unit,
+        quantity: qty,
+        unitPrice
+      },
+      {
+        accountId: account.id,
+        amount: unitPrice,
+        direction: "in",
+        note: "Unit price update (sale)",
+        kind: "valuation",
+        receiveDate: saleDate,
+        unit: available.unit,
+        quantity: qty,
+        unitPrice
+      },
+      {
+        accountId: saleToAccountId,
+        subAccountId: saleToSubId || null,
+        amount: total,
+        direction: "in",
+        note: saleNote ? `${saleNote} • from ${account.name}` : `Asset sale from ${account.name}`,
+        kind: "adjust",
+        receiveDate: saleDate
+      }
+    ];
+    await onAddAccountTxn(batch);
+    setSaleQty("");
+    setSaleTotal("");
+    setSaleDate(new Date().toISOString().slice(0, 10));
+    setSaleToAccountId("");
+    setSaleToSubId("");
+    setSaleNote("");
+    setShowSaleModal(false);
   }
 
   async function handleTransfer() {
@@ -771,6 +969,29 @@ function AccountDetail({
     return { principal, accrued };
   }
 
+  function computeAssetSummary() {
+    const txns = accountTxns.filter((t) => t.accountId === account.id);
+    const purchases = txns.filter((t) => t.kind === "purchase");
+    const sales = txns.filter((t) => t.kind === "sale");
+    const valuations = txns
+      .filter((t) => t.kind === "valuation")
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    const qty = purchases.reduce((s, t) => s + Number(t.quantity || 0), 0) -
+      sales.reduce((s, t) => s + Number(t.quantity || 0), 0);
+    const unit = purchases.find((t) => t.unit)?.unit || sales.find((t) => t.unit)?.unit || "";
+    const latestVal = valuations[0];
+    const latestPurchase = purchases.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const latestSale = sales.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const unitPrice = Number(
+      latestVal?.unitPrice ||
+      latestSale?.unitPrice ||
+      latestPurchase?.unitPrice ||
+      0
+    );
+    const currentValue = unitPrice > 0 ? unitPrice * Math.max(qty, 0) : Number(account.balance || 0);
+    return { qty: Math.max(qty, 0), unit, unitPrice, currentValue };
+  }
+
 
   async function handleAddCredit() {
     const amt = Number(creditAmount || 0);
@@ -901,6 +1122,10 @@ function AccountDetail({
                 const summary = computeCreditSummary()
                 return fmtTZS(Number(base || 0) + summary.accrued)
               }
+              if (currentGroup?.type === "asset") {
+                const summary = computeAssetSummary()
+                return fmtTZS(summary.currentValue || base)
+              }
               return fmtTZS(base)
             })()}
           </div>
@@ -913,11 +1138,20 @@ function AccountDetail({
             </div>
           );
         })()}
+        {currentGroup?.type === "asset" && (() => {
+          const info = computeAssetSummary();
+          return (
+            <div className="small" style={{ marginTop: 4 }}>
+              Units: {info.qty} {info.unit || ""}
+            </div>
+          );
+        })()}
         <div className="accDetailActions">
           <button
             className={`quickBtn ${mode === "adjust" ? "active" : ""}`}
             onClick={() => {
               if (currentGroup?.type === "credit") setShowCreditModal(true);
+              else if (currentGroup?.type === "asset") setShowPurchaseModal(true);
               else setMode("adjust");
             }}
             title="Add or spend"
@@ -925,6 +1159,23 @@ function AccountDetail({
           >
             +
           </button>
+          {currentGroup?.type === "asset" && (
+            <button
+              className="quickBtn danger"
+              onClick={() => {
+                const info = getAvailableUnits(account.id);
+                setSaleUnit(info.unit);
+                const target = accounts.find((a) => a.id !== account.id);
+                setSaleToAccountId(target?.id || "");
+                setSaleToSubId("");
+                setShowSaleModal(true);
+              }}
+              title="Sell asset"
+              type="button"
+            >
+              −
+            </button>
+          )}
           <button
             className={`quickBtn transfer ${mode === "transfer" ? "active" : ""}`}
             onClick={() => setMode("transfer")}
@@ -1207,6 +1458,170 @@ function AccountDetail({
         </div>
       )}
 
+      {showPurchaseModal && (
+        <div className="modalBackdrop" onClick={() => setShowPurchaseModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Asset Purchase</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Units</label>
+                <input
+                  value={purchaseUnit}
+                  onChange={(e) => setPurchaseUnit(e.target.value)}
+                  placeholder="e.g. Acres, Shares"
+                />
+              </div>
+              <div className="field">
+                <label>Amount of Units</label>
+                <input
+                  inputMode="decimal"
+                  value={purchaseQty}
+                  onChange={(e) => setPurchaseQty(e.target.value)}
+                  placeholder="e.g. 10"
+                />
+              </div>
+              <div className="field">
+                <label>Total (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={purchaseTotal}
+                  onChange={(e) => setPurchaseTotal(e.target.value)}
+                  placeholder="e.g. 4510000"
+                />
+              </div>
+              <div className="field">
+                <label>Transaction Fee (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={purchaseFee}
+                  onChange={(e) => setPurchaseFee(e.target.value)}
+                  placeholder="e.g. 2000"
+                />
+              </div>
+              <div className="field">
+                <label>Price per Unit</label>
+                <input
+                  readOnly
+                  value={
+                    purchaseQty && (purchaseTotal || purchaseFee)
+                      ? ((Number(purchaseTotal || 0) + Number(purchaseFee || 0)) / Number(purchaseQty || 0)).toFixed(2)
+                      : ""
+                  }
+                  placeholder="Calculated"
+                />
+              </div>
+              <div className="field">
+                <label>Date of Purchase</label>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </div>
+              {error && <div className="formError">{error}</div>}
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowPurchaseModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={handlePurchaseAsset}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSaleModal && (
+        <div className="modalBackdrop" onClick={() => setShowSaleModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Asset Sale</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Units</label>
+                <input value={saleUnit} readOnly />
+              </div>
+              <div className="field">
+                <label>Units amount</label>
+                <input
+                  inputMode="decimal"
+                  value={saleQty}
+                  onChange={(e) => setSaleQty(e.target.value)}
+                  placeholder="e.g. 2"
+                />
+                <div className="small">
+                  Max: {getAvailableUnits(account.id).qty} {saleUnit || ""}
+                </div>
+              </div>
+              <div className="field">
+                <label>Total Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={saleTotal}
+                  onChange={(e) => setSaleTotal(e.target.value)}
+                  placeholder="e.g. 200000"
+                />
+              </div>
+              <div className="field">
+                <label>Selling Date</label>
+                <input
+                  type="date"
+                  value={saleDate}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Where is the money going</label>
+                <select value={saleToAccountId} onChange={(e) => setSaleToAccountId(e.target.value)}>
+                  <option value="">Select account</option>
+                  {accounts
+                    .filter((a) => a.id !== account.id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {(() => {
+                const target = accounts.find((a) => a.id === saleToAccountId);
+                if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
+                return (
+                  <div className="field">
+                    <label>To sub-account</label>
+                    <select value={saleToSubId} onChange={(e) => setSaleToSubId(e.target.value)}>
+                      <option value="">Select sub-account</option>
+                      {target.subAccounts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
+              <div className="field">
+                <label>Note (optional)</label>
+                <input
+                  value={saleNote}
+                  onChange={(e) => setSaleNote(e.target.value)}
+                  placeholder="e.g. Partial sale"
+                />
+              </div>
+              {error && <div className="formError">{error}</div>}
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowSaleModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={handleSaleAsset}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {selectedTxn && (
         <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
@@ -1374,8 +1789,9 @@ function AccountDetail({
                   {items.map((t) => {
                     const subName =
                       account.subAccounts?.find((s) => s.id === t.subAccountId)?.name || "";
-                    const title = t.note || "Balance update";
-                    const meta = subName || (t.kind === "transfer" ? "Transfer" : "Account");
+                    const title = t.note || (t.kind ? `${t.kind[0].toUpperCase()}${t.kind.slice(1)}` : "Balance update");
+                    const kindLabel = t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "";
+                    const meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
                     return (
                       <div
                         className="accHistoryRow"
@@ -1390,17 +1806,17 @@ function AccountDetail({
                         <div className="accHistoryIcon">
                           {(title || "A").slice(0, 1).toUpperCase()}
                         </div>
-                      <div className="accHistoryInfo">
-                        <div className="accHistoryTitleRow">{title}</div>
-                        <div className="accHistoryMeta">{meta}</div>
+                        <div className="accHistoryInfo">
+                          <div className="accHistoryTitleRow">{title}</div>
+                          <div className="accHistoryMeta">{meta}</div>
+                        </div>
+                        <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
+                          {t.direction === "in" ? "+" : "-"}
+                          {fmtTZS(t.amount)}
+                        </div>
                       </div>
-                      <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
-                        {t.direction === "in" ? "+" : "-"}
-                        {fmtTZS(t.amount)}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
                 </div>
               </div>
             );

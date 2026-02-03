@@ -67,23 +67,23 @@ const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata'
 const CLOUD_BACKUP_LATEST_NAME = 'kapapa-finance-backup-latest.json'
 const CLOUD_BACKUP_PREFIX = 'kapapa-finance-backup-'
 
-function uid(){
+function uid() {
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
 
-function base64UrlEncode(buf){
+function base64UrlEncode(buf) {
   const bytes = new Uint8Array(buf)
   let s = ''
-  for (let i=0;i<bytes.length;i++) s += String.fromCharCode(bytes[i])
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-async function sha256(data){
+async function sha256(data) {
   const enc = new TextEncoder()
   return crypto.subtle.digest('SHA-256', enc.encode(data))
 }
 
-function randomString(len = 64){
+function randomString(len = 64) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~'
   const arr = crypto.getRandomValues(new Uint8Array(len))
   return Array.from(arr, x => chars[x % chars.length]).join('')
@@ -97,7 +97,7 @@ const GROUP_IDS = {
   realEstate: 'group-real-estate'
 }
 
-function normalizeAccountsWithGroups(inputAccounts, groups){
+function normalizeAccountsWithGroups(inputAccounts, groups) {
   const accounts = Array.isArray(inputAccounts) ? inputAccounts : []
   const groupById = new Map((groups || []).map(g => [g.id, g]))
   const groupByType = new Map((groups || []).map(g => [g.type, g]))
@@ -120,7 +120,7 @@ function createLedger({
   categories,
   categoryMeta,
   groups
-} = {}){
+} = {}) {
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
     { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
@@ -172,7 +172,7 @@ function createLedger({
   }
 }
 
-function normalizeLedger(data){
+function normalizeLedger(data) {
   if (!data || typeof data !== 'object') return createLedger()
   return createLedger({
     id: data.id || uid(),
@@ -183,8 +183,8 @@ function normalizeLedger(data){
   })
 }
 
-function isVaultEmpty(v){
-  if (Array.isArray(v?.ledgers) && v.ledgers.length > 0){
+function isVaultEmpty(v) {
+  if (Array.isArray(v?.ledgers) && v.ledgers.length > 0) {
     return v.ledgers.every(l =>
       (!l.txns || l.txns.length === 0) &&
       true
@@ -197,7 +197,7 @@ function isVaultEmpty(v){
   )
 }
 
-function getSeedVault(){
+function getSeedVault() {
   const selcomId = uid()
   const absaId = uid()
   const crdbId = uid()
@@ -279,7 +279,7 @@ function getSeedVault(){
 
 // We now store an object in the encrypted vault (not just an array)
 // { ledgers: [{...}], activeLedgerId: '', settings: { pinLockEnabled: false } }
-function normalizeVault(data){
+function normalizeVault(data) {
   if (!data) {
     const ledger = createLedger()
     return {
@@ -326,7 +326,7 @@ function normalizeVault(data){
   }
 }
 
-export default function App(){
+export default function App() {
   const [stage, setStage] = useState('loading') // loading | setpin | unlock | app
   const [tab, setTab] = useState('accounts') // home | accounts | tx | settings
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
@@ -349,7 +349,7 @@ export default function App(){
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0,7))
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [form, setForm] = useState({
     type: 'expense',
     amount: '',
@@ -441,7 +441,7 @@ export default function App(){
   }, [])
 
   useEffect(() => {
-    async function handleAuthRedirect(){
+    async function handleAuthRedirect() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
@@ -460,7 +460,7 @@ export default function App(){
         window.history.replaceState({}, '', window.location.origin + '/kapapafinance/')
         return
       }
-      try{
+      try {
         const token = await exchangeGoogleCode(code, verifier)
         const pending = {
           refreshToken: token.refresh_token || '',
@@ -469,7 +469,7 @@ export default function App(){
         }
         sessionStorage.setItem('gdrive_pending_token', JSON.stringify(pending))
         show('Google Drive connected. Unlock to finish.')
-      } catch (e){
+      } catch (e) {
         show('Google sign-in failed.')
       } finally {
         sessionStorage.removeItem('gdrive_oauth_state')
@@ -484,7 +484,7 @@ export default function App(){
     const pending = sessionStorage.getItem('gdrive_pending_token')
     if (!pending) return
     if (stage !== 'app') return
-    try{
+    try {
       const data = JSON.parse(pending)
       if (data.refreshToken) {
         const next = {
@@ -505,16 +505,16 @@ export default function App(){
         persist({ ...vault, settings: next })
         show('Google Drive connected.')
       }
-    } catch {}
+    } catch { }
     sessionStorage.removeItem('gdrive_pending_token')
   }, [stage, settings, vault])
 
-  function show(msg){
+  function show(msg) {
     setToast(msg)
     setTimeout(() => setToast(''), 3800)
   }
 
-  async function startGoogleAuth(){
+  async function startGoogleAuth() {
     const verifier = randomString(64)
     const challenge = base64UrlEncode(await sha256(verifier))
     const state = randomString(24)
@@ -533,7 +533,7 @@ export default function App(){
     window.location.href = authUrl.toString()
   }
 
-  async function exchangeGoogleCode(code, verifier){
+  async function exchangeGoogleCode(code, verifier) {
     const body = new URLSearchParams({
       code,
       client_id: GOOGLE_CLIENT_ID,
@@ -550,7 +550,7 @@ export default function App(){
     return res.json()
   }
 
-  async function refreshGoogleToken(refreshToken){
+  async function refreshGoogleToken(refreshToken) {
     const body = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       grant_type: 'refresh_token',
@@ -565,7 +565,7 @@ export default function App(){
     return res.json()
   }
 
-  async function getGoogleAccessToken(){
+  async function getGoogleAccessToken() {
     const cloud = settings.cloudBackup || {}
     const refreshToken = cloud.google?.refreshToken
     if (!refreshToken) throw new Error('Not connected to Google Drive.')
@@ -580,7 +580,7 @@ export default function App(){
     return token.access_token
   }
 
-  async function driveUploadFile({ content, name, fileId }){
+  async function driveUploadFile({ content, name, fileId }) {
     const accessToken = await getGoogleAccessToken()
     const boundary = '-------kapapa' + Math.random().toString(16).slice(2)
     const metadata = {
@@ -614,7 +614,7 @@ export default function App(){
     return res.json()
   }
 
-  async function driveListBackups(){
+  async function driveListBackups() {
     const accessToken = await getGoogleAccessToken()
     const q = "name contains 'kapapa-finance-backup' and trashed=false"
     const url = new URL('https://www.googleapis.com/drive/v3/files')
@@ -629,7 +629,7 @@ export default function App(){
     return Array.isArray(data.files) ? data.files : []
   }
 
-  async function driveDownloadFile(fileId){
+  async function driveDownloadFile(fileId) {
     const accessToken = await getGoogleAccessToken()
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     const res = await fetch(url, {
@@ -639,16 +639,16 @@ export default function App(){
     return res.text()
   }
 
-  async function handlePinToggle(nextEnabled){
-    if (nextEnabled){
-      if (!hasPin()){
+  async function handlePinToggle(nextEnabled) {
+    if (nextEnabled) {
+      if (!hasPin()) {
         setStage('setpin')
         show('Set a PIN to enable lock.')
         return
       }
       const entered = pin || prompt('Enter your PIN to enable lock')
       if (!entered) return
-      try{
+      try {
         const data = normalizeVault(loadVaultPlain())
         const nextVault = { ...data, settings: { ...settings, pinLockEnabled: true } }
         setPin(entered)
@@ -656,7 +656,7 @@ export default function App(){
         await saveVault(entered, nextVault)
         localStorage.setItem(PIN_FLOW_KEY, 'true')
         show('PIN lock enabled.')
-      } catch(e){
+      } catch (e) {
         show('Could not enable PIN lock.')
       }
       return
@@ -664,7 +664,7 @@ export default function App(){
 
     const entered = pin || (hasPin() ? prompt('Enter your PIN to disable lock') : '')
     if (hasPin() && !entered) return
-    try{
+    try {
       const data = hasPin() ? normalizeVault(await loadVault(entered)) : normalizeVault(loadVaultPlain())
       const nextVault = { ...data, settings: { ...settings, pinLockEnabled: false } }
       saveVaultPlain(nextVault)
@@ -673,19 +673,19 @@ export default function App(){
       setStage('app')
       setTab('home')
       show('PIN lock disabled.')
-    } catch(e){
+    } catch (e) {
       show('Could not disable PIN lock.')
     }
   }
 
-  async function handleSetPin(){
-    try{
+  async function handleSetPin() {
+    try {
       if (!pin || pin.length < 4) return show('PIN must be at least 4 digits/characters.')
       if (pin !== pin2) return show('PINs do not match.')
       await setNewPin(pin)
 
       let data = normalizeVault(await loadVault(pin))
-      if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)){
+      if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)) {
         localStorage.setItem(SEED_KEY, '0')
       }
       data = { ...data, settings: { ...data.settings, pinLockEnabled: true } }
@@ -696,15 +696,15 @@ export default function App(){
       setStage('app')
       setTab('accounts')
       show('PIN set. Vault created.')
-    } catch(e){
+    } catch (e) {
       show(e.message || 'Failed to set PIN.')
     }
   }
 
-  async function handleUnlock(){
-    try{
+  async function handleUnlock() {
+    try {
       let data = normalizeVault(await loadVault(pin))
-      if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)){
+      if (!localStorage.getItem(SEED_KEY) && isVaultEmpty(data)) {
         localStorage.setItem(SEED_KEY, '0')
       }
       data = { ...data, settings: { ...data.settings, pinLockEnabled: true } }
@@ -715,23 +715,23 @@ export default function App(){
       setStage('app')
       setTab('accounts')
       show('Unlocked.')
-    } catch(e){
+    } catch (e) {
       show('Wrong PIN or vault corrupted.')
     }
   }
 
-  async function persist(nextVault){
+  async function persist(nextVault) {
     setVaultState(nextVault)
-    try{
+    try {
       const pinFlowEnabled = localStorage.getItem(PIN_FLOW_KEY) !== 'false'
       if (pinFlowEnabled) await saveVault(pin, nextVault)
       else saveVaultPlain(nextVault)
-    } catch(e){
+    } catch (e) {
       show('Could not save (are you locked?)')
     }
   }
 
-  function updateSettings(next){
+  function updateSettings(next) {
     persist({ ...vault, settings: next })
   }
 
@@ -746,7 +746,7 @@ export default function App(){
   const expenseCats = categories.expense || [...DEFAULT_EXPENSE_CATEGORIES]
   const incomeCats = categories.income || [...DEFAULT_INCOME_CATEGORIES]
 
-  function persistActiveLedger(nextLedger){
+  function persistActiveLedger(nextLedger) {
     const hasActive = ledgers.some(l => l.id === activeLedger.id)
     const nextLedgers = hasActive
       ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
@@ -755,7 +755,7 @@ export default function App(){
     persist({ ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId })
   }
 
-  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns }){
+  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns }) {
     const hasActive = ledgers.some(l => l.id === activeLedger.id)
     const nextLedgers = hasActive
       ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
@@ -770,7 +770,7 @@ export default function App(){
     })
   }
 
-  function handleAddLedger(){
+  function handleAddLedger() {
     const name = prompt('Ledger name?')
     if (!name) return
     const trimmed = name.trim()
@@ -784,7 +784,7 @@ export default function App(){
     setShowLedgerPicker(false)
   }
 
-  function handleSelectLedger(id){
+  function handleSelectLedger(id) {
     if (!id || id === activeLedger.id) {
       setShowLedgerPicker(false)
       return
@@ -794,20 +794,20 @@ export default function App(){
     setShowLedgerPicker(false)
   }
 
-  async function handleSwitchLedgerToAccounts(id, accountId){
+  async function handleSwitchLedgerToAccounts(id, accountId) {
     if (!id || id === activeLedger.id) return
     await persist({ ...vault, activeLedgerId: id })
     setTab('accounts')
     setFocusAccountId(accountId || null)
   }
 
-  function formatMonthLabel(value){
+  function formatMonthLabel(value) {
     const d = new Date(`${value}-01`)
     if (Number.isNaN(d.getTime())) return value
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
   }
 
-  function shiftMonth(delta){
+  function shiftMonth(delta) {
     const [y, m] = month.split('-').map(Number)
     if (!y || !m) return
     const next = new Date(y, m - 1 + delta, 1)
@@ -819,18 +819,18 @@ export default function App(){
   const filteredTxns = useMemo(() => {
     return txns
       .filter(t => monthKey(t.date) === month)
-      .sort((a,b) => (a.date < b.date ? 1 : -1))
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [txns, month])
 
   const filteredAccountTxns = useMemo(() => {
     return accountTxns
       .filter(t => monthKey(t.date) === month)
-      .sort((a,b) => (a.date < b.date ? 1 : -1))
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [accountTxns, month])
 
   const kpis = useMemo(() => {
     let inc = 0, exp = 0
-    for (const t of filteredTxns){
+    for (const t of filteredTxns) {
       const amt = Number(t.amount || 0)
       if (t.type === 'income') inc += amt
       else exp += amt
@@ -844,7 +844,7 @@ export default function App(){
     ? (Date.now() - cloudLastBackup.getTime()) > cloudWarnDays * 86400000
     : cloudBackup.enabled
 
-  async function backupNow({ silent = false } = {}){
+  async function backupNow({ silent = false } = {}) {
     if (!cloudBackup.enabled) {
       if (!silent) show('Cloud backup is disabled.')
       return
@@ -856,7 +856,7 @@ export default function App(){
     if (cloudBusy) return
     setCloudBusy(true)
     setCloudError('')
-    try{
+    try {
       const content = exportEncryptedBackup()
       const stamp = new Date().toISOString().replace(/[:.]/g, '-')
       const versionedName = `${CLOUD_BACKUP_PREFIX}${stamp}.json`
@@ -890,7 +890,7 @@ export default function App(){
       }
       updateSettings(next)
       if (!silent) show('Backup complete.')
-    } catch (e){
+    } catch (e) {
       setCloudError('Backup failed.')
       const next = {
         ...settings,
@@ -909,21 +909,21 @@ export default function App(){
     }
   }
 
-  async function openRestorePicker(){
+  async function openRestorePicker() {
     if (!cloudGoogle.refreshToken) {
       show('Connect Google Drive first.')
       return
     }
     setCloudBusy(true)
     setCloudError('')
-    try{
+    try {
       const files = await driveListBackups()
       const sorted = files.sort((a, b) => (a.modifiedTime < b.modifiedTime ? 1 : -1))
       setRestoreFiles(sorted)
       setSelectedRestoreId(sorted[0]?.id || '')
       setRestorePin('')
       setShowRestoreModal(true)
-    } catch (e){
+    } catch (e) {
       setCloudError('Could not load backups.')
       show('Could not load backups.')
     } finally {
@@ -931,7 +931,7 @@ export default function App(){
     }
   }
 
-  async function restoreFromCloud(){
+  async function restoreFromCloud() {
     if (!selectedRestoreId) return
     if (!restorePin) {
       show('Enter your PIN to restore.')
@@ -939,7 +939,7 @@ export default function App(){
     }
     setCloudBusy(true)
     setCloudError('')
-    try{
+    try {
       const prevMeta = localStorage.getItem('lf_meta_v1')
       const prevVault = localStorage.getItem('lf_vault_v1')
       const text = await driveDownloadFile(selectedRestoreId)
@@ -951,7 +951,7 @@ export default function App(){
       setShowRestoreModal(false)
       setRestorePin('')
       show('Restore complete.')
-    } catch (e){
+    } catch (e) {
       if (typeof prevMeta === 'string') localStorage.setItem('lf_meta_v1', prevMeta)
       if (typeof prevVault === 'string') localStorage.setItem('lf_vault_v1', prevVault)
       show('Restore failed. Check your PIN.')
@@ -982,7 +982,7 @@ export default function App(){
     }
   }, [stage, cloudBackup.enabled, cloudGoogle.refreshToken, cloudGoogle.lastBackupAt])
 
-  async function addTxn(e){
+  async function addTxn(e) {
     e.preventDefault()
     const amt = Number(form.amount)
     if (!amt || amt <= 0) return show('Enter a valid amount.')
@@ -999,9 +999,9 @@ export default function App(){
 
     let nextAccounts = allAccounts
     let nextAccountTxns = allAccountTxns
-    if (t.accountId){
+    if (t.accountId) {
       const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId)
-      if (acct){
+      if (acct) {
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
@@ -1036,11 +1036,11 @@ export default function App(){
       nextAccounts,
       nextAccountTxns
     })
-    setForm(f => ({...f, amount:'', note:'', date: todayISO()}))
+    setForm(f => ({ ...f, amount: '', note: '', date: todayISO() }))
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date }){
+  async function addQuickTxn({ type, amount, category, note, accountId, date }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) return show('Enter a valid amount.')
 
@@ -1056,9 +1056,9 @@ export default function App(){
 
     let nextAccounts = allAccounts
     let nextAccountTxns = allAccountTxns
-    if (t.accountId){
+    if (t.accountId) {
       const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId)
-      if (acct){
+      if (acct) {
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
@@ -1096,12 +1096,12 @@ export default function App(){
     show('Saved.')
   }
 
-  function findAccountByIdOrName(idOrName){
+  function findAccountByIdOrName(idOrName) {
     if (!idOrName) return null
     return allAccounts.find(a => a.id === idOrName || a.name === idOrName) || null
   }
 
-  async function updateTxn(original, next){
+  async function updateTxn(original, next) {
     const nextTxns = txns.map(t => (t.id === original.id ? next : t))
 
     let nextAccounts = allAccounts
@@ -1111,7 +1111,7 @@ export default function App(){
     const oldDelta = original.type === 'income' ? Number(original.amount || 0) : -Number(original.amount || 0)
     const newDelta = next.type === 'income' ? Number(next.amount || 0) : -Number(next.amount || 0)
 
-    if (oldAccount){
+    if (oldAccount) {
       nextAccounts = nextAccounts.map(a => {
         if (a.id !== oldAccount.id) return a
         const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
@@ -1123,7 +1123,7 @@ export default function App(){
         return { ...a, subAccounts: nextSubs }
       })
     }
-    if (newAccount){
+    if (newAccount) {
       nextAccounts = nextAccounts.map(a => {
         if (a.id !== newAccount.id) return a
         const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
@@ -1169,7 +1169,7 @@ export default function App(){
     show('Updated.')
   }
 
-  async function delTxn(id){
+  async function delTxn(id) {
     const next = txns.filter(t => t.id !== id)
     await persistActiveLedger({ ...activeLedger, txns: next })
     show('Deleted.')
@@ -1177,7 +1177,7 @@ export default function App(){
 
   // ---------- Accounts ----------
 
-  async function upsertAccount(acc){
+  async function upsertAccount(acc) {
     const normalized = acc.ledgerId ? acc : { ...acc, ledgerId: activeLedger.id }
     const next = [...allAccounts]
     const idx = next.findIndex(a => a.id === normalized.id)
@@ -1187,14 +1187,14 @@ export default function App(){
     show('Account saved.')
   }
 
-  async function deleteAccount(id){
+  async function deleteAccount(id) {
     const next = allAccounts.filter(a => a.id !== id)
     const nextAccountTxns = allAccountTxns.filter(t => t.accountId !== id)
     await persist({ ...vault, accounts: next, accountTxns: nextAccountTxns })
     show('Account deleted.')
   }
 
-  async function addAccountTxn(txnOrList){
+  async function addAccountTxn(txnOrList) {
     const txns = Array.isArray(txnOrList) ? txnOrList : [txnOrList]
     if (!txns.length) return
 
@@ -1289,7 +1289,7 @@ export default function App(){
     show('Saved.')
   }
 
-  function applyAccountDelta(nextAccounts, accountId, subAccountId, delta){
+  function applyAccountDelta(nextAccounts, accountId, subAccountId, delta) {
     return nextAccounts.map(a => {
       if (a.id !== accountId) return a
       const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
@@ -1301,7 +1301,7 @@ export default function App(){
     })
   }
 
-  async function deleteAccountTxn(entryId){
+  async function deleteAccountTxn(entryId) {
     const entry = allAccountTxns.find(t => t.id === entryId)
     if (!entry) return
     let targets = [entry]
@@ -1310,7 +1310,7 @@ export default function App(){
       targets = allAccountTxns.filter(t => t.kind === 'transfer' && t.id.startsWith(baseId))
     }
     let nextAccounts = allAccounts
-    for (const t of targets){
+    for (const t of targets) {
       const delta = t.direction === 'in' ? -Number(t.amount || 0) : Number(t.amount || 0)
       nextAccounts = applyAccountDelta(nextAccounts, t.accountId, t.subAccountId, delta)
     }
@@ -1320,7 +1320,7 @@ export default function App(){
     show('Deleted.')
   }
 
-  async function updateAccountTxn(entryId, next){
+  async function updateAccountTxn(entryId, next) {
     const entry = allAccountTxns.find(t => t.id === entryId)
     if (!entry) return
     const oldAmt = Number(entry.amount || 0)
@@ -1335,7 +1335,7 @@ export default function App(){
     show('Updated.')
   }
 
-  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }){
+  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }) {
     const from = allAccounts.find(a => a.id === fromId)
     const to = allAccounts.find(a => a.id === toId)
     if (!from || !to) return
@@ -1389,19 +1389,19 @@ export default function App(){
     show('Transfer saved.')
   }
 
-  async function updateAccountGroups(nextGroups){
+  async function updateAccountGroups(nextGroups) {
     await persistActiveLedger({ ...activeLedger, groups: nextGroups })
   }
 
-  async function updateAccounts(nextAccounts){
+  async function updateAccounts(nextAccounts) {
     const activeIds = new Set(accounts.map(a => a.id))
     const otherAccounts = allAccounts.filter(a => !activeIds.has(a.id))
     await persist({ ...vault, accounts: [...nextAccounts, ...otherAccounts] })
   }
 
   // ---------- Export/Import/Reset ----------
-  function download(filename, text){
-    const blob = new Blob([text], { type:'application/json' })
+  function download(filename, text) {
+    const blob = new Blob([text], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1412,29 +1412,29 @@ export default function App(){
     setTimeout(() => URL.revokeObjectURL(url), 1200)
   }
 
-  async function handleExport(){
+  async function handleExport() {
     const enc = exportEncryptedBackup()
-    download(`local-finance-backup-encrypted-${new Date().toISOString().slice(0,10)}.json`, enc)
+    download(`local-finance-backup-encrypted-${new Date().toISOString().slice(0, 10)}.json`, enc)
     show('Exported encrypted backup.')
   }
 
-  async function handleImport(file){
-    try{
+  async function handleImport(file) {
+    try {
       const text = await file.text()
       importEncryptedBackup(text)
       show('Imported. Unlock with your PIN.')
       setStage('unlock')
-              const fresh = normalizeVault(null)
-              setVaultState({
-                ...fresh,
-                settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
-              })
-    } catch(e){
+      const fresh = normalizeVault(null)
+      setVaultState({
+        ...fresh,
+        settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
+      })
+    } catch (e) {
       show(e.message || 'Import failed.')
     }
   }
 
-  async function handleReset(){
+  async function handleReset() {
     if (!confirm('This will delete everything on this device. Continue?')) return
     await resetAll()
     localStorage.removeItem(SEED_KEY)
@@ -1445,7 +1445,7 @@ export default function App(){
     show('Reset complete.')
   }
 
-  async function handleWipeAll(){
+  async function handleWipeAll() {
     if (!confirm('This will remove all user and demo data and reset the app. Continue?')) return
     await resetAll()
     localStorage.removeItem(SEED_KEY)
@@ -1456,7 +1456,7 @@ export default function App(){
     show('All data cleared.')
   }
 
-  async function handleLoadDemo(){
+  async function handleLoadDemo() {
     if (!confirm('Load demo data? This will replace your current data.')) return
     const data = getSeedVault()
     localStorage.setItem(SEED_KEY, '1')
@@ -1465,7 +1465,7 @@ export default function App(){
   }
 
   // ---------- Screens ----------
-  function HomeScreen(){
+  function HomeScreen() {
     const monthLabel = useMemo(() => formatMonthLabel(month), [month])
     const [collapseExpense, setCollapseExpense] = useState(() => {
       try { return localStorage.getItem('collapse_expense') === 'true' } catch { return false }
@@ -1476,7 +1476,7 @@ export default function App(){
     const expenseTotals = useMemo(() => {
       const map = new Map()
       for (const c of expenseCats) map.set(c, 0)
-      for (const t of filteredTxns){
+      for (const t of filteredTxns) {
         if (t.type !== 'expense') continue
         const key = t.category || 'Other'
         map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
@@ -1487,7 +1487,7 @@ export default function App(){
     const incomeTotals = useMemo(() => {
       const map = new Map()
       for (const c of incomeCats) map.set(c, 0)
-      for (const t of filteredTxns){
+      for (const t of filteredTxns) {
         if (t.type !== 'income') continue
         const key = t.category || 'Other'
         map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
@@ -1496,14 +1496,50 @@ export default function App(){
     }, [filteredTxns, incomeCats])
 
     useEffect(() => {
-      try { localStorage.setItem('collapse_expense', String(collapseExpense)) } catch {}
-    }, [collapseExpense])
-
-    useEffect(() => {
-      try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch {}
+      try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch { }
     }, [collapseIncome])
 
-    function addCategory(type){
+    const [draggingCat, setDraggingCat] = useState(null) // { type, name }
+    const [dragOverCat, setDragOverCat] = useState(null) // name (string)
+
+    function handleDragStart(type, name) {
+      setDraggingCat({ type, name })
+    }
+
+    function handleDragOver(e, type, name) {
+      e.preventDefault()
+      if (draggingCat && draggingCat.type === type && dragOverCat !== name) {
+        setDragOverCat(name)
+      }
+    }
+
+    function handleDrop(type, targetName) {
+      if (!draggingCat || draggingCat.type !== type) return
+
+      const list = type === 'expense' ? expenseCats : incomeCats
+      const fromIndex = list.indexOf(draggingCat.name)
+      const toIndex = list.indexOf(targetName)
+
+      if (fromIndex < 0 || toIndex < 0) {
+        setDraggingCat(null)
+        setDragOverCat(null)
+        return
+      }
+
+      const next = [...list]
+      next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, draggingCat.name)
+
+      const nextCategories = {
+        ...categories,
+        [type]: next
+      }
+      persistActiveLedger({ ...activeLedger, categories: nextCategories })
+      setDraggingCat(null)
+      setDragOverCat(null)
+    }
+
+    function addCategory(type) {
       const name = prompt(`New ${type} category name?`)
       if (!name) return
       const trimmed = name.trim()
@@ -1525,7 +1561,7 @@ export default function App(){
       persistActiveLedger({ ...activeLedger, categories: nextCategories, categoryMeta: nextMeta })
     }
 
-    function editCategory(type){
+    function editCategory(type) {
       const list = type === 'expense' ? expenseCats : incomeCats
       if (!list.length) return
       const from = prompt(`Rename which ${type} category?\n${list.join(', ')}`)
@@ -1566,7 +1602,7 @@ export default function App(){
       })
     }
 
-    if (selectedCategory){
+    if (selectedCategory) {
       return (
         <CategoryDetail
           category={selectedCategory}
@@ -1673,8 +1709,13 @@ export default function App(){
             <div className="ledgerGrid">
               {incomeCats.map((c, i) => (
                 <div
-                  className={`ledgerCard theme-${(i % 6) + 4}`}
+                  className={`ledgerCard theme-${(i % 6) + 4} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
                   key={c}
+                  draggable
+                  onDragStart={() => handleDragStart('income', c)}
+                  onDragOver={(e) => handleDragOver(e, 'income', c)}
+                  onDrop={() => handleDrop('income', c)}
+                  onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
                   style={categoryMeta.income?.[c]?.color ? { background: categoryMeta.income[c].color } : undefined}
                   onClick={() => setSelectedCategory({ type: 'income', name: c })}
                   role="button"
@@ -1686,7 +1727,7 @@ export default function App(){
                   }}
                 >
                   <div className="ledgerCardTitle">{c}</div>
-                  <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
+                  <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
                   <div className="ledgerCardValue">{fmtTZS(incomeTotals.get(c) || 0)}</div>
                 </div>
               ))}
@@ -1721,28 +1762,34 @@ export default function App(){
                 const progress = Math.min(ratio * 100, 100)
                 const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
                 return (
-                <div
-                  className={`ledgerCard theme-${(i % 9) + 1}`}
-                  key={c}
-                  style={{
-                    '--progress': `${progress}%`,
-                    '--progress-color': progressColor,
-                    ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
-                  }}
-                  onClick={() => setSelectedCategory({ type: 'expense', name: c })}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setSelectedCategory({ type: 'expense', name: c })
-                    }
-                  }}
-                >
-                  <div className="ledgerCardTitle">{c}</div>
-                  <div className="ledgerCardIcon">{c.slice(0,1).toUpperCase()}</div>
-                  <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
-                </div>
-              )})}
+                  <div
+                    className={`ledgerCard theme-${(i % 9) + 1} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
+                    key={c}
+                    draggable
+                    onDragStart={() => handleDragStart('expense', c)}
+                    onDragOver={(e) => handleDragOver(e, 'expense', c)}
+                    onDrop={() => handleDrop('expense', c)}
+                    onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
+                    style={{
+                      '--progress': `${progress}%`,
+                      '--progress-color': progressColor,
+                      ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
+                    }}
+                    onClick={() => setSelectedCategory({ type: 'expense', name: c })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setSelectedCategory({ type: 'expense', name: c })
+                      }
+                    }}
+                  >
+                    <div className="ledgerCardTitle">{c}</div>
+                    <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
+                    <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -1752,7 +1799,7 @@ export default function App(){
     )
   }
 
-  function CategoryDetail({ category, onClose, onAdd, total, meta, onUpdateMeta }){
+  function CategoryDetail({ category, onClose, onAdd, total, meta, onUpdateMeta }) {
     const [amount, setAmount] = useState('')
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
@@ -1791,14 +1838,14 @@ export default function App(){
 
     const groupedRecent = useMemo(() => {
       const map = new Map()
-      for (const t of recentTxns){
+      for (const t of recentTxns) {
         if (!map.has(t.date)) map.set(t.date, [])
         map.get(t.date).push(t)
       }
       return Array.from(map.entries())
     }, [recentTxns])
 
-    function openTxnDetail(t){
+    function openTxnDetail(t) {
       setSelectedTxn({
         id: `txn-${t.id}`,
         date: t.date,
@@ -1815,7 +1862,7 @@ export default function App(){
       })
     }
 
-    function addSubcategory(){
+    function addSubcategory() {
       const name = prompt('Subcategory name?')
       if (!name) return
       const trimmed = name.trim()
@@ -1824,13 +1871,13 @@ export default function App(){
       onUpdateMeta?.({ budget, subs: next })
     }
 
-    function openEditModal(){
+    function openEditModal() {
       setEditName(category.name)
       setEditColor(meta?.color || '')
       setShowEditModal(true)
     }
 
-    function saveCategoryEdit(){
+    function saveCategoryEdit() {
       const trimmed = editName.trim()
       if (!trimmed) return
       const list = category.type === 'expense' ? expenseCats : incomeCats
@@ -1876,7 +1923,7 @@ export default function App(){
       if (trimmed !== category.name) onClose()
     }
 
-    function deleteCategory(){
+    function deleteCategory() {
       if (!confirm(`Delete "${category.name}"?`)) return
       const list = category.type === 'expense' ? expenseCats : incomeCats
       const nextList = list.filter(c => c !== category.name)
@@ -1907,12 +1954,12 @@ export default function App(){
       onClose()
     }
 
-    function updateBudget(value){
+    function updateBudget(value) {
       const nextBudget = Number(value || 0)
       onUpdateMeta?.({ budget: nextBudget, subs: subcats })
     }
 
-    if (selectedTxn){
+    if (selectedTxn) {
       return (
         <TransactionDetail
           txn={selectedTxn}
@@ -2038,7 +2085,7 @@ export default function App(){
               return (
                 <div className="catDetailHistoryCard" key={date}>
                   <div className="catHistoryHead">
-                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })}</div>
+                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
                     <div className="catHistoryTotals">
                       <span className={category.type === 'income' ? 'in' : 'out'}>
                         {category.type === 'income' ? 'IN' : 'OUT'} {fmtTZS(total)}
@@ -2059,7 +2106,7 @@ export default function App(){
                             if (e.key === 'Enter' || e.key === ' ') openTxnDetail(t)
                           }}
                         >
-                          <div className="catHistoryIcon">{category.name.slice(0,1).toUpperCase()}</div>
+                          <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
                           <div className="catHistoryInfo">
                             <div className="catHistoryTitleRow">{t.note || category.name}</div>
                             <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
@@ -2122,7 +2169,7 @@ export default function App(){
     )
   }
 
-  function TransactionsScreen(){
+  function TransactionsScreen() {
     const periodLabel = useMemo(() => formatMonthLabel(month), [month])
     const [selectedTxn, setSelectedTxn] = useState(null)
 
@@ -2164,19 +2211,19 @@ export default function App(){
         }
       })
 
-      return [...baseTxns, ...acctTxns].sort((a,b) => (a.date < b.date ? 1 : -1))
+      return [...baseTxns, ...acctTxns].sort((a, b) => (a.date < b.date ? 1 : -1))
     }, [filteredTxns, filteredAccountTxns, accounts])
 
     const groupedTxns = useMemo(() => {
       const map = new Map()
-      for (const t of combinedTxns){
+      for (const t of combinedTxns) {
         if (!map.has(t.date)) map.set(t.date, [])
         map.get(t.date).push(t)
       }
       return Array.from(map.entries())
     }, [combinedTxns])
 
-    if (selectedTxn){
+    if (selectedTxn) {
       return (
         <TransactionDetail
           txn={selectedTxn}
@@ -2263,7 +2310,7 @@ export default function App(){
               return (
                 <div className="txDayCard" key={date}>
                   <div className="txDayHead">
-                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })}</div>
+                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
                     <div className="txDayTotals">
                       {totals.out > 0 && <span className="out">OUT {fmtTZS(totals.out)}</span>}
                       {totals.in > 0 && <span className="in">IN {fmtTZS(totals.in)}</span>}
@@ -2277,7 +2324,7 @@ export default function App(){
                         }}
                       >
                         <div className="txRowIcon">
-                          {(t.title || 'T').slice(0,1).toUpperCase()}
+                          {(t.title || 'T').slice(0, 1).toUpperCase()}
                         </div>
                         <div className="txRowMain">
                           <div className="txRowTitle">{t.title}</div>
@@ -2304,7 +2351,7 @@ export default function App(){
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose }){
+  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose }) {
     const isEditable = txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
@@ -2326,7 +2373,7 @@ export default function App(){
     const labelType = type === 'income' ? 'Income' : 'Expense'
     const categoryOptions = type === 'income' ? incomeCats : expenseCats
 
-    function handleSave(){
+    function handleSave() {
       if (!isEditable) return
       const amt = Number(amount || 0)
       if (!amt || amt <= 0) return show('Enter a valid amount.')
@@ -2452,7 +2499,7 @@ export default function App(){
     )
   }
 
-  function SettingsScreen(){
+  function SettingsScreen() {
     return (
       <div className="card">
         <h2>Settings</h2>
@@ -2460,12 +2507,12 @@ export default function App(){
         <div className="row">
           <button className="btn" onClick={handleExport}>Export (Encrypted)</button>
 
-          <label className="btn" style={{display:'inline-flex', alignItems:'center', gap:8}}>
+          <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             Import
             <input
               type="file"
               accept="application/json"
-              style={{display:'none'}}
+              style={{ display: 'none' }}
               onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])}
             />
           </label>
@@ -2474,7 +2521,7 @@ export default function App(){
           <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
         </div>
 
-        <div className="small" style={{marginTop:10}}>
+        <div className="small" style={{ marginTop: 10 }}>
           Important: iPhone Safari storage can sometimes be cleared if space is low.
           Export backups regularly.
         </div>
@@ -2489,19 +2536,19 @@ export default function App(){
 
         <div className="hr" />
 
-        <div className="row" style={{ alignItems:'center', justifyContent:'space-between' }}>
+        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontWeight:600 }}>Cloud Backup (Google Drive)</div>
+            <div style={{ fontWeight: 600 }}>Cloud Backup (Google Drive)</div>
             <div className="small">Encrypted backup stored in your Google Drive app folder.</div>
             {cloudLastBackup && (
               <div className="small">Last backup: {cloudLastBackup.toLocaleString()}</div>
             )}
             {cloudStale && (
-              <div className="small" style={{ color:'#d27b00' }}>
+              <div className="small" style={{ color: '#d27b00' }}>
                 Backup hasn’t run in {cloudWarnDays} days.
               </div>
             )}
-            {cloudError && <div className="small" style={{ color:'#d25b5b' }}>{cloudError}</div>}
+            {cloudError && <div className="small" style={{ color: '#d25b5b' }}>{cloudError}</div>}
           </div>
           <label className="toggle">
             <input
@@ -2509,7 +2556,7 @@ export default function App(){
               checked={!!cloudBackup.enabled}
               onChange={e => {
                 const enabled = e.target.checked
-                if (enabled && !cloudGoogle.refreshToken){
+                if (enabled && !cloudGoogle.refreshToken) {
                   startGoogleAuth()
                   return
                 }
@@ -2526,7 +2573,7 @@ export default function App(){
           </label>
         </div>
 
-        <div className="row" style={{ gap:8, marginTop:10, flexWrap:'wrap' }}>
+        <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           {!cloudGoogle.refreshToken ? (
             <button className="btn" onClick={startGoogleAuth} disabled={cloudBusy}>
               Connect Google Drive
@@ -2560,9 +2607,9 @@ export default function App(){
 
         <div className="hr" />
 
-        <div className="row" style={{ alignItems:'center', justifyContent:'space-between' }}>
+        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontWeight:600 }}>PIN lock</div>
+            <div style={{ fontWeight: 600 }}>PIN lock</div>
             <div className="small">Require PIN to unlock the app.</div>
           </div>
           <label className="toggle">
@@ -2581,7 +2628,7 @@ export default function App(){
           <button className="btn" onClick={handleLoadDemo}>Load Demo Data</button>
         </div>
 
-        <div className="small" style={{marginTop:10}}>
+        <div className="small" style={{ marginTop: 10 }}>
           Demo data will overwrite your current accounts and account transactions.
         </div>
 
@@ -2648,7 +2695,7 @@ export default function App(){
     )
   }
 
-  function BudgetSettings(){
+  function BudgetSettings() {
     const [draftBudgets, setDraftBudgets] = useState(() => {
       const map = {}
       expenseCats.forEach(c => {
@@ -2659,7 +2706,7 @@ export default function App(){
     })
     const totalBudget = Object.values(draftBudgets).reduce((s, v) => s + Number(v || 0), 0)
 
-    function handleSaveBudgets(){
+    function handleSaveBudgets() {
       const nextMeta = {
         ...categoryMeta,
         expense: {
@@ -2697,7 +2744,7 @@ export default function App(){
               </div>
             ))}
           </div>
-          <div className="row" style={{ justifyContent:'flex-end', marginTop: 10 }}>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
             <button className="btn" type="button" onClick={() => setShowBudgetSettings(false)}>
               Cancel
             </button>
@@ -2713,7 +2760,7 @@ export default function App(){
   // ---------- Auth screens ----------
   if (stage === 'loading') return null
 
-  if (stage === 'setpin'){
+  if (stage === 'setpin') {
     return (
       <div className="container">
         <div className="pinWrap card">
@@ -2733,17 +2780,17 @@ export default function App(){
 
           <div className="field">
             <label>New PIN (min 4 characters)</label>
-            <input value={pin} onChange={e=>setPin(e.target.value)} placeholder="e.g. 1234" />
+            <input value={pin} onChange={e => setPin(e.target.value)} placeholder="e.g. 1234" />
           </div>
           <div className="field">
             <label>Confirm PIN</label>
-            <input value={pin2} onChange={e=>setPin2(e.target.value)} placeholder="repeat PIN" />
+            <input value={pin2} onChange={e => setPin2(e.target.value)} placeholder="repeat PIN" />
           </div>
 
           <button className="btn primary" onClick={handleSetPin}>Create Vault</button>
 
           {toast && <div className="toast">{toast}</div>}
-          <div className="small" style={{marginTop:10}}>
+          <div className="small" style={{ marginTop: 10 }}>
             Tip: Use iPhone Face ID/Passcode + a PIN you can remember.
           </div>
         </div>
@@ -2751,7 +2798,7 @@ export default function App(){
     )
   }
 
-  if (stage === 'unlock'){
+  if (stage === 'unlock') {
     return (
       <div className="container">
         <div className="pinWrap card">
@@ -2765,14 +2812,14 @@ export default function App(){
           <div className="hr" />
           <div className="field">
             <label>PIN</label>
-            <input value={pin} onChange={e=>setPin(e.target.value)} placeholder="Your PIN" />
+            <input value={pin} onChange={e => setPin(e.target.value)} placeholder="Your PIN" />
           </div>
           <div className="row">
             <button className="btn primary" onClick={handleUnlock}>Unlock</button>
             <button className="btn danger" onClick={handleReset}>Reset</button>
           </div>
           {toast && <div className="toast">{toast}</div>}
-          <div className="small" style={{marginTop:10}}>
+          <div className="small" style={{ marginTop: 10 }}>
             Export/import is available after unlock (recommended).
           </div>
         </div>
@@ -2827,14 +2874,14 @@ export default function App(){
             accountTxns={accountTxns}
             groups={activeLedger.groups || []}
             activeLedgerId={activeLedger.id}
-          ledgers={ledgers}
-          focusAccountId={focusAccountId}
-          onFocusAccountUsed={() => setFocusAccountId(null)}
-          onSwitchLedger={handleSwitchLedgerToAccounts}
-          onDetailOpen={() => setShowAccountsHeader(false)}
-          onDetailClose={() => setShowAccountsHeader(true)}
-          onToast={show}
-          onUpsertAccount={upsertAccount}
+            ledgers={ledgers}
+            focusAccountId={focusAccountId}
+            onFocusAccountUsed={() => setFocusAccountId(null)}
+            onSwitchLedger={handleSwitchLedgerToAccounts}
+            onDetailOpen={() => setShowAccountsHeader(false)}
+            onDetailClose={() => setShowAccountsHeader(true)}
+            onToast={show}
+            onUpsertAccount={upsertAccount}
             onDeleteAccount={deleteAccount}
             onAddAccountTxn={addAccountTxn}
             onTransferAccount={transferAccount}

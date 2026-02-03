@@ -25,9 +25,6 @@
 
 
 ## TODO: 
-- Impliment the ability to sale an asset
-- On a Asset Page, you currently show Total Value, but can you also show, Units Amount like lets say 10 Acres 
-- Impliment the ability to revaluate an Assset
 - On the Asset Page, can you also show Total Purhase Amount, Profit +- depending it the Revaluation Amount is greater of less than the total Purchase Amount 
 - Show details of the Assets on the Accounts Tab
 - Impliment ability to Update Asset Valuation as per a certain Date, this should then show the Appreciation Value (New Valuation - Purchased Amount)
@@ -38,7 +35,9 @@
 - Add an Investment Group in Accounts Tab
 
 ## 3rd Feb
-
+- Impliment the ability to revaluate an Assset
+- On a Asset Page, you currently show Total Value, but can you also show, Units Amount like lets say 10 Acres 
+- Impliment the ability to sale an asset
 
 
 ## 2nd Feb

@@ -709,6 +709,7 @@ function AccountDetail({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState(account.name || "");
   const [editLedgerId, setEditLedgerId] = useState(account.ledgerId || activeLedgerId);
+  const [editBalance, setEditBalance] = useState("");
   const [editError, setEditError] = useState("");
 
   useEffect(() => {
@@ -762,7 +763,7 @@ function AccountDetail({
   const entries = useMemo(() => {
     return accountTxns
       .filter((t) => t.accountId === account.id)
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
+      .sort((a, b) => (a.date > b.date ? -1 : (a.date < b.date ? 1 : 0)));
   }, [accountTxns, account.id]);
 
   const grouped = useMemo(() => {
@@ -997,6 +998,9 @@ function AccountDetail({
   }
 
   function handleEdit() {
+    setEditName(account.name);
+    setEditLedgerId(account.ledgerId || activeLedgerId);
+    setEditBalance(account.balance || 0);
     setEditError("");
     setShowEditModal(true);
   }
@@ -1014,6 +1018,7 @@ function AccountDetail({
     const targetGroup = targetGroups.find((g) => g.type === type) || targetGroups[0] || currentGroup;
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = subs.map((s) => ({ ...s, ledgerId: nextLedgerId }));
+
     await onUpsertAccount?.({
       ...account,
       name,
@@ -1022,6 +1027,25 @@ function AccountDetail({
       groupType: targetGroup?.type || account.groupType,
       subAccounts: nextSubs
     });
+
+    // Balance update logic for Debit accounts
+    if (type === 'debit') {
+      const oldBal = Number(account.balance || 0);
+      const newBal = Number(editBalance || 0);
+      const delta = newBal - oldBal;
+
+      if (Math.abs(delta) > 0.01) {
+        await onAddAccountTxn?.({
+          accountId: account.id,
+          amount: Math.abs(delta),
+          direction: delta > 0 ? 'in' : 'out',
+          kind: 'adjust',
+          note: 'Balance correction',
+          date: new Date().toISOString().slice(0, 10)
+        });
+      }
+    }
+
     setShowEditModal(false);
     if (nextLedgerId && nextLedgerId !== activeLedgerId) {
       const ledgerName = ledgers.find((l) => l.id === nextLedgerId)?.name || "selected ledger";
@@ -1901,6 +1925,17 @@ function AccountDetail({
                 ))}
               </select>
             </div>
+            {(currentGroup?.type === 'debit' || !currentGroup) && (
+              <div className="field">
+                <label>Balance (TZS) - Creates Adjustment</label>
+                <input
+                  type="number"
+                  value={editBalance}
+                  onChange={(e) => setEditBalance(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            )}
             {editError && <div className="small" style={{ color: "#d25b5b" }}>{editError}</div>}
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowEditModal(false)}>

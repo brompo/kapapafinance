@@ -2170,6 +2170,8 @@ export default function App() {
   }
 
   function TransactionsScreen() {
+    const [txTab, setTxTab] = useState('daily') // daily, monthly, stats
+    const [statYear, setStatYear] = useState(() => new Date().getFullYear())
     const periodLabel = useMemo(() => formatMonthLabel(month), [month])
     const [selectedTxn, setSelectedTxn] = useState(null)
 
@@ -2223,6 +2225,67 @@ export default function App() {
       return Array.from(map.entries())
     }, [combinedTxns])
 
+    const monthlyStats = useMemo(() => {
+      // Aggregate by month for the selected year
+      const stats = new Map() // 'YYYY-MM' -> { inc, exp }
+      const allTxns = [...allAccountTxns, ...txns]
+
+      allTxns.forEach(t => {
+        const date = t.date || todayISO()
+        const y = Number(date.slice(0, 4))
+        if (y !== statYear) return
+        const key = date.slice(0, 7)
+        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0 })
+        const entry = stats.get(key)
+
+        // Logic similar to kpi calculation
+        // For txns: type=income -> inc, type=expense -> exp
+        // For accountTxns: direction=in -> inc, direction=out -> exp (simplified view)
+        // Wait, accountTxns includes transfers. Transfers between own accounts shouldn't be income/expense.
+        // But for "Monthly Stats" asked: "Monthly Income, Monthly Expenses, Monthly Balance"
+
+        let amt = Number(t.amount || 0)
+        let isInc = false
+        let isExp = false
+
+        if (t.kind === 'transfer') return // Skip internal transfers for stats? 
+        // Or if logic is strict:
+        // txns (income/expense)
+        if (!t.accountId && t.type) {
+          if (t.type === 'income') isInc = true
+          else isExp = true
+        } else if (t.accountId) {
+          // Account txns
+          if (t.kind === 'adjust' || t.kind === 'credit' || t.kind === 'valuation') {
+            // Treat specific account adjustments as income/expense?
+            // Adjust IN = Income, Adjust OUT = Expense (Loss)
+            if (t.direction === 'in') isInc = true
+            else isExp = true
+          }
+        }
+
+        if (isInc) entry.inc += amt
+        if (isExp) entry.exp += amt
+      })
+
+      // Fill in all months for the year
+      const result = []
+      for (let m = 1; m <= 12; m++) {
+        const mm = String(m).padStart(2, '0')
+        const key = `${statYear}-${mm}`
+        const dateObj = new Date(statYear, m - 1, 1)
+        const monthName = dateObj.toLocaleString('default', { month: 'long' })
+        const data = stats.get(key) || { inc: 0, exp: 0 }
+        result.push({
+          key,
+          label: monthName,
+          ...data,
+          bal: data.inc - data.exp
+        })
+      }
+      return result.reverse() // Dec to Jan
+    }, [statYear, allAccountTxns, txns])
+
     if (selectedTxn) {
       return (
         <TransactionDetail
@@ -2246,14 +2309,30 @@ export default function App() {
           </div>
 
           <div className="txPeriod">
-            <button className="txNavBtn" onClick={() => shiftMonth(-1)} type="button">‹</button>
-            <div className="txPeriodLabel">{periodLabel}</div>
-            <button className="txNavBtn" onClick={() => shiftMonth(1)} type="button">›</button>
+            {txTab === 'monthly' ? (
+              <>
+                <button className="txNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
+                <div className="txPeriodLabel">{statYear}</div>
+                <button className="txNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
+              </>
+            ) : txTab === 'daily' ? (
+              <>
+                <button className="txNavBtn" onClick={() => shiftMonth(-1)} type="button">‹</button>
+                <div className="txPeriodLabel">{periodLabel}</div>
+                <button className="txNavBtn" onClick={() => shiftMonth(1)} type="button">›</button>
+              </>
+            ) : (
+              <div className="txPeriodLabel">Statistics</div>
+            )}
           </div>
 
           <div className="txActions">
-            <button className="txIconBtn" type="button" title="Pick date">📅</button>
-            <button className="txIconBtn" type="button" title="Filters">⏳</button>
+            {txTab === 'daily' && (
+              <>
+                <button className="txIconBtn" type="button" title="Pick date">📅</button>
+                <button className="txIconBtn" type="button" title="Filters">⏳</button>
+              </>
+            )}
           </div>
         </div>
 
@@ -2281,71 +2360,114 @@ export default function App() {
           </div>
         )}
 
-        <div className="txKpiBar">
-          <div className="txKpiItem">
-            <div className="txKpiLabel">Income</div>
-            <div className="txKpiValue income">{fmtTZS(kpis.inc)}</div>
+        {txTab === 'daily' && (
+          <div className="txKpiBar">
+            <div className="txKpiItem">
+              <div className="txKpiLabel">Income</div>
+              <div className="txKpiValue income">{fmtTZS(kpis.inc)}</div>
+            </div>
+            <div className="txKpiItem">
+              <div className="txKpiLabel">Expense</div>
+              <div className="txKpiValue expense">{fmtTZS(kpis.exp)}</div>
+            </div>
+            <div className="txKpiItem">
+              <div className="txKpiLabel">Balance</div>
+              <div className="txKpiValue">{fmtTZS(kpis.bal)}</div>
+            </div>
           </div>
-          <div className="txKpiItem">
-            <div className="txKpiLabel">Expense</div>
-            <div className="txKpiValue expense">{fmtTZS(kpis.exp)}</div>
-          </div>
-          <div className="txKpiItem">
-            <div className="txKpiLabel">Balance</div>
-            <div className="txKpiValue">{fmtTZS(kpis.bal)}</div>
-          </div>
-        </div>
+        )}
 
         <div className="txList">
-          {groupedTxns.length === 0 ? (
-            <div className="emptyRow">No transactions yet for {periodLabel}.</div>
-          ) : (
-            groupedTxns.map(([date, items]) => {
-              const totals = items.reduce((s, t) => {
-                if (t.direction === 'in') s.in += t.amount
-                else s.out += t.amount
-                return s
-              }, { in: 0, out: 0 })
+          {txTab === 'daily' ? (
+            groupedTxns.length === 0 ? (
+              <div className="emptyRow">No transactions yet for {periodLabel}.</div>
+            ) : (
+              groupedTxns.map(([date, items]) => {
+                const totals = items.reduce((s, t) => {
+                  if (t.direction === 'in') s.in += t.amount
+                  else s.out += t.amount
+                  return s
+                }, { in: 0, out: 0 })
 
-              return (
-                <div className="txDayCard" key={date}>
-                  <div className="txDayHead">
-                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
-                    <div className="txDayTotals">
-                      {totals.out > 0 && <span className="out">OUT {fmtTZS(totals.out)}</span>}
-                      {totals.in > 0 && <span className="in">IN {fmtTZS(totals.in)}</span>}
+                return (
+                  <div className="txDayCard" key={date}>
+                    <div className="txDayHead">
+                      <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                      <div className="txDayTotals">
+                        {totals.out > 0 && <span className="out">OUT {fmtTZS(totals.out)}</span>}
+                        {totals.in > 0 && <span className="in">IN {fmtTZS(totals.in)}</span>}
+                      </div>
+                    </div>
+                    <div className="txDayBody">
+                      {items.map(t => (
+                        <div className="txRow" key={t.id} onClick={() => setSelectedTxn(t)} role="button" tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') setSelectedTxn(t)
+                          }}
+                        >
+                          <div className="txRowIcon">
+                            {(t.title || 'T').slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="txRowMain">
+                            <div className="txRowTitle">{t.title}</div>
+                            {t.sub && <div className="txRowSub">{t.sub}</div>}
+                          </div>
+                          <div className={'txRowAmount ' + (t.direction === 'in' ? 'pos' : 'neg')}>
+                            {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="txDayBody">
-                    {items.map(t => (
-                      <div className="txRow" key={t.id} onClick={() => setSelectedTxn(t)} role="button" tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') setSelectedTxn(t)
-                        }}
-                      >
-                        <div className="txRowIcon">
-                          {(t.title || 'T').slice(0, 1).toUpperCase()}
-                        </div>
-                        <div className="txRowMain">
-                          <div className="txRowTitle">{t.title}</div>
-                          {t.sub && <div className="txRowSub">{t.sub}</div>}
-                        </div>
-                        <div className={'txRowAmount ' + (t.direction === 'in' ? 'pos' : 'neg')}>
-                          {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })
+                )
+              })
+            )
+          ) : txTab === 'monthly' ? (
+            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+              <table className="table" style={{ minWidth: 320, fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '10px 8px' }}>Month</th>
+                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Income</th>
+                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Expr</th>
+                    <th style={{ textAlign: 'right', padding: '10px 8px' }}>Bal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyStats.map(m => (
+                    <tr key={m.key}>
+                      <td style={{ padding: '10px 8px', fontWeight: 600, color: '#555' }}>
+                        {m.label.slice(0, 3).toUpperCase()}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)' }}>
+                        {m.inc > 0 ? fmtTZS(m.inc) : '-'}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)' }}>
+                        {m.exp > 0 ? fmtTZS(m.exp) : '-'}
+                      </td>
+                      <td style={{
+                        textAlign: 'right',
+                        padding: '10px 8px',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        color: m.bal < 0 ? 'var(--danger)' : 'var(--text)'
+                      }}>
+                        {fmtTZS(m.bal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="emptyRow">Stats coming soon!</div>
           )}
         </div>
 
         <div className="txBottomTabs">
-          <button className="active" type="button">Record</button>
-          <button type="button">Stats</button>
-          <button type="button">Tag</button>
+          <button className={txTab === 'daily' ? 'active' : ''} type="button" onClick={() => setTxTab('daily')}>Daily</button>
+          <button className={txTab === 'monthly' ? 'active' : ''} type="button" onClick={() => setTxTab('monthly')}>Monthly</button>
+          <button className={txTab === 'stats' ? 'active' : ''} type="button" onClick={() => setTxTab('stats')}>Stats</button>
         </div>
       </div>
     )

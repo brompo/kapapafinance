@@ -25,16 +25,24 @@
 
 
 ## TODO: 
-- On the Asset Page, can you also show Total Purhase Amount, Profit +- depending it the Revaluation Amount is greater of less than the total Purchase Amount 
+- IN the transaction Tab at the Bottom, instead of Records, Stats, Tag, Change this to Daily, Monthly Stats
+- Under the Monthly Stats, I want it to present , Monthly Income, Monthly Expenses, Monthly Balance,for all month in a particular year, at the top change the filter to Year, so that one can select the year 
+
+- On the Asset Page, can you also show Total Purhase Amount, Profit depending it the Revaluation Amount is greater of less than the total Revaluation Amount 
 - Show details of the Assets on the Accounts Tab
 - Impliment ability to Update Asset Valuation as per a certain Date, this should then show the Appreciation Value (New Valuation - Purchased Amount)
-- Impliment a way to backup data so that I don't have to remember backing up data all the time, suggesting to use Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
+- Impliment a way to backup data so that one doesnt have to remember backing up data all the time, suggesting to use Cloud Backup, so that I don't have to remember backing up data all the time, user should sign in with their own storage, 
 - Add the ability for deleting a transaction, also from the Accounts Page
 - Implement the Ability to make the Categories Draggable, so that one can sort them how they want 
 - Implement a way to have subaccounts assigned to ledgers 
-- Add an Investment Group in Accounts Tab
+
+HIGH VALUE
+- Implement a way to share the ledger with another person, when you share a ledger, a person should be able to see all the transactions and accounts, and you can specify view only or edit access. 
 
 ## 3rd Feb
+- Sort Transactions, the latest transaction should appear at the top
+- Impliment Ability to on Edit a Debit Account, one can update the Balance, and an Adjustement transaction will be created to reflect the balance change
+- Add an Investment Group in Accounts Tab
 - Impliment the ability to revaluate an Assset
 - On a Asset Page, you currently show Total Value, but can you also show, Units Amount like lets say 10 Acres 
 - Impliment the ability to sale an asset

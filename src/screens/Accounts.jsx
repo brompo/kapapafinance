@@ -2009,10 +2009,10 @@ function AccountDetail({
               <div className="accHistoryCard" key={date}>
                 <div className="accHistoryHead">
                   <div className="accHistoryDate">
+                    <div className="dateYear">{new Date(date).getFullYear()}</div>
                     <div className="dateTop">
                       {new Date(date).toLocaleDateString("en-GB", { weekday: 'short', day: 'numeric', month: 'short' })}
                     </div>
-                    <div className="dateYear">{new Date(date).getFullYear()}</div>
                   </div>
                   <div className="accHistoryTotals">
                     {totals.out > 0 && (

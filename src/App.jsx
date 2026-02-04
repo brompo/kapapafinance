@@ -2368,10 +2368,10 @@ export default function App() {
                   <div className="txDayCard" key={date}>
                     <div className="txDayHead">
                       <div className="txDayDate">
+                        <div className="dateYear">{new Date(date).getFullYear()}</div>
                         <div className="dateTop">
                           {new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </div>
-                        <div className="dateYear">{new Date(date).getFullYear()}</div>
                       </div>
                       <div className="txDayTotals">
                         {totals.out > 0 && (

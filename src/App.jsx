@@ -389,8 +389,21 @@ export default function App() {
     ? ALL_LEDGERS_TEMPLATE
     : (ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger())
   const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
+
+  // Helper to check if an account or its subaccounts belong to the active ledger
+  function isAccountInLedger(account, ledgerId) {
+    if (ledgerId === ALL_LEDGERS_ID) return true
+    if (account.ledgerId === ledgerId) return true
+    if (Array.isArray(account.subAccounts)) {
+      return account.subAccounts.some(s => s.ledgerId === ledgerId)
+    }
+    return false
+  }
+
   const normalizedActiveAccounts = normalizeAccountsWithGroups(
-    activeLedgerId === ALL_LEDGERS_ID ? rawAccounts : rawAccounts.filter(a => a.ledgerId === activeLedger.id),
+    activeLedgerId === ALL_LEDGERS_ID
+      ? rawAccounts
+      : rawAccounts.filter(a => isAccountInLedger(a, activeLedger.id)),
     activeLedger.groups
   )
   const normalizedById = useMemo(
@@ -1421,6 +1434,13 @@ export default function App() {
     await persist({ ...vault, accounts: [...nextAccounts, ...otherAccounts] })
   }
 
+  async function handleUpdateLedger(ledgerId, updates) {
+    const nextLedgers = vault.ledgers.map(l =>
+      l.id === ledgerId ? { ...l, ...updates } : l
+    )
+    await persist({ ...vault, ledgers: nextLedgers })
+  }
+
   // ---------- Export/Import/Reset ----------
   function download(filename, text) {
     const blob = new Blob([text], { type: 'application/json' })
@@ -1698,7 +1718,25 @@ export default function App() {
                     onClick={() => handleSelectLedger(l.id)}
                   >
                     <span className="ledgerPickerName">{l.name}</span>
-                    {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        className="miniBtn"
+                        type="button"
+                        style={{ padding: '2px 8px' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newName = prompt("Rename ledger:", l.name)
+                          if (newName && newName.trim() && newName.trim() !== l.name) {
+                            handleUpdateLedger(l.id, { name: newName.trim() })
+                          }
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <span className="ledgerPickerCheck">
+                        {l.id === activeLedger.id ? '✓' : ''}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>

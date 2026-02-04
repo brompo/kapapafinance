@@ -153,9 +153,22 @@ export default function Accounts({
 
   function getAccountBalance(account) {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    const base = subs.length
-      ? subs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
-      : Number(account.balance || 0);
+    // If showing all ledgers, sum all subaccounts.
+    // If showing a specific ledger, only sum subaccounts assigned to that ledger.
+    // Also include the account's base balance ONLY if the account ITSELF is in this ledger
+    // (or if we are showing all ledgers).
+    // Note: Usually if an account has subaccounts, we assume the base balance is 0 or ignored,
+    // but here we sum them.
+    const relevantSubs = activeLedgerId === "all"
+      ? subs
+      : subs.filter(s => s.ledgerId === activeLedgerId);
+
+    // Check if the parent account itself belongs to the active ledger
+    const parentInLedger = activeLedgerId === "all" || account.ledgerId === activeLedgerId;
+
+    const base = subs.length > 0
+      ? relevantSubs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+      : (parentInLedger ? Number(account.balance || 0) : 0);
 
     const groupType = groupById.get(account.groupId)?.type;
     if (groupType === "credit") return base + computeAccruedForAccount(account);
@@ -474,6 +487,7 @@ export default function Accounts({
             getAssetInfo={getAssetInfo}
             expandedAccounts={expandedAccounts}
             onToggleAccountExpand={toggleAccountExpand}
+            activeLedgerId={activeLedgerId}
           />
         );
       })}
@@ -507,6 +521,7 @@ function Section({
   getAssetInfo,
   expandedAccounts,
   onToggleAccountExpand,
+  activeLedgerId,
 }) {
   return (
     <div
@@ -608,8 +623,12 @@ function Section({
               );
 
               const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
-              if (subs.length && expandedAccounts?.[a.id]) {
-                subs.forEach((s) => {
+              const visibleSubs = activeLedgerId === "all"
+                ? subs
+                : subs.filter(s => s.ledgerId === activeLedgerId);
+
+              if (visibleSubs.length && expandedAccounts?.[a.id]) {
+                visibleSubs.forEach((s) => {
                   nodes.push(
                     <div className="rowItem subRow" key={`${a.id}-${s.id}`}>
                       <div className="rowLeft">
@@ -727,6 +746,9 @@ function AccountDetail({
   const [editBalance, setEditBalance] = useState("");
   const [editGroupId, setEditGroupId] = useState("");
   const [editError, setEditError] = useState("");
+  const [editingSubAccountId, setEditingSubAccountId] = useState(null)
+  const [subEditName, setSubEditName] = useState("")
+  const [subEditLedgerId, setSubEditLedgerId] = useState("")
 
   useEffect(() => {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
@@ -1041,7 +1063,8 @@ function AccountDetail({
     targetGroup = targetGroup || targetGroups[0] || currentGroup;
 
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    const nextSubs = subs.map((s) => ({ ...s, ledgerId: nextLedgerId }));
+    // Do not overwrite subaccount ledger IDs when moving the parent account
+    const nextSubs = subs;
 
     await onUpsertAccount?.({
       ...account,
@@ -1219,6 +1242,34 @@ function AccountDetail({
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    let targetLedgerId = activeLedgerId;
+    if (activeLedgerId === "all" || accounts.length > 0) {
+      // If in "All Ledgers", or just generically, maybe ask? 
+      // For now, let's default to the current active ledger (if specific), 
+      // or the parent account's ledger if active is "all".
+      if (activeLedgerId === "all") targetLedgerId = account.ledgerId;
+
+      // Optional: Prompt for ledger?
+      // Simplification: We will just use the current context or parent.
+      // The user requested "assigned to a particulat ledger".
+      // Let's add a confirm or simple prompt extension or just defaulting.
+      // User requirement: "assigned to a particulat ledger".
+      // Let's prompt for it if multiple ledgers exist.
+      if (ledgers.length > 1) {
+        // Simple approach: show a list in prompt? No, that's hard.
+        // Let's just create it in the active ledger (if valid) or prompt?
+        // To keep UI simple like before, we will default to `activeLedgerId || account.ledgerId`.
+        // But maybe we need a modal for adding subaccount now?
+        // Re-using the prompt flow for now but maybe we can be smarter.
+        // Actually, let's just create it. Editing is where assignment happens usually?
+        // Or wait, if I am in Ledger B, and I add a subaccount to Account (from Ledger A), 
+        // it MUST be in Ledger B for it to show up here!
+        // So defaulting to `activeLedgerId` is the correct behavior for "show in that Ledger".
+        if (activeLedgerId === 'all') targetLedgerId = account.ledgerId;
+      }
+    }
+
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = [
       ...subs,
@@ -1226,11 +1277,22 @@ function AccountDetail({
         id: crypto.randomUUID(),
         name: trimmed,
         balance: 0,
-        ledgerId: account.ledgerId || activeLedgerId,
+        ledgerId: targetLedgerId || account.ledgerId,
       },
     ];
     onUpsertAccount({ ...account, subAccounts: nextSubs });
     if (!subAccountId) setSubAccountId(nextSubs[0].id);
+  }
+
+  function handleSaveSubEdit() {
+    if (!subEditName.trim()) return
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
+    const nextSubs = subs.map(s => {
+      if (s.id !== editingSubAccountId) return s
+      return { ...s, name: subEditName.trim(), ledgerId: subEditLedgerId }
+    })
+    onUpsertAccount({ ...account, subAccounts: nextSubs })
+    setEditingSubAccountId(null)
   }
 
   return (
@@ -1376,20 +1438,31 @@ function AccountDetail({
         <div className="accHistoryTitle">Sub-accounts</div>
         {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
           <div className="list">
-            {account.subAccounts.map((s) => (
-              <div className="rowItem subRow" key={s.id}>
-                <div className="rowLeft">
-                  <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
-                  <div>
-                    <div className="rowName">{s.name}</div>
-                    <div className="rowMeta">Sub-account</div>
+            {account.subAccounts
+              .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+              .map((s) => (
+                <div className="rowItem subRow" key={s.id}>
+                  <div className="rowLeft">
+                    <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
+                    <div>
+                      <div className="rowName">{s.name}</div>
+                      <div className="rowMeta">
+                        {activeLedgerId === 'all' && ledgers.find(l => l.id === s.ledgerId)?.name}
+                        {activeLedgerId === 'all' ? ' • ' : ''}Sub-account
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rowRight">
+                    <div className="rowAmount">{fmtTZS(s.balance)}</div>
+                    <button className="miniBtn" type="button" onClick={(e) => {
+                      e.stopPropagation()
+                      setEditingSubAccountId(s.id)
+                      setSubEditName(s.name)
+                      setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
+                    }}>Edit</button>
                   </div>
                 </div>
-                <div className="rowRight">
-                  <div className="rowAmount">{fmtTZS(s.balance)}</div>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         ) : (
           <div className="emptyRow">No sub-accounts yet.</div>
@@ -1435,11 +1508,13 @@ function AccountDetail({
                       <label>From sub-account</label>
                       <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
                         <option value="">Select</option>
-                        {account.subAccounts.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
+                        {account.subAccounts
+                          .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   )}
@@ -1463,11 +1538,13 @@ function AccountDetail({
                         <label>To sub-account</label>
                         <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
                           <option value="">Select</option>
-                          {target.subAccounts.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
+                          {target.subAccounts
+                            .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
                         </select>
                       </div>
                     );
@@ -1506,11 +1583,13 @@ function AccountDetail({
                       <label>Sub-account</label>
                       <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
                         <option value="">Select</option>
-                        {account.subAccounts.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
+                        {account.subAccounts
+                          .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   )}
@@ -1595,11 +1674,13 @@ function AccountDetail({
                     <label>To sub-account</label>
                     <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
                       <option value="">Select sub-account</option>
-                      {target.subAccounts.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
+                      {target.subAccounts
+                        .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 );
@@ -1759,11 +1840,13 @@ function AccountDetail({
                     <label>To sub-account</label>
                     <select value={saleToSubId} onChange={(e) => setSaleToSubId(e.target.value)}>
                       <option value="">Select sub-account</option>
-                      {target.subAccounts.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
+                      {target.subAccounts
+                        .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 );
@@ -1984,6 +2067,41 @@ function AccountDetail({
                 Cancel
               </button>
               <button className="btn primary" type="button" onClick={handleSaveEdit}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingSubAccountId && (
+        <div className="modalBackdrop" onClick={() => setEditingSubAccountId(null)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Edit Sub-account</div>
+            <div className="field">
+              <label>Name</label>
+              <input
+                value={subEditName}
+                onChange={(e) => setSubEditName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="field">
+              <label>Ledger</label>
+              <select
+                value={subEditLedgerId}
+                onChange={(e) => setSubEditLedgerId(e.target.value)}
+              >
+                {ledgers.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn" type="button" onClick={() => setEditingSubAccountId(null)}>
+                Cancel
+              </button>
+              <button className="btn primary" type="button" onClick={handleSaveSubEdit}>
                 Save
               </button>
             </div>

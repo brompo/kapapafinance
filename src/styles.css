@@ -1692,12 +1692,16 @@ label {
 .ledgerPickerName {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis
+  text-overflow: ellipsis;
+  flex: 1;
+  text-align: left;
 }
 
 .ledgerPickerCheck {
   color: #5a5fb0;
-  font-weight: 700
+  font-weight: 700;
+  width: 24px;
+  text-align: center;
 }
 
 .ledgerPickerAdd {

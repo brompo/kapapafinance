@@ -2367,10 +2367,25 @@ export default function App() {
                 return (
                   <div className="txDayCard" key={date}>
                     <div className="txDayHead">
-                      <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                      <div className="txDayDate">
+                        <div className="dateTop">
+                          {new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </div>
+                        <div className="dateYear">{new Date(date).getFullYear()}</div>
+                      </div>
                       <div className="txDayTotals">
-                        {totals.out > 0 && <span className="out">OUT {fmtTZS(totals.out)}</span>}
-                        {totals.in > 0 && <span className="in">IN {fmtTZS(totals.in)}</span>}
+                        {totals.out > 0 && (
+                          <div className="totalGroup">
+                            <div className="totalLabel out">OUT</div>
+                            <div className="totalValue out">{fmtTZS(totals.out)}</div>
+                          </div>
+                        )}
+                        {totals.in > 0 && (
+                          <div className="totalGroup">
+                            <div className="totalLabel in">IN</div>
+                            <div className="totalValue in">{fmtTZS(totals.in)}</div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="txDayBody">

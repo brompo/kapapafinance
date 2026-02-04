@@ -1203,7 +1203,6 @@ function AccountDetail({
 
   function handleSaveTxnEdit() {
     if (!selectedTxn) return;
-    if (selectedTxn.kind === "transfer") return;
     const amt = Number(editTxnAmount || 0);
     if (!amt || amt <= 0) {
       setError("Enter a valid amount.");
@@ -1915,11 +1914,7 @@ function AccountDetail({
             <div className="modalTitle">
               {selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}
             </div>
-            {selectedTxn.kind === "transfer" && (
-              <div className="small" style={{ marginBottom: 8 }}>
-                Transfers can be deleted, but not edited here.
-              </div>
-            )}
+
             <div className="accQuickForm">
               <div className="field">
                 <label>Amount (TZS)</label>
@@ -1927,7 +1922,6 @@ function AccountDetail({
                   inputMode="decimal"
                   value={editTxnAmount}
                   onChange={(e) => setEditTxnAmount(e.target.value)}
-                  disabled={selectedTxn.kind === "transfer"}
                 />
               </div>
               {selectedTxn.kind === "credit" && (
@@ -1974,7 +1968,6 @@ function AccountDetail({
                 <input
                   value={editTxnNote}
                   onChange={(e) => setEditTxnNote(e.target.value)}
-                  disabled={selectedTxn.kind === "transfer"}
                 />
               </div>
               <div className="field">
@@ -1983,7 +1976,6 @@ function AccountDetail({
                   type="date"
                   value={editTxnDate}
                   onChange={(e) => setEditTxnDate(e.target.value)}
-                  disabled={selectedTxn.kind === "transfer"}
                 />
               </div>
               {error && <div className="formError">{error}</div>}
@@ -2001,11 +1993,9 @@ function AccountDetail({
                 >
                   Delete
                 </button>
-                {selectedTxn.kind !== "transfer" && (
-                  <button className="btn primary" type="button" onClick={handleSaveTxnEdit}>
-                    Save
-                  </button>
-                )}
+                <button className="btn primary" type="button" onClick={handleSaveTxnEdit}>
+                  Save
+                </button>
               </div>
             </div>
           </div>

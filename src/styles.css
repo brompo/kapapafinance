@@ -1468,6 +1468,17 @@ label {
   color: #e24b4b
 }
 
+.txnAmountInput {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  width: 140px;
+  color: inherit;
+  outline: none;
+}
+
 .txnDetailGrid {
   display: flex;
   flex-direction: column;

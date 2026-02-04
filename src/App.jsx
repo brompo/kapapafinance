@@ -1361,11 +1361,59 @@ export default function App() {
     const oldAmt = Number(entry.amount || 0)
     const newAmt = Number(next.amount || 0)
     if (!newAmt || newAmt <= 0) return
-    const delta = entry.direction === 'in' ? (newAmt - oldAmt) : -(newAmt - oldAmt)
-    let nextAccounts = applyAccountDelta(allAccounts, entry.accountId, entry.subAccountId, delta)
-    const nextAccountTxns = allAccountTxns.map(t => (
-      t.id === entryId ? { ...t, ...next } : t
-    ))
+
+    let nextAccounts = allAccounts
+    let nextAccountTxns = allAccountTxns
+
+    if (entry.kind === 'transfer') {
+      // Handle transfer update: find the pair and update both
+      const baseId = entry.id.replace(/-(in|out)$/, '')
+      const pair = allAccountTxns.find(t => t.id !== entry.id && t.id.startsWith(baseId))
+
+      // 1. Revert old amounts
+      const deltaRevertEntry = entry.direction === 'in' ? -oldAmt : oldAmt
+      nextAccounts = applyAccountDelta(nextAccounts, entry.accountId, entry.subAccountId, deltaRevertEntry)
+
+      if (pair) {
+        const deltaRevertPair = pair.direction === 'in' ? -oldAmt : oldAmt
+        nextAccounts = applyAccountDelta(nextAccounts, pair.accountId, pair.subAccountId, deltaRevertPair)
+      }
+
+      // 2. Apply new amounts
+      const deltaApplyEntry = entry.direction === 'in' ? newAmt : -newAmt
+      nextAccounts = applyAccountDelta(nextAccounts, entry.accountId, entry.subAccountId, deltaApplyEntry)
+
+      if (pair) {
+        const deltaApplyPair = pair.direction === 'in' ? newAmt : -newAmt
+        nextAccounts = applyAccountDelta(nextAccounts, pair.accountId, pair.subAccountId, deltaApplyPair)
+      }
+
+      // 3. Update transaction entries
+      // Update entry
+      const updatedEntry = { ...entry, ...next }
+      // Update pair with same amount/date/note details
+      const updatedPair = pair ? {
+        ...pair,
+        amount: newAmt,
+        date: next.date || pair.date,
+        note: next.note || pair.note
+      } : null
+
+      nextAccountTxns = nextAccountTxns.map(t => {
+        if (t.id === entry.id) return updatedEntry
+        if (pair && t.id === pair.id) return updatedPair
+        return t
+      })
+
+    } else {
+      // Normal transaction update
+      const delta = entry.direction === 'in' ? (newAmt - oldAmt) : -(newAmt - oldAmt)
+      nextAccounts = applyAccountDelta(allAccounts, entry.accountId, entry.subAccountId, delta)
+      nextAccountTxns = allAccountTxns.map(t => (
+        t.id === entryId ? { ...t, ...next } : t
+      ))
+    }
+
     await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
     show('Updated.')
   }
@@ -2576,7 +2624,20 @@ export default function App() {
         </div>
 
         <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
-          {type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}
+          {isEditable ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span>{type === 'income' ? '+' : '-'}</span>
+              <input
+                className="txnAmountInput"
+                inputMode="decimal"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          ) : (
+            <>{type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}</>
+          )}
         </div>
 
         <div className="txnDetailGrid">

@@ -67,6 +67,28 @@ const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata'
 const CLOUD_BACKUP_LATEST_NAME = 'kapapa-finance-backup-latest.json'
 const CLOUD_BACKUP_PREFIX = 'kapapa-finance-backup-'
 
+const GROUP_IDS = {
+  debit: 'group-debit',
+  credit: 'group-credit',
+  investment: 'group-invest',
+  shares: 'group-shares',
+  realEstate: 'group-real-estate'
+}
+
+const ALL_LEDGERS_ID = 'all'
+
+const ALL_LEDGERS_TEMPLATE = {
+  id: ALL_LEDGERS_ID,
+  name: 'All Ledgers',
+  groups: [
+    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
+    { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', collapsed: false },
+    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
+    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
+  ]
+}
+
 function uid() {
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
@@ -89,13 +111,7 @@ function randomString(len = 64) {
   return Array.from(arr, x => chars[x % chars.length]).join('')
 }
 
-const GROUP_IDS = {
-  debit: 'group-debit',
-  credit: 'group-credit',
-  investment: 'group-invest',
-  shares: 'group-shares',
-  realEstate: 'group-real-estate'
-}
+
 
 function normalizeAccountsWithGroups(inputAccounts, groups) {
   const accounts = Array.isArray(inputAccounts) ? inputAccounts : []
@@ -369,10 +385,12 @@ export default function App() {
   const cloudGoogle = cloudBackup.google || {}
   const ledgers = vault.ledgers || []
   const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
-  const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger()
+  const activeLedger = activeLedgerId === ALL_LEDGERS_ID
+    ? ALL_LEDGERS_TEMPLATE
+    : (ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger())
   const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
   const normalizedActiveAccounts = normalizeAccountsWithGroups(
-    rawAccounts.filter(a => a.ledgerId === activeLedger.id),
+    activeLedgerId === ALL_LEDGERS_ID ? rawAccounts : rawAccounts.filter(a => a.ledgerId === activeLedger.id),
     activeLedger.groups
   )
   const normalizedById = useMemo(
@@ -382,8 +400,12 @@ export default function App() {
   const allAccounts = rawAccounts.map(a => normalizedById.get(a.id) || a)
   const allAccountTxns = Array.isArray(vault.accountTxns) ? vault.accountTxns : []
   const ledgerAccountIds = useMemo(
-    () => new Set(allAccounts.filter(a => a.ledgerId === activeLedger.id).map(a => a.id)),
-    [allAccounts, activeLedger.id]
+    () => new Set(
+      activeLedgerId === ALL_LEDGERS_ID
+        ? allAccounts.map(a => a.id)
+        : allAccounts.filter(a => a.ledgerId === activeLedger.id).map(a => a.id)
+    ),
+    [allAccounts, activeLedger.id, activeLedgerId]
   )
   const accounts = normalizedActiveAccounts
   const accountTxns = allAccountTxns.filter(t => ledgerAccountIds.has(t.accountId))
@@ -785,7 +807,7 @@ export default function App() {
   }
 
   function handleSelectLedger(id) {
-    if (!id || id === activeLedger.id) {
+    if (!id || id === activeLedgerId) {
       setShowLedgerPicker(false)
       return
     }
@@ -2960,15 +2982,23 @@ export default function App() {
                   <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
                     <div className="ledgerPickerTitle">Ledgers</div>
                     <div className="ledgerPickerList">
+                      <button
+                        className={`ledgerPickerItem ${activeLedgerId === ALL_LEDGERS_ID ? 'active' : ''}`}
+                        type="button"
+                        onClick={() => handleSelectLedger(ALL_LEDGERS_ID)}
+                      >
+                        <span className="ledgerPickerName">All Ledgers</span>
+                        {activeLedgerId === ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
+                      </button>
                       {ledgers.map(l => (
                         <button
                           key={l.id}
-                          className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                          className={`ledgerPickerItem ${l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID ? 'active' : ''}`}
                           type="button"
                           onClick={() => handleSelectLedger(l.id)}
                         >
                           <span className="ledgerPickerName">{l.name}</span>
-                          {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                          {l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
                         </button>
                       ))}
                     </div>

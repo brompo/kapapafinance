@@ -2228,9 +2228,9 @@ export default function App() {
     const monthlyStats = useMemo(() => {
       // Aggregate by month for the selected year
       const stats = new Map() // 'YYYY-MM' -> { inc, exp }
-      const allTxns = [...allAccountTxns, ...txns]
 
-      allTxns.forEach(t => {
+      // Only use txns (Category transactions), ignore account adjustments/transfers
+      txns.forEach(t => {
         const date = t.date || todayISO()
         const y = Number(date.slice(0, 4))
         if (y !== statYear) return
@@ -2238,34 +2238,9 @@ export default function App() {
         if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0 })
         const entry = stats.get(key)
 
-        // Logic similar to kpi calculation
-        // For txns: type=income -> inc, type=expense -> exp
-        // For accountTxns: direction=in -> inc, direction=out -> exp (simplified view)
-        // Wait, accountTxns includes transfers. Transfers between own accounts shouldn't be income/expense.
-        // But for "Monthly Stats" asked: "Monthly Income, Monthly Expenses, Monthly Balance"
-
-        let amt = Number(t.amount || 0)
-        let isInc = false
-        let isExp = false
-
-        if (t.kind === 'transfer') return // Skip internal transfers for stats? 
-        // Or if logic is strict:
-        // txns (income/expense)
-        if (!t.accountId && t.type) {
-          if (t.type === 'income') isInc = true
-          else isExp = true
-        } else if (t.accountId) {
-          // Account txns
-          if (t.kind === 'adjust' || t.kind === 'credit' || t.kind === 'valuation') {
-            // Treat specific account adjustments as income/expense?
-            // Adjust IN = Income, Adjust OUT = Expense (Loss)
-            if (t.direction === 'in') isInc = true
-            else isExp = true
-          }
-        }
-
-        if (isInc) entry.inc += amt
-        if (isExp) entry.exp += amt
+        const amt = Number(t.amount || 0)
+        if (t.type === 'income') entry.inc += amt
+        else if (t.type === 'expense') entry.exp += amt
       })
 
       // Fill in all months for the year
@@ -2284,7 +2259,7 @@ export default function App() {
         })
       }
       return result.reverse() // Dec to Jan
-    }, [statYear, allAccountTxns, txns])
+    }, [statYear, txns])
 
     if (selectedTxn) {
       return (

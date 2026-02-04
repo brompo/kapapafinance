@@ -573,24 +573,6 @@ function Section({
                   onDragEnd={() => onAccountDragOver?.(null)}
                 >
                   <div className="rowLeft">
-                    <button
-                      className="rowDragHandle"
-                      type="button"
-                      draggable
-                      onDragStart={(e) => {
-                        e.stopPropagation();
-                        onAccountDragStart?.(a.id);
-                      }}
-                      onDragEnd={(e) => {
-                        e.stopPropagation();
-                        onAccountDragOver?.(null);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      title="Drag to reorder"
-                      aria-label="Drag to reorder"
-                    >
-                      ≡
-                    </button>
                     <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
                     <div>
                       <div className="rowName">{a.name}</div>
@@ -1270,7 +1252,10 @@ function AccountDetail({
         <div className="accDetailTopRow">
           <div className="rowLeft">
             <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
-            <div className="accDetailName">{account.name}</div>
+            <div>
+              <div className="accDetailName">{account.name}</div>
+              <div className="rowMeta">{currentGroup?.name}</div>
+            </div>
           </div>
           <div className="accDetailBalance">
             {(() => {

@@ -255,14 +255,33 @@ export default function Accounts({
     }
     const dragged = visibleAccounts.find((a) => a.id === draggingAccountId);
     const target = visibleAccounts.find((a) => a.id === targetId);
-    if (!dragged || !target || dragged.groupId !== groupId || target.groupId !== groupId) {
+
+    if (!dragged || !target) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
       return;
     }
+
+    const sourceGroup = groupById.get(dragged.groupId);
+    const targetGroup = groupById.get(groupId);
+
+    if (sourceGroup?.type !== targetGroup?.type) {
+      setDraggingAccountId(null);
+      setDragOverAccountId(null);
+      return;
+    }
+
     const next = accounts.filter((a) => a.id !== draggingAccountId);
     const targetIndex = next.findIndex((a) => a.id === targetId);
-    next.splice(targetIndex, 0, dragged);
+
+    const updatedAccount = { ...dragged, groupId: groupId };
+
+    if (targetIndex >= 0) {
+      next.splice(targetIndex, 0, updatedAccount);
+    } else {
+      next.push(updatedAccount);
+    }
+
     onUpdateAccounts?.(next);
     setDraggingAccountId(null);
     setDragOverAccountId(null);
@@ -271,15 +290,28 @@ export default function Accounts({
   function handleAccountDropToGroup(groupId) {
     if (!draggingAccountId) return;
     const dragged = visibleAccounts.find((a) => a.id === draggingAccountId);
-    if (!dragged || dragged.groupId !== groupId) {
+    if (!dragged) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
       return;
     }
+
+    const sourceGroup = groupById.get(dragged.groupId);
+    const targetGroup = groupById.get(groupId);
+
+    if (sourceGroup?.type !== targetGroup?.type) {
+      setDraggingAccountId(null);
+      setDragOverAccountId(null);
+      return;
+    }
+
     const next = accounts.filter((a) => a.id !== draggingAccountId);
+    const updatedAccount = { ...dragged, groupId: groupId };
+
     const insertIndex = next.findIndex((a) => a.groupId === groupId);
-    if (insertIndex === -1) next.push(dragged);
-    else next.splice(insertIndex, 0, dragged);
+    if (insertIndex === -1) next.push(updatedAccount);
+    else next.splice(insertIndex, 0, updatedAccount);
+
     onUpdateAccounts?.(next);
     setDraggingAccountId(null);
     setDragOverAccountId(null);
@@ -710,6 +742,7 @@ function AccountDetail({
   const [editName, setEditName] = useState(account.name || "");
   const [editLedgerId, setEditLedgerId] = useState(account.ledgerId || activeLedgerId);
   const [editBalance, setEditBalance] = useState("");
+  const [editGroupId, setEditGroupId] = useState("");
   const [editError, setEditError] = useState("");
 
   useEffect(() => {
@@ -1001,6 +1034,7 @@ function AccountDetail({
     setEditName(account.name);
     setEditLedgerId(account.ledgerId || activeLedgerId);
     setEditBalance(account.balance || 0);
+    setEditGroupId(account.groupId);
     setEditError("");
     setShowEditModal(true);
   }
@@ -1015,7 +1049,14 @@ function AccountDetail({
     const targetLedger = ledgers.find((l) => l.id === nextLedgerId);
     const targetGroups = Array.isArray(targetLedger?.groups) ? targetLedger.groups : [];
     const type = currentGroup?.type || account.groupType || "debit";
-    const targetGroup = targetGroups.find((g) => g.type === type) || targetGroups[0] || currentGroup;
+
+    // Try to find a group in the target ledger that matches both Name and Type
+    let targetGroup = targetGroups.find((g) => g.name === currentGroup?.name && g.type === type);
+    // Fallback to matching by Type only
+    if (!targetGroup) targetGroup = targetGroups.find((g) => g.type === type);
+    // Final fallback
+    targetGroup = targetGroup || targetGroups[0] || currentGroup;
+
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = subs.map((s) => ({ ...s, ledgerId: nextLedgerId }));
 
@@ -1023,8 +1064,8 @@ function AccountDetail({
       ...account,
       name,
       ledgerId: nextLedgerId,
-      groupId: targetGroup?.id || account.groupId,
-      groupType: targetGroup?.type || account.groupType,
+      groupId: (nextLedgerId === activeLedgerId && editGroupId) ? editGroupId : (targetGroup?.id || account.groupId),
+      groupType: (nextLedgerId === activeLedgerId && editGroupId && groups.find(g => g.id === editGroupId)?.type) || targetGroup?.type || account.groupType,
       subAccounts: nextSubs
     });
 
@@ -1923,6 +1964,21 @@ function AccountDetail({
                     {l.name}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Group</label>
+              <select
+                value={editGroupId}
+                onChange={(e) => setEditGroupId(e.target.value)}
+                disabled={editLedgerId !== activeLedgerId}
+              >
+                {groups
+                  .filter(g => g.type === (currentGroup?.type || 'debit'))
+                  .map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))
+                }
               </select>
             </div>
             {(currentGroup?.type === 'debit' || !currentGroup) && (

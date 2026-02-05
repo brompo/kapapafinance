@@ -1075,7 +1075,7 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) return show('Enter a valid amount.')
 
@@ -1086,7 +1086,8 @@ export default function App() {
       category,
       note: note ? note.trim() : '',
       date: date || todayISO(),
-      accountId: accountId || ''
+      accountId: accountId || '',
+      subAccountId: subAccountId || ''
     }
 
     let nextAccounts = allAccounts
@@ -1097,7 +1098,11 @@ export default function App() {
         const targetId = acct.id
         const delta = t.type === 'income' ? amt : -amt
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-        const targetSubId = subs.length ? subs[0]?.id : null
+        // Use provided subAccountId if valid, else default to first sub if subs exist
+        const targetSubId = subs.length
+          ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+          : null
+
         nextAccounts = allAccounts.map(a => {
           if (a.id !== targetId) return a
           if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
@@ -1107,7 +1112,7 @@ export default function App() {
           return { ...a, subAccounts: nextSubs }
         })
         const entry = {
-          id: uid(),
+          id: `txn-${t.id}`,
           accountId: targetId,
           subAccountId: targetSubId,
           amount: amt,
@@ -1205,8 +1210,34 @@ export default function App() {
   }
 
   async function delTxn(id) {
-    const next = txns.filter(t => t.id !== id)
-    await persistActiveLedger({ ...activeLedger, txns: next })
+    const t = txns.find(x => x.id === id)
+    if (!t) return
+
+    let nextAccounts = allAccounts
+    let nextAccountTxns = allAccountTxns
+
+    if (t.accountId) {
+      const acct = findAccountByIdOrName(t.accountId)
+      if (acct) {
+        const entryId = `txn-${t.id}`
+        const entry = allAccountTxns.find(at => at.id === entryId)
+
+        const delta = t.type === 'income' ? -Number(t.amount || 0) : Number(t.amount || 0)
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const subId = (entry && entry.subAccountId) || t.subAccountId || (subs.length ? subs[0].id : null)
+        nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
+
+        nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+      }
+    }
+
+    const nextTxns = txns.filter(x => x.id !== id)
+
+    persistLedgerAndAccounts({
+      nextLedger: { ...activeLedger, txns: nextTxns },
+      nextAccounts,
+      nextAccountTxns
+    })
     show('Deleted.')
   }
 
@@ -1351,7 +1382,31 @@ export default function App() {
     }
     const idsToRemove = new Set(targets.map(t => t.id))
     const nextAccountTxns = allAccountTxns.filter(t => !idsToRemove.has(t.id))
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns })
+
+    // Reverse Sync: If this was a ledger transaction, remove it from the ledger too
+    let nextLedgers = vault.ledgers
+    let nextActiveLedgerId = activeLedgerId
+
+    // Only attempt to remove from ledger if it looks like a linked transaction (starts with txn-)
+    // and we are deleting the main entry (not a transfer pair, though logic covers filtered targets)
+    if (entryId.startsWith('txn-')) {
+      const ledgerTxnId = entryId.replace('txn-', '')
+      // We need to find which ledger it belongs to. 
+      // Current architecture assumes mostly active ledger, but let's search.
+      nextLedgers = nextLedgers.map(l => {
+        if (l.txns.some(t => t.id === ledgerTxnId)) {
+          return { ...l, txns: l.txns.filter(t => t.id !== ledgerTxnId) }
+        }
+        return l
+      })
+    }
+
+    await persist({
+      ...vault,
+      ledgers: nextLedgers,
+      accounts: nextAccounts,
+      accountTxns: nextAccountTxns
+    })
     show('Deleted.')
   }
 
@@ -1697,14 +1752,15 @@ export default function App() {
         <CategoryDetail
           category={selectedCategory}
           onClose={() => setSelectedCategory(null)}
-          onAdd={(amount, note, accountId, date) =>
+          onAdd={(amount, note, accountId, date, subAccountId) =>
             addQuickTxn({
               type: selectedCategory.type,
               amount,
               category: selectedCategory.name,
               note,
               accountId,
-              date
+              date,
+              subAccountId
             })
           }
           total={selectedCategory.type === 'expense'
@@ -1913,6 +1969,27 @@ export default function App() {
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
     const [selectedSub, setSelectedSub] = useState('')
+    const [subAccountId, setSubAccountId] = useState('')
+
+    // Reset subAccountId when accountId changes, defaulting to Active Ledger if possible
+    useEffect(() => {
+      if (!accountId) {
+        setSubAccountId('')
+        return
+      }
+      const acct = accounts.find(a => a.id === accountId)
+      if (acct && Array.isArray(acct.subAccounts)) {
+        const match = acct.subAccounts.find(s => s.ledgerId === activeLedgerId)
+        if (match) {
+          setSubAccountId(match.id)
+          return
+        }
+      }
+      setSubAccountId('')
+    }, [accountId, activeLedgerId])
+
+    const selectedAccount = accounts.find(a => a.id === accountId)
+    const showSubAccountSelect = selectedAccount && Array.isArray(selectedAccount.subAccounts) && selectedAccount.subAccounts.length > 0
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showEditModal, setShowEditModal] = useState(false)
     const [editName, setEditName] = useState(category.name)
@@ -2076,6 +2153,10 @@ export default function App() {
           incomeCats={incomeCats}
           onSave={(next) => updateTxn(selectedTxn.raw, next)}
           onClose={() => setSelectedTxn(null)}
+          onDelete={() => {
+            delTxn(selectedTxn.raw.id)
+            setSelectedTxn(null)
+          }}
         />
       )
     }
@@ -2146,6 +2227,9 @@ export default function App() {
               onChange={e => setDate(e.target.value)}
             />
           </div>
+
+
+
           <div className="field">
             <label>Account</label>
             <select value={accountId} onChange={e => setAccountId(e.target.value)}>
@@ -2155,6 +2239,23 @@ export default function App() {
               ))}
             </select>
           </div>
+
+          {showSubAccountSelect && (
+            <div className="field">
+              <label>Sub-account</label>
+              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)}>
+                <option value="">Select sub-account</option>
+                {selectedAccount.subAccounts
+                  // Filter valid sub-accounts for the current ledger if applicable, 
+                  // but here we rely on the component receiving active accounts only.
+                  .map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))
+                }
+              </select>
+            </div>
+          )}
+
           <div className="field">
             <label>Note (optional)</label>
             <input
@@ -2171,11 +2272,12 @@ export default function App() {
                 const combinedNote = selectedSub
                   ? `${selectedSub}${note ? ` • ${note}` : ''}`
                   : note
-                onAdd(amount, combinedNote, accountId, date)
+                onAdd(amount, combinedNote, accountId, date, subAccountId) // Added subAccountId
                 setAmount('')
                 setNote('')
                 setDate(todayISO())
                 setAccountId('')
+                setSubAccountId('')
               }}
             >
               Add {category.type === 'expense' ? 'Expense' : 'Income'}
@@ -2232,48 +2334,50 @@ export default function App() {
           )}
         </div>
 
-        {showEditModal && (
-          <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
-            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <div className="modalTitle">Edit Category</div>
-              <div className="field">
-                <label>Name</label>
-                <input value={editName} onChange={e => setEditName(e.target.value)} />
-              </div>
-              <div className="field">
-                <label>Background color</label>
-                <div className="colorPickerRow">
-                  {colorOptions.map(color => (
+        {
+          showEditModal && (
+            <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+                <div className="modalTitle">Edit Category</div>
+                <div className="field">
+                  <label>Name</label>
+                  <input value={editName} onChange={e => setEditName(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Background color</label>
+                  <div className="colorPickerRow">
+                    {colorOptions.map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`colorSwatch ${editColor === color ? 'active' : ''}`}
+                        style={{ background: color }}
+                        onClick={() => setEditColor(color)}
+                        aria-label={`Pick ${color}`}
+                      />
+                    ))}
                     <button
-                      key={color}
                       type="button"
-                      className={`colorSwatch ${editColor === color ? 'active' : ''}`}
-                      style={{ background: color }}
-                      onClick={() => setEditColor(color)}
-                      aria-label={`Pick ${color}`}
-                    />
-                  ))}
-                  <button
-                    type="button"
-                    className={`colorSwatch custom ${!editColor ? 'active' : ''}`}
-                    onClick={() => setEditColor('')}
-                  >
-                    None
+                      className={`colorSwatch custom ${!editColor ? 'active' : ''}`}
+                      onClick={() => setEditColor('')}
+                    >
+                      None
+                    </button>
+                  </div>
+                </div>
+                <div className="modalActions">
+                  <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={saveCategoryEdit}>
+                    Save
                   </button>
                 </div>
               </div>
-              <div className="modalActions">
-                <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={saveCategoryEdit}>
-                  Save
-                </button>
-              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      </div >
     )
   }
 
@@ -2571,8 +2675,8 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose }) {
-    const isEditable = txn.kind === 'txn'
+  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose, onDelete }) {
+    const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
     const [category, setCategory] = useState(txn.category || '')
@@ -2618,9 +2722,18 @@ export default function App() {
         <div className="txnDetailHeader">
           <button className="iconBtn" onClick={onClose} type="button">✕</button>
           <div className="txnDetailTitle">Transactions</div>
-          <button className="pillBtn" type="button" disabled={!isEditable} onClick={handleSave}>
-            Save
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            {onDelete && isEditable && (
+              <button className="pillBtn danger" type="button" onClick={() => {
+                if (confirm('Delete this transaction?')) onDelete()
+              }}>
+                Delete
+              </button>
+            )}
+            <button className="pillBtn" type="button" disabled={!isEditable} onClick={handleSave}>
+              Save
+            </button>
+          </div>
         </div>
 
         <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
@@ -3112,7 +3225,7 @@ export default function App() {
 
           <AccountsScreen
             accounts={accounts}
-            accountTxns={accountTxns}
+            accountTxns={allAccountTxns}
             groups={activeLedger.groups || []}
             activeLedgerId={activeLedger.id}
             ledgers={ledgers}

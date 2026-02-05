@@ -153,22 +153,10 @@ export default function Accounts({
 
   function getAccountBalance(account) {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    // If showing all ledgers, sum all subaccounts.
-    // If showing a specific ledger, only sum subaccounts assigned to that ledger.
-    // Also include the account's base balance ONLY if the account ITSELF is in this ledger
-    // (or if we are showing all ledgers).
-    // Note: Usually if an account has subaccounts, we assume the base balance is 0 or ignored,
-    // but here we sum them.
-    const relevantSubs = activeLedgerId === "all"
-      ? subs
-      : subs.filter(s => s.ledgerId === activeLedgerId);
-
-    // Check if the parent account itself belongs to the active ledger
-    const parentInLedger = activeLedgerId === "all" || account.ledgerId === activeLedgerId;
-
+    // Always show global total regardless of active ledger filter
     const base = subs.length > 0
-      ? relevantSubs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
-      : (parentInLedger ? Number(account.balance || 0) : 0);
+      ? subs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+      : Number(account.balance || 0);
 
     const groupType = groupById.get(account.groupId)?.type;
     if (groupType === "credit") return base + computeAccruedForAccount(account);
@@ -181,20 +169,43 @@ export default function Accounts({
     return base;
   }
 
+
+  function getFilteredBalance(account) {
+    // For Net Worth, we ONLY want to include money that belongs to the active ledger.
+    if (activeLedgerId === "all") return getAccountBalance(account);
+
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+
+    // If sub-accounts exist, sum only those in the active ledger
+    if (subs.length > 0) {
+      return subs
+        .filter(s => s.ledgerId === activeLedgerId)
+        .reduce((s, sub) => s + Number(sub.balance || 0), 0);
+    }
+
+    // If no sub-accounts, check if the main account belongs to this ledger
+    if (account.ledgerId === activeLedgerId) {
+      return Number(account.balance || 0);
+    }
+
+    return 0;
+  }
+
   const totals = useMemo(() => {
     const assets = visibleAccounts
       .filter((a) => {
         const g = groupById.get(a.groupId);
         return g?.type === "debit" || g?.type === "asset";
       })
-      .reduce((s, a) => s + getAccountBalance(a), 0);
+      .reduce((s, a) => s + getFilteredBalance(a), 0);
 
     const liabilities = visibleAccounts
       .filter((a) => groupById.get(a.groupId)?.type === "credit")
-      .reduce((s, a) => s + getAccountBalance(a), 0);
+      .reduce((s, a) => s + getFilteredBalance(a), 0);
 
     return { assets, liabilities, netWorth: assets - liabilities };
-  }, [visibleAccounts, groupById]);
+  }, [visibleAccounts, groupById, activeLedgerId]); // Added activeLedgerId dependency
+
 
   const shownGroups = useMemo(() => {
     if (filter === "all") return groups;
@@ -637,7 +648,6 @@ function Section({
                         </div>
                         <div>
                           <div className="rowName">{s.name}</div>
-                          <div className="rowMeta">Sub-account</div>
                         </div>
                       </div>
                       <div className="rowRight">
@@ -1293,14 +1303,29 @@ function AccountDetail({
     onUpsertAccount({ ...account, subAccounts: nextSubs })
     setEditingSubAccountId(null)
   }
+  function handleDeleteSubAccount(subId) {
+    const sub = (account.subAccounts || []).find(s => s.id === subId)
+    if (!sub) return
+    const bal = Number(sub.balance || 0)
+    const msg = bal !== 0
+      ? `This sub-account has a balance of ${fmtTZS(bal)}. Deleting it will discard this balance. Continue?`
+      : "Delete this sub-account?"
+
+    if (!window.confirm(msg)) return;
+    const nextSubs = (account.subAccounts || []).filter(s => s.id !== subId)
+    onUpsertAccount({ ...account, subAccounts: nextSubs })
+  }
 
   return (
     <div className="accountsScreen accountDetail">
       <div className="accDetailHeader">
-        <button className="iconBtn" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="accDetailHeaderLeft">
+          <button className="iconBtn" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="accDetailHeaderRight">
           <button className="pillBtn" onClick={handleEdit}>
             Edit
           </button>
@@ -1316,7 +1341,9 @@ function AccountDetail({
             <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
             <div>
               <div className="accDetailName">{account.name}</div>
-              <div className="rowMeta">{currentGroup?.name}</div>
+              <div className="rowMeta">
+                {currentGroup?.name}
+              </div>
             </div>
           </div>
           <div className="accDetailBalance">
@@ -1438,7 +1465,6 @@ function AccountDetail({
         {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
           <div className="list">
             {account.subAccounts
-              .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
               .map((s) => (
                 <div className="rowItem subRow" key={s.id}>
                   <div className="rowLeft">
@@ -1446,8 +1472,7 @@ function AccountDetail({
                     <div>
                       <div className="rowName">{s.name}</div>
                       <div className="rowMeta">
-                        {activeLedgerId === 'all' && ledgers.find(l => l.id === s.ledgerId)?.name}
-                        {activeLedgerId === 'all' ? ' • ' : ''}Sub-account
+                        {ledgers.find(l => l.id === s.ledgerId)?.name}
                       </div>
                     </div>
                   </div>
@@ -1508,7 +1533,6 @@ function AccountDetail({
                       <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
                         <option value="">Select</option>
                         {account.subAccounts
-                          .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
                           .map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
@@ -1538,7 +1562,6 @@ function AccountDetail({
                         <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
                           <option value="">Select</option>
                           {target.subAccounts
-                            .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
                             .map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
@@ -1583,7 +1606,6 @@ function AccountDetail({
                       <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
                         <option value="">Select</option>
                         {account.subAccounts
-                          .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
                           .map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
@@ -1674,7 +1696,6 @@ function AccountDetail({
                     <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
                       <option value="">Select sub-account</option>
                       {target.subAccounts
-                        .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
                         .map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -1840,7 +1861,6 @@ function AccountDetail({
                     <select value={saleToSubId} onChange={(e) => setSaleToSubId(e.target.value)}>
                       <option value="">Select sub-account</option>
                       {target.subAccounts
-                        .filter(s => activeLedgerId === 'all' || s.ledgerId === activeLedgerId)
                         .map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -2030,7 +2050,6 @@ function AccountDetail({
               <select
                 value={editGroupId}
                 onChange={(e) => setEditGroupId(e.target.value)}
-                disabled={editLedgerId !== activeLedgerId}
               >
                 {groups
                   .filter(g => g.type === (currentGroup?.type || 'debit'))
@@ -2087,13 +2106,33 @@ function AccountDetail({
                 ))}
               </select>
             </div>
-            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn" type="button" onClick={() => setEditingSubAccountId(null)}>
-                Cancel
-              </button>
-              <button className="btn primary" type="button" onClick={handleSaveSubEdit}>
-                Save
-              </button>
+            <div className="row" style={{ justifyContent: "space-between", gap: 8, marginTop: 24 }}>
+              {(() => {
+                const sub = account.subAccounts?.find(s => s.id === editingSubAccountId);
+                if (sub) {
+                  return (
+                    <button
+                      className="btn danger"
+                      type="button"
+                      onClick={() => {
+                        handleDeleteSubAccount(editingSubAccountId);
+                        setEditingSubAccountId(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )
+                }
+                return <div></div>
+              })()}
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setEditingSubAccountId(null)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" onClick={handleSaveSubEdit}>
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>

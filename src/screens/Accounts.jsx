@@ -1500,42 +1500,6 @@ function AccountDetail({
         </div>
       </div>
 
-      <div className="activitySection">
-        <div className="activityListHeader">Recent activity</div>
-        {(() => {
-          const relevantTxns = accountTxns
-            .filter(t => t.accountId === account.id)
-            .sort((a, b) => (a.date < b.date ? 1 : -1))
-            .slice(0, 10);
-
-          if (!relevantTxns.length) {
-            return <div style={{ padding: '0 20px', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', marginBottom: 20 }}>No recent activity.</div>
-          }
-
-          return relevantTxns.map(t => (
-            <div className="activityCard" key={t.id}>
-              <div className="actIcon">
-                {t.kind === 'purchase' ? 'P' : t.kind === 'sale' ? 'S' : t.kind === 'valuation' ? 'M' : t.direction === 'in' ? 'IN' : 'OUT'}
-              </div>
-              <div className="actDetails">
-                <div className="actTop">
-                  <div className="actTitle">
-                    {t.note || (t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : 'Transaction')}
-                    {t.kind === 'purchase' && t.quantity && ` ${t.quantity} Units @ ${t.unitPrice}`}
-                  </div>
-                  <div className={`actAmount ${t.direction}`}>
-                    {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
-                  </div>
-                </div>
-                <div className="actMeta">
-                  {formatDay(t.date || t.receiveDate)} • {t.kind || 'Transfer'}
-                </div>
-              </div>
-            </div>
-          ));
-        })()}
-      </div>
-
       <div className="accHistory">
         <div className="accHistoryTitle">Sub-accounts</div>
         {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (

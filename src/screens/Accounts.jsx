@@ -1463,15 +1463,16 @@ function AccountDetail({
             return (
               <>
                 <div className="metricGrid">
-                  <div className="metricBox">
-                    <div className="metricLabel">Market Value</div>
-                    <div className="metricValue">{fmtTZS(info.marketValue)}</div>
-                    <div className="metricSub">Current Value</div>
-                  </div>
+
                   <div className="metricBox">
                     <div className="metricLabel">Book Value</div>
                     <div className="metricValue">{fmtTZS(info.costBasis)}</div>
                     <div className="metricSub">(Invested)</div>
+                  </div>
+                  <div className="metricBox">
+                    <div className="metricLabel">Market Value</div>
+                    <div className="metricValue">{fmtTZS(info.marketValue)}</div>
+                    <div className="metricSub">Current Value</div>
                   </div>
                 </div>
 

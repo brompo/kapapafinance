@@ -662,24 +662,6 @@ function Section({
                         <div className="assetBalance">
                           {fmtTZS(bal)}
                         </div>
-                        <div className="assetActions">
-                          <button className="actBtn btnBuy" onClick={(e) => {
-                            e.stopPropagation()
-                            // Open detail then purchase modal? 
-                            // Ideally we pass a special prop or handle it here.
-                            // For now, let's just open account detail, the user can click + there.
-                            // Or we can try to trigger purchase modal if we add a handler.
-                            onSelectAccount?.(a.id)
-                          }}>BUY</button>
-                          <button className="actBtn btnUpd" onClick={(e) => {
-                            e.stopPropagation()
-                            onSelectAccount?.(a.id)
-                          }}>UPDATE</button>
-                          <button className="actBtn btnSell" onClick={(e) => {
-                            e.stopPropagation()
-                            onSelectAccount?.(a.id)
-                          }}>SELL</button>
-                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1405,6 +1387,12 @@ function AccountDetail({
   return (
     <div className="accountsScreen accountDetail">
       <div className="accDetailCard">
+
+        <div className="accDetailActionsTop">
+          <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
+          <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
+          <button className="miniActionBtn" onClick={onClose}>✕</button>
+        </div>
         {/* Title Row */}
         <div className="accDetailTitleRow">
           <div className="accDetailIcon">
@@ -1412,12 +1400,11 @@ function AccountDetail({
           </div>
           <div className="accDetailTitle">
             <h2>{account.name}</h2>
-            <span>{currentGroup?.name}</span>
-          </div>
-          <div className="accDetailActionsTop">
-            <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
-            <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
-            <button className="miniActionBtn" onClick={onClose}>✕</button>
+            <span>
+              {getAssetInfo(account, accountTxns, currentGroup).hasData
+                ? `${getAssetInfo(account, accountTxns, currentGroup).qty} ${getAssetInfo(account, accountTxns, currentGroup).unit || currentGroup?.name}`
+                : currentGroup?.name}
+            </span>
           </div>
         </div>
 

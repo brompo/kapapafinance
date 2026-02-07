@@ -292,7 +292,7 @@ label {
 .accountsScreen {
   background: #f5f6fb;
   border-radius: 22px;
-  padding: 14px;
+  padding: 6px;
   color: #1f2332;
   box-shadow: 0 10px 30px rgba(16, 18, 30, .08);
 }
@@ -695,6 +695,7 @@ label {
 
 .accHistoryTitle {
   font-weight: 600;
+  padding-left: 10px;
   color: #2b2f4e
 }
 
@@ -909,7 +910,7 @@ label {
    Account detail screen
    ========================= */
 .accountDetail {
-  padding: 18px
+  /*padding: 18px*/
 }
 
 .accDetailHeader {
@@ -2383,7 +2384,7 @@ label {
 .accDetailTitleRow {
   display: flex;
   align-items: center;
-  margin: 24px;
+  margin: 10px;
 }
 
 .accDetailIcon {
@@ -2417,7 +2418,10 @@ label {
 }
 
 .accDetailActionsTop {
-  display: flex;
+  /*display: flex;*/
+  text-align: right;
+  padding-right: 10px;
+  padding-top: 10px;
   gap: 8px;
 }
 
@@ -2425,7 +2429,7 @@ label {
   background: rgba(255, 255, 255, 0.15);
   border: none;
   color: white;
-  padding: 6px 16px;
+  padding: 8px 16px;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -2584,7 +2588,7 @@ label {
 
 .activityCard {
   background: white;
-  margin: 0 16px 12px;
+  margin: 0px 0px 5px;
   padding: 16px;
   border-radius: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);

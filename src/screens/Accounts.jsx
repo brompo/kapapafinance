@@ -31,6 +31,7 @@ function getAssetInfo(account, accountTxns, group) {
   const sortedTxns = txns.sort((a, b) => (a.date > b.date ? 1 : -1));
   let runningQty = 0;
   let runningCost = 0;
+  let realizedGain = 0;
 
   for (const t of sortedTxns) {
     if (t.kind === "purchase") {
@@ -40,10 +41,13 @@ function getAssetInfo(account, accountTxns, group) {
       runningCost += cost;
     } else if (t.kind === "sale") {
       const q = Number(t.quantity || 0);
+      const proceeds = Number(t.amount || 0);
       if (runningQty > 0) {
         const avg = runningCost / runningQty;
-        runningCost -= avg * q;
+        const costOfSold = avg * q;
+        runningCost -= costOfSold;
         runningQty -= q;
+        realizedGain += (proceeds - costOfSold);
       }
     }
   }
@@ -71,7 +75,8 @@ function getAssetInfo(account, accountTxns, group) {
     avgPrice: Math.max(0, avgPrice),
     costBasis: Math.max(0, runningCost), // Accounting Value
     marketValue: unitPrice * Math.max(qty, 0), // Market Value
-    value: unitPrice * Math.max(qty, 0) // Backward compat
+    value: unitPrice * Math.max(qty, 0), // Backward compat
+    realizedGain
   };
 }
 
@@ -378,6 +383,7 @@ export default function Accounts({
         ledgers={ledgers}
         onSwitchLedger={onSwitchLedger}
         onClose={() => setSelectedId(null)}
+        getAccountBalance={getAccountBalance}
         onAddAccountTxn={onAddAccountTxn}
         onTransferAccount={onTransferAccount}
         onUpsertAccount={onUpsertAccount}
@@ -658,9 +664,12 @@ function Section({
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                         <div className="assetBalance">
                           {fmtTZS(bal)}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: '#666', marginTop: 2 }}>
+                          Invested: {fmtTZS(getAssetInfo(a, accountTxns, group).costBasis)}
                         </div>
                       </div>
                     </div>
@@ -764,6 +773,7 @@ function AccountDetail({
   onDeleteAccount,
   onUpdateAccountTxn,
   onDeleteAccountTxn,
+  getAccountBalance,
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
   const [mode, setMode] = useState(null); // adjust | transfer | null
@@ -1389,9 +1399,11 @@ function AccountDetail({
       <div className="accDetailCard">
 
         <div className="accDetailActionsTop">
-          <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
-          <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
           <button className="miniActionBtn" onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
+            <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
+          </div>
         </div>
         {/* Title Row */}
         <div className="accDetailTitleRow">
@@ -1405,6 +1417,9 @@ function AccountDetail({
                 ? `${getAssetInfo(account, accountTxns, currentGroup).qty} ${getAssetInfo(account, accountTxns, currentGroup).unit || currentGroup?.name}`
                 : currentGroup?.name}
             </span>
+          </div>
+          <div style={{ marginLeft: "auto", fontSize: "1.5rem", fontWeight: "700" }}>
+            {fmtTZS(getAccountBalance(account))}
           </div>
         </div>
 
@@ -1458,12 +1473,12 @@ function AccountDetail({
           {/* Metrics Grid */}
           {currentGroup?.type === 'asset' && (() => {
             const info = computeAssetSummary()
-            const pl = info.marketValue - info.costBasis
-            const plPercent = info.costBasis > 0 ? (pl / info.costBasis) * 100 : 0
+            const unrealizedPL = info.marketValue - info.costBasis
+            const plPercent = info.costBasis > 0 ? (unrealizedPL / info.costBasis) * 100 : 0
+            const realizedGain = info.realizedGain || 0
             return (
               <>
                 <div className="metricGrid">
-
                   <div className="metricBox">
                     <div className="metricLabel">Book Value</div>
                     <div className="metricValue">{fmtTZS(info.costBasis)}</div>
@@ -1475,12 +1490,17 @@ function AccountDetail({
                     <div className="metricSub">Current Value</div>
                   </div>
                 </div>
-
-                <div className={`gainPill ${pl < 0 ? 'loss' : ''}`}>
-                  Unrealized Gain: {pl > 0 ? '+' : ''}{fmtTZS(pl)} ({pl > 0 ? '+' : ''}{plPercent.toFixed(1)}%)
+                <div className={`gainPill ${unrealizedPL < 0 ? 'loss' : ''}`}>
+                  Unrealized: {unrealizedPL > 0 ? '+' : ''}{fmtTZS(unrealizedPL)} ({unrealizedPL > 0 ? '+' : ''}{plPercent.toFixed(1)}%)
                 </div>
+                {realizedGain !== 0 && (
+                  <div className={`gainPill ${realizedGain < 0 ? 'loss' : ''}`} style={{ marginTop: 8, background: realizedGain < 0 ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)' }}>
+                    Realized Gain: {realizedGain > 0 ? '+' : ''}{fmtTZS(realizedGain)}
+                  </div>
+                )}
               </>
             )
+
           })()}
 
           {currentGroup?.type === 'credit' && (() => {
@@ -1501,108 +1521,84 @@ function AccountDetail({
         </div>
       </div>
 
-      <div className="accHistory">
-        <div className="accHistoryTitle">Sub-accounts</div>
-        {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
-          <div className="list">
-            {account.subAccounts
-              .map((s) => (
-                <div className="rowItem subRow" key={s.id}>
-                  <div className="rowLeft">
-                    <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
-                    <div>
-                      <div className="rowName">{s.name}</div>
-                      <div className="rowMeta">
-                        {ledgers.find(l => l.id === s.ledgerId)?.name}
+      {(currentGroup?.type === 'debit' || (Array.isArray(account.subAccounts) && account.subAccounts.length > 0)) && (
+        <div className="accHistory">
+          <div className="accHistoryTitle">Sub-accounts</div>
+          {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
+            <div className="list">
+              {account.subAccounts
+                .map((s) => (
+                  <div className="rowItem subRow" key={s.id}>
+                    <div className="rowLeft">
+                      <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
+                      <div>
+                        <div className="rowName">{s.name}</div>
+                        <div className="rowMeta">
+                          {ledgers.find(l => l.id === s.ledgerId)?.name}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="rowRight">
-                    <div className="rowAmount">{fmtTZS(s.balance)}</div>
-                    <button className="miniBtn" type="button" onClick={(e) => {
-                      e.stopPropagation()
-                      setEditingSubAccountId(s.id)
-                      setSubEditName(s.name)
-                      setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
-                    }}>Edit</button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <div className="emptyRow">No sub-accounts yet.</div>
-        )}
-        <button className="btn" type="button" onClick={handleAddSubAccount}>
-          Add Sub-account
-        </button>
-      </div>
-
-      {mode && (
-        <div className="modalBackdrop" onClick={() => setMode(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">{mode === "transfer" ? "Transfer" : "Add Money"}</div>
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Amount (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 10000"
-                />
-              </div>
-
-              {mode === "transfer" ? (
-                <>
-                  <div className="field">
-                    <label>Date</label>
-                    <input
-                      type="date"
-                      value={transferDate}
-                      onChange={(e) => setTransferDate(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>From account</label>
-                    <input value={account.name} readOnly />
-                  </div>
-
-                  {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
-                    <div className="field">
-                      <label>From sub-account</label>
-                      <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
-                        <option value="">Select</option>
-                        {account.subAccounts
-                          .map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                      </select>
+                    <div className="rowRight">
+                      <div className="rowAmount">{fmtTZS(s.balance)}</div>
+                      <button className="miniBtn" type="button" onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingSubAccountId(s.id)
+                        setSubEditName(s.name)
+                        setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
+                      }}>Edit</button>
                     </div>
-                  )}
-
-                  <div className="field">
-                    <label>To account</label>
-                    <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
                   </div>
+                ))}
+            </div>
+          ) : (
+            <div className="emptyRow">No sub-accounts yet.</div>
+          )}
+          {currentGroup?.type === 'debit' && (
+            <button className="btn" type="button" onClick={handleAddSubAccount}>
+              Add Sub-account
+            </button>
+          )}
+        </div>
+      )}
 
-                  {(() => {
-                    const target = accounts.find((a) => a.id === targetId);
-                    if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
-                    return (
+      {
+        mode && (
+          <div className="modalBackdrop" onClick={() => setMode(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">{mode === "transfer" ? "Transfer" : "Add Money"}</div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Amount (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="e.g. 10000"
+                  />
+                </div>
+
+                {mode === "transfer" ? (
+                  <>
+                    <div className="field">
+                      <label>Date</label>
+                      <input
+                        type="date"
+                        value={transferDate}
+                        onChange={(e) => setTransferDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label>From account</label>
+                      <input value={account.name} readOnly />
+                    </div>
+
+                    {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
                       <div className="field">
-                        <label>To sub-account</label>
-                        <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
+                        <label>From sub-account</label>
+                        <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
                           <option value="">Select</option>
-                          {target.subAccounts
+                          {account.subAccounts
                             .map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
@@ -1610,43 +1606,164 @@ function AccountDetail({
                             ))}
                         </select>
                       </div>
-                    );
-                  })()}
+                    )}
 
-                  <div className="field">
-                    <label>Note (optional)</label>
-                    <input
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="e.g. Bus fare"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="field">
-                    <label>Date</label>
-                    <input
-                      type="date"
-                      value={adjustDate}
-                      onChange={(e) => setAdjustDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Note (optional)</label>
-                    <input
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="e.g. Bus fare"
-                    />
-                  </div>
-
-                  {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
                     <div className="field">
-                      <label>Sub-account</label>
-                      <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
-                        <option value="">Select</option>
-                        {account.subAccounts
+                      <label>To account</label>
+                      <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {(() => {
+                      const target = accounts.find((a) => a.id === targetId);
+                      if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
+                      return (
+                        <div className="field">
+                          <label>To sub-account</label>
+                          <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
+                            <option value="">Select</option>
+                            {target.subAccounts
+                              .map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="field">
+                      <label>Note (optional)</label>
+                      <input
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="e.g. Bus fare"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="field">
+                      <label>Date</label>
+                      <input
+                        type="date"
+                        value={adjustDate}
+                        onChange={(e) => setAdjustDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Note (optional)</label>
+                      <input
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="e.g. Bus fare"
+                      />
+                    </div>
+
+                    {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
+                      <div className="field">
+                        <label>Sub-account</label>
+                        <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
+                          <option value="">Select</option>
+                          {account.subAccounts
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {error && <div className="formError">{error}</div>}
+
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setMode(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={mode === "transfer" ? handleTransfer : handleAdjust}
+                  >
+                    {mode === "transfer" ? "Transfer" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        showCreditModal && (
+          <div className="modalBackdrop" onClick={() => setShowCreditModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Add Credit</div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Amount (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    placeholder="e.g. 100000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Interest Rate (%)</label>
+                  <input
+                    inputMode="decimal"
+                    value={creditRate}
+                    onChange={(e) => setCreditRate(e.target.value)}
+                    placeholder="e.g. 2"
+                  />
+                </div>
+                <div className="field">
+                  <label>Interest Type</label>
+                  <select value={creditType} onChange={(e) => setCreditType(e.target.value)}>
+                    <option value="simple">Simple</option>
+                    <option value="compound">Compound</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Receiving Date</label>
+                  <input
+                    type="date"
+                    value={receiveDate}
+                    onChange={(e) => setReceiveDate(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>To account</label>
+                  <select value={creditToAccountId} onChange={(e) => setCreditToAccountId(e.target.value)}>
+                    <option value="">Select account</option>
+                    {accounts
+                      .filter((a) => a.id !== account.id)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                {(() => {
+                  const target = accounts.find((a) => a.id === creditToAccountId);
+                  if (!target || !Array.isArray(target.subAccounts) || !target.subAccounts.length) return null;
+                  return (
+                    <div className="field">
+                      <label>To sub-account</label>
+                      <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
+                        <option value="">Select sub-account</option>
+                        {target.subAccounts
                           .map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
@@ -1654,530 +1771,453 @@ function AccountDetail({
                           ))}
                       </select>
                     </div>
-                  )}
-                </>
-              )}
-
-              {error && <div className="formError">{error}</div>}
-
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setMode(null)}>
-                  Cancel
-                </button>
-                <button
-                  className="btn primary"
-                  type="button"
-                  onClick={mode === "transfer" ? handleTransfer : handleAdjust}
-                >
-                  {mode === "transfer" ? "Transfer" : "Save"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCreditModal && (
-        <div className="modalBackdrop" onClick={() => setShowCreditModal(false)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Add Credit</div>
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Amount (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={creditAmount}
-                  onChange={(e) => setCreditAmount(e.target.value)}
-                  placeholder="e.g. 100000"
-                />
-              </div>
-              <div className="field">
-                <label>Interest Rate (%)</label>
-                <input
-                  inputMode="decimal"
-                  value={creditRate}
-                  onChange={(e) => setCreditRate(e.target.value)}
-                  placeholder="e.g. 2"
-                />
-              </div>
-              <div className="field">
-                <label>Interest Type</label>
-                <select value={creditType} onChange={(e) => setCreditType(e.target.value)}>
-                  <option value="simple">Simple</option>
-                  <option value="compound">Compound</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Receiving Date</label>
-                <input
-                  type="date"
-                  value={receiveDate}
-                  onChange={(e) => setReceiveDate(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>To account</label>
-                <select value={creditToAccountId} onChange={(e) => setCreditToAccountId(e.target.value)}>
-                  <option value="">Select account</option>
-                  {accounts
-                    .filter((a) => a.id !== account.id)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              {(() => {
-                const target = accounts.find((a) => a.id === creditToAccountId);
-                if (!target || !Array.isArray(target.subAccounts) || !target.subAccounts.length) return null;
-                return (
-                  <div className="field">
-                    <label>To sub-account</label>
-                    <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
-                      <option value="">Select sub-account</option>
-                      {target.subAccounts
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                );
-              })()}
-              <div className="field">
-                <label>Interest Start Date</label>
-                <input
-                  type="date"
-                  value={interestStartDate}
-                  onChange={(e) => setInterestStartDate(e.target.value)}
-                />
-              </div>
-              {error && <div className="formError">{error}</div>}
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowCreditModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={handleAddCredit}>
-                  Save Credit
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPurchaseModal && (
-        <div className="modalBackdrop" onClick={() => setShowPurchaseModal(false)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Asset Purchase</div>
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Units</label>
-                <input
-                  value={purchaseUnit}
-                  onChange={(e) => setPurchaseUnit(e.target.value)}
-                  placeholder="e.g. Acres, Shares"
-                />
-              </div>
-              <div className="field">
-                <label>Amount of Units</label>
-                <input
-                  inputMode="decimal"
-                  value={purchaseQty}
-                  onChange={(e) => setPurchaseQty(e.target.value)}
-                  placeholder="e.g. 10"
-                />
-              </div>
-              <div className="field">
-                <label>Total (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={purchaseTotal}
-                  onChange={(e) => setPurchaseTotal(e.target.value)}
-                  placeholder="e.g. 4510000"
-                />
-              </div>
-              <div className="field">
-                <label>Transaction Fee (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={purchaseFee}
-                  onChange={(e) => setPurchaseFee(e.target.value)}
-                  placeholder="e.g. 2000"
-                />
-              </div>
-              <div className="field">
-                <label>Price per Unit</label>
-                <input
-                  readOnly
-                  value={
-                    purchaseQty && (purchaseTotal || purchaseFee)
-                      ? ((Number(purchaseTotal || 0) + Number(purchaseFee || 0)) / Number(purchaseQty || 0)).toFixed(2)
-                      : ""
-                  }
-                  placeholder="Calculated"
-                />
-              </div>
-              <div className="field">
-                <label>Date of Purchase</label>
-                <input
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                />
-              </div>
-              {error && <div className="formError">{error}</div>}
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowPurchaseModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={handlePurchaseAsset}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSaleModal && (
-        <div className="modalBackdrop" onClick={() => setShowSaleModal(false)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Asset Sale</div>
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Units</label>
-                <input value={saleUnit} readOnly />
-              </div>
-              <div className="field">
-                <label>Units amount</label>
-                <input
-                  inputMode="decimal"
-                  value={saleQty}
-                  onChange={(e) => setSaleQty(e.target.value)}
-                  placeholder="e.g. 2"
-                />
-                <div className="small">
-                  Max: {getAvailableUnits(account.id).qty} {saleUnit || ""}
-                </div>
-              </div>
-              <div className="field">
-                <label>Total Amount (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={saleTotal}
-                  onChange={(e) => setSaleTotal(e.target.value)}
-                  placeholder="e.g. 200000"
-                />
-              </div>
-              <div className="field">
-                <label>Selling Date</label>
-                <input
-                  type="date"
-                  value={saleDate}
-                  onChange={(e) => setSaleDate(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>Where is the money going</label>
-                <select value={saleToAccountId} onChange={(e) => setSaleToAccountId(e.target.value)}>
-                  <option value="">Select account</option>
-                  {accounts
-                    .filter((a) => a.id !== account.id)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              {(() => {
-                const target = accounts.find((a) => a.id === saleToAccountId);
-                if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
-                return (
-                  <div className="field">
-                    <label>To sub-account</label>
-                    <select value={saleToSubId} onChange={(e) => setSaleToSubId(e.target.value)}>
-                      <option value="">Select sub-account</option>
-                      {target.subAccounts
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                );
-              })()}
-              <div className="field">
-                <label>Note (optional)</label>
-                <input
-                  value={saleNote}
-                  onChange={(e) => setSaleNote(e.target.value)}
-                  placeholder="e.g. Market sale"
-                />
-              </div>
-              {error && <div className="formError">{error}</div>}
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowSaleModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={handleSaleAsset}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showValuationModal && (
-        <div className="modalBackdrop" onClick={() => setShowValuationModal(false)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Asset Valuation</div>
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Units Price (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={valuationPrice}
-                  onChange={(e) => setValuationPrice(e.target.value)}
-                  placeholder="e.g. 500000"
-                />
-              </div>
-              <div className="field">
-                <label>Date of Valuation</label>
-                <input
-                  type="date"
-                  value={valuationDate}
-                  onChange={(e) => setValuationDate(e.target.value)}
-                />
-              </div>
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowValuationModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={handleValuation}>
-                  Revaluate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {selectedTxn && (
-        <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">
-              {selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}
-            </div>
-
-            <div className="accQuickForm">
-              <div className="field">
-                <label>Amount (TZS)</label>
-                <input
-                  inputMode="decimal"
-                  value={editTxnAmount}
-                  onChange={(e) => setEditTxnAmount(e.target.value)}
-                />
-              </div>
-              {selectedTxn.kind === "credit" && (
-                <div className="field">
-                  <label>Interest Rate (%)</label>
-                  <input
-                    inputMode="decimal"
-                    value={editCreditRate}
-                    onChange={(e) => setEditCreditRate(e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedTxn.kind === "credit" && (
-                <div className="field">
-                  <label>Interest Type</label>
-                  <select value={editCreditType} onChange={(e) => setEditCreditType(e.target.value)}>
-                    <option value="simple">Simple</option>
-                    <option value="compound">Compound</option>
-                  </select>
-                </div>
-              )}
-              {selectedTxn.kind === "credit" && (
-                <div className="field">
-                  <label>Receiving Date</label>
-                  <input
-                    type="date"
-                    value={editReceiveDate}
-                    onChange={(e) => setEditReceiveDate(e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedTxn.kind === "credit" && (
+                  );
+                })()}
                 <div className="field">
                   <label>Interest Start Date</label>
                   <input
                     type="date"
-                    value={editInterestStartDate}
-                    onChange={(e) => setEditInterestStartDate(e.target.value)}
+                    value={interestStartDate}
+                    onChange={(e) => setInterestStartDate(e.target.value)}
+                  />
+                </div>
+                {error && <div className="formError">{error}</div>}
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setShowCreditModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleAddCredit}>
+                    Save Credit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        showPurchaseModal && (
+          <div className="modalBackdrop" onClick={() => setShowPurchaseModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Asset Purchase</div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Units</label>
+                  <input
+                    value={purchaseUnit}
+                    onChange={(e) => setPurchaseUnit(e.target.value)}
+                    placeholder="e.g. Acres, Shares"
+                  />
+                </div>
+                <div className="field">
+                  <label>Amount of Units</label>
+                  <input
+                    inputMode="decimal"
+                    value={purchaseQty}
+                    onChange={(e) => setPurchaseQty(e.target.value)}
+                    placeholder="e.g. 10"
+                  />
+                </div>
+                <div className="field">
+                  <label>Total (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={purchaseTotal}
+                    onChange={(e) => setPurchaseTotal(e.target.value)}
+                    placeholder="e.g. 4510000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Transaction Fee (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={purchaseFee}
+                    onChange={(e) => setPurchaseFee(e.target.value)}
+                    placeholder="e.g. 2000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Price per Unit</label>
+                  <input
+                    readOnly
+                    value={
+                      purchaseQty && (purchaseTotal || purchaseFee)
+                        ? ((Number(purchaseTotal || 0) + Number(purchaseFee || 0)) / Number(purchaseQty || 0)).toFixed(2)
+                        : ""
+                    }
+                    placeholder="Calculated"
+                  />
+                </div>
+                <div className="field">
+                  <label>Date of Purchase</label>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                  />
+                </div>
+                {error && <div className="formError">{error}</div>}
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setShowPurchaseModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handlePurchaseAsset}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        showSaleModal && (
+          <div className="modalBackdrop" onClick={() => setShowSaleModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Asset Sale</div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Units</label>
+                  <input value={saleUnit} readOnly />
+                </div>
+                <div className="field">
+                  <label>Units amount</label>
+                  <input
+                    inputMode="decimal"
+                    value={saleQty}
+                    onChange={(e) => setSaleQty(e.target.value)}
+                    placeholder="e.g. 2"
+                  />
+                  <div className="small">
+                    Max: {getAvailableUnits(account.id).qty} {saleUnit || ""}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Total Amount (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={saleTotal}
+                    onChange={(e) => setSaleTotal(e.target.value)}
+                    placeholder="e.g. 200000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Selling Date</label>
+                  <input
+                    type="date"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>Where is the money going</label>
+                  <select value={saleToAccountId} onChange={(e) => setSaleToAccountId(e.target.value)}>
+                    <option value="">Select account</option>
+                    {accounts
+                      .filter((a) => a.id !== account.id)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                {(() => {
+                  const target = accounts.find((a) => a.id === saleToAccountId);
+                  if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
+                  return (
+                    <div className="field">
+                      <label>To sub-account</label>
+                      <select value={saleToSubId} onChange={(e) => setSaleToSubId(e.target.value)}>
+                        <option value="">Select sub-account</option>
+                        {target.subAccounts
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  );
+                })()}
+                <div className="field">
+                  <label>Note (optional)</label>
+                  <input
+                    value={saleNote}
+                    onChange={(e) => setSaleNote(e.target.value)}
+                    placeholder="e.g. Market sale"
+                  />
+                </div>
+                {error && <div className="formError">{error}</div>}
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setShowSaleModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleSaleAsset}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        showValuationModal && (
+          <div className="modalBackdrop" onClick={() => setShowValuationModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Asset Valuation</div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Units Price (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={valuationPrice}
+                    onChange={(e) => setValuationPrice(e.target.value)}
+                    placeholder="e.g. 500000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Date of Valuation</label>
+                  <input
+                    type="date"
+                    value={valuationDate}
+                    onChange={(e) => setValuationDate(e.target.value)}
+                  />
+                </div>
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setShowValuationModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleValuation}>
+                    Revaluate
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+
+      {
+        selectedTxn && (
+          <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">
+                {selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}
+              </div>
+
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Amount (TZS)</label>
+                  <input
+                    inputMode="decimal"
+                    value={editTxnAmount}
+                    onChange={(e) => setEditTxnAmount(e.target.value)}
+                  />
+                </div>
+                {selectedTxn.kind === "credit" && (
+                  <div className="field">
+                    <label>Interest Rate (%)</label>
+                    <input
+                      inputMode="decimal"
+                      value={editCreditRate}
+                      onChange={(e) => setEditCreditRate(e.target.value)}
+                    />
+                  </div>
+                )}
+                {selectedTxn.kind === "credit" && (
+                  <div className="field">
+                    <label>Interest Type</label>
+                    <select value={editCreditType} onChange={(e) => setEditCreditType(e.target.value)}>
+                      <option value="simple">Simple</option>
+                      <option value="compound">Compound</option>
+                    </select>
+                  </div>
+                )}
+                {selectedTxn.kind === "credit" && (
+                  <div className="field">
+                    <label>Receiving Date</label>
+                    <input
+                      type="date"
+                      value={editReceiveDate}
+                      onChange={(e) => setEditReceiveDate(e.target.value)}
+                    />
+                  </div>
+                )}
+                {selectedTxn.kind === "credit" && (
+                  <div className="field">
+                    <label>Interest Start Date</label>
+                    <input
+                      type="date"
+                      value={editInterestStartDate}
+                      onChange={(e) => setEditInterestStartDate(e.target.value)}
+                    />
+                  </div>
+                )}
+                <div className="field">
+                  <label>Note</label>
+                  <input
+                    value={editTxnNote}
+                    onChange={(e) => setEditTxnNote(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={editTxnDate}
+                    onChange={(e) => setEditTxnDate(e.target.value)}
+                  />
+                </div>
+                {error && <div className="formError">{error}</div>}
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setSelectedTxn(null)}>
+                    Close
+                  </button>
+                  <button
+                    className="btn danger"
+                    type="button"
+                    onClick={() => {
+                      onDeleteAccountTxn?.(selectedTxn.id);
+                      setSelectedTxn(null);
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleSaveTxnEdit}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        showEditModal && (
+          <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Edit Account</div>
+              <div className="field">
+                <label>Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Account name"
+                />
+              </div>
+              <div className="field">
+                <label>Ledger</label>
+                <select value={editLedgerId} onChange={(e) => setEditLedgerId(e.target.value)}>
+                  {ledgers.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Group</label>
+                <select
+                  value={editGroupId}
+                  onChange={(e) => setEditGroupId(e.target.value)}
+                >
+                  {groups
+                    .filter(g => g.type === (currentGroup?.type || 'debit'))
+                    .map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))
+                  }
+                </select>
+              </div>
+              {(currentGroup?.type === 'debit' || !currentGroup) && (
+                <div className="field">
+                  <label>Balance (TZS) - Creates Adjustment</label>
+                  <input
+                    type="number"
+                    value={editBalance}
+                    onChange={(e) => setEditBalance(e.target.value)}
+                    placeholder="0"
                   />
                 </div>
               )}
-              <div className="field">
-                <label>Note</label>
-                <input
-                  value={editTxnNote}
-                  onChange={(e) => setEditTxnNote(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>Date</label>
-                <input
-                  type="date"
-                  value={editTxnDate}
-                  onChange={(e) => setEditTxnDate(e.target.value)}
-                />
-              </div>
-              {error && <div className="formError">{error}</div>}
-              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setSelectedTxn(null)}>
-                  Close
-                </button>
-                <button
-                  className="btn danger"
-                  type="button"
-                  onClick={() => {
-                    onDeleteAccountTxn?.(selectedTxn.id);
-                    setSelectedTxn(null);
-                  }}
-                >
-                  Delete
-                </button>
-                <button className="btn primary" type="button" onClick={handleSaveTxnEdit}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEditModal && (
-        <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Edit Account</div>
-            <div className="field">
-              <label>Name</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Account name"
-              />
-            </div>
-            <div className="field">
-              <label>Ledger</label>
-              <select value={editLedgerId} onChange={(e) => setEditLedgerId(e.target.value)}>
-                {ledgers.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Group</label>
-              <select
-                value={editGroupId}
-                onChange={(e) => setEditGroupId(e.target.value)}
-              >
-                {groups
-                  .filter(g => g.type === (currentGroup?.type || 'debit'))
-                  .map(g => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))
-                }
-              </select>
-            </div>
-            {(currentGroup?.type === 'debit' || !currentGroup) && (
-              <div className="field">
-                <label>Balance (TZS) - Creates Adjustment</label>
-                <input
-                  type="number"
-                  value={editBalance}
-                  onChange={(e) => setEditBalance(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-            )}
-            {editError && <div className="small" style={{ color: "#d25b5b" }}>{editError}</div>}
-            <div className="modalActions">
-              <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
-                Cancel
-              </button>
-              <button className="btn primary" type="button" onClick={handleSaveEdit}>
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingSubAccountId && (
-        <div className="modalBackdrop" onClick={() => setEditingSubAccountId(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalTitle">Edit Sub-account</div>
-            <div className="field">
-              <label>Name</label>
-              <input
-                value={subEditName}
-                onChange={(e) => setSubEditName(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="field">
-              <label>Ledger</label>
-              <select
-                value={subEditLedgerId}
-                onChange={(e) => setSubEditLedgerId(e.target.value)}
-              >
-                {ledgers.map(l => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="row" style={{ justifyContent: "space-between", gap: 8, marginTop: 24 }}>
-              {(() => {
-                const sub = account.subAccounts?.find(s => s.id === editingSubAccountId);
-                if (sub) {
-                  return (
-                    <button
-                      className="btn danger"
-                      type="button"
-                      onClick={() => {
-                        handleDeleteSubAccount(editingSubAccountId);
-                        setEditingSubAccountId(null);
-                      }}
-                    >
-                      Delete
-                    </button>
-                  )
-                }
-                return <div></div>
-              })()}
-              <div className="row" style={{ gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setEditingSubAccountId(null)}>
+              {editError && <div className="small" style={{ color: "#d25b5b" }}>{editError}</div>}
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
                   Cancel
                 </button>
-                <button className="btn primary" type="button" onClick={handleSaveSubEdit}>
+                <button className="btn primary" type="button" onClick={handleSaveEdit}>
                   Save
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
+
+      {
+        editingSubAccountId && (
+          <div className="modalBackdrop" onClick={() => setEditingSubAccountId(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Edit Sub-account</div>
+              <div className="field">
+                <label>Name</label>
+                <input
+                  value={subEditName}
+                  onChange={(e) => setSubEditName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="field">
+                <label>Ledger</label>
+                <select
+                  value={subEditLedgerId}
+                  onChange={(e) => setSubEditLedgerId(e.target.value)}
+                >
+                  {ledgers.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between", gap: 8, marginTop: 24 }}>
+                {(() => {
+                  const sub = account.subAccounts?.find(s => s.id === editingSubAccountId);
+                  if (sub) {
+                    return (
+                      <button
+                        className="btn danger"
+                        type="button"
+                        onClick={() => {
+                          handleDeleteSubAccount(editingSubAccountId);
+                          setEditingSubAccountId(null);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )
+                  }
+                  return <div></div>
+                })()}
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setEditingSubAccountId(null)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleSaveSubEdit}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       <div className="accHistory">
         <div className="accHistoryTitle">Recent activity</div>
@@ -2255,6 +2295,6 @@ function AccountDetail({
           })
         )}
       </div>
-    </div>
+    </div >
   );
 }

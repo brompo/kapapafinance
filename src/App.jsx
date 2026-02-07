@@ -3237,10 +3237,13 @@ export default function App() {
           <AccountsScreen
             accounts={accounts}
             accountTxns={allAccountTxns}
+            txns={activeLedger.txns || []}
             groups={activeLedger.groups || []}
             activeLedgerId={activeLedger.id}
             ledgers={ledgers}
             focusAccountId={focusAccountId}
+            settings={settings}
+            onUpdateSettings={updateSettings}
             onFocusAccountUsed={() => setFocusAccountId(null)}
             onSwitchLedger={handleSwitchLedgerToAccounts}
             onDetailOpen={() => setShowAccountsHeader(false)}

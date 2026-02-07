@@ -100,13 +100,20 @@ export default function Accounts({
   onDeleteAccountTxn,
   onUpdateGroups,
   onUpdateAccounts,
+  settings = {},
+  onUpdateSettings,
+  txns = [] // Ledger transactions for return calc
 }) {
+  const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [editTargetValue, setEditTargetValue] = useState("");
+  const [editTargetYear, setEditTargetYear] = useState("");
   const [filter, setFilter] = useState("all"); // all | debit | credit | asset
   const [selectedId, setSelectedId] = useState(null);
   const [draggingGroupId, setDraggingGroupId] = useState(null);
   const [draggingAccountId, setDraggingAccountId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const [showOverview, setShowOverview] = useState(true);
+  const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
   const [dragOverAccountId, setDragOverAccountId] = useState(null);
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
@@ -199,19 +206,81 @@ export default function Accounts({
 
 
   const totals = useMemo(() => {
-    const assets = visibleAccounts
-      .filter((a) => {
-        const g = groupById.get(a.groupId);
-        return g?.type === "debit" || g?.type === "asset";
-      })
-      .reduce((s, a) => s + getAccountBalance(a), 0);
+    let assets = 0;
+    let liabilities = 0;
+    let capitalDeployed = 0;
 
-    const liabilities = visibleAccounts
-      .filter((a) => groupById.get(a.groupId)?.type === "credit")
-      .reduce((s, a) => s + getAccountBalance(a), 0);
+    for (const a of visibleAccounts) {
+      const g = groupById.get(a.groupId);
+      const type = g?.type;
+      const val = getAccountBalance(a); // Market Value
 
-    return { assets, liabilities, netWorth: assets - liabilities };
-  }, [visibleAccounts, groupById, activeLedgerId]); // Added activeLedgerId dependency
+      if (type === "credit") {
+        liabilities += val;
+        capitalDeployed -= val;
+      } else if (type === "asset") {
+        assets += val;
+        const info = getAssetInfo(a, accountTxns, g);
+        capitalDeployed += (info.costBasis || 0);
+      } else {
+        // Debit
+        assets += val;
+        capitalDeployed += val;
+      }
+    }
+
+    // --- Capital Coverage Metrics ---
+    // 1. Monthly Return (Avg last 3 months)
+    const now = new Date();
+    let totalProfit3m = 0;
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
+
+    // Filter txns for income/expense in last 3 months
+    // Note: txns prop passed from App.jsx contains all ledger txns
+    const recentTxns = txns.filter(t => t.date >= iso3m);
+    let income3m = 0;
+    let expense3m = 0;
+    for (const t of recentTxns) {
+      const amt = Number(t.amount || 0);
+      if (t.type === 'income') income3m += amt;
+      else if (t.type === 'expense') expense3m += amt;
+    }
+    const avgMonthlyProfit = (income3m - expense3m) / 3;
+    const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
+
+    // 2. Cost of Capital (Weighted Avg Monthly Interest)
+    let totalDebt = 0;
+    let totalWeightedRate = 0;
+    for (const a of visibleAccounts) {
+      const g = groupById.get(a.groupId);
+      if (g?.type === 'credit') {
+        const bal = getAccountBalance(a); // This includes accrued
+        // We need the rate. It's on the account object, usually 'creditRate' (annual %)
+        // If not present, assume 0.
+        const rate = Number(a.creditRate || 0);
+        if (bal > 0) {
+          totalDebt += bal;
+          totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
+        }
+      }
+    }
+    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
+
+    // 3. Coverage
+    const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
+
+    return {
+      assets,
+      liabilities,
+      netWorth: assets - liabilities,
+      capitalDeployed,
+      monthlyReturn,
+      costOfCapital,
+      coverage
+    };
+  }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
   const shownGroups = useMemo(() => {
@@ -464,6 +533,19 @@ export default function Accounts({
           <div className="overviewCard">
             <div className="ovMainLabel">Net Worth</div>
             <div className="ovMainValue">{fmtTZS(totals.netWorth)}</div>
+            <div className="netWorthTargetText" style={{ justifyContent: 'center', marginBottom: 12, color: 'rgba(255,255,255,0.8)' }}>
+              {settings.netWorthTarget ? (
+                <span>Target: {fmtCompact(settings.netWorthTarget)} by {settings.netWorthTargetYear || '2029'}</span>
+              ) : (
+                <span>Set Target</span>
+              )}
+              <button className="netWorthEditBtn" style={{ color: 'white' }} onClick={(e) => {
+                e.stopPropagation();
+                setEditTargetValue(settings.netWorthTarget || "");
+                setEditTargetYear(settings.netWorthTargetYear || "2029");
+                setTargetModalOpen(true);
+              }}>✎</button>
+            </div>
             <div className="ovGrid">
               <div>
                 <div className="ovItemLabel">Assets</div>
@@ -479,33 +561,151 @@ export default function Accounts({
 
           {/* Top Metrics Cards */}
           {/* Top Metrics Cards */}
-          <div className="topMetricsRow">
-            <div className="topMetricCard">
-              <div className="topMetricLabel">Net Worth</div>
-              <div className="topMetricValue" style={{ color: totals.netWorth < 0 ? '#DC2626' : '#16A34A' }}>
-                {fmtTZS(totals.netWorth)}
-                <span className="trendIcon">{totals.netWorth >= 0 ? '↑' : '↓'}</span>
-              </div>
-              <div className="topMetricSub">
-                {totals.assets > 0 ? ((totals.netWorth / totals.assets) * 100).toFixed(1) : 0}% of Assets
-              </div>
-            </div>
-            <div className="topMetricCard">
-              <div className="topMetricLabel">Total Invested</div>
-              <div className="topMetricValue" style={{ color: '#16A34A' }}>
-                {fmtTZS(totals.assets)}
-                <span className="trendIcon">↑</span>
-              </div>
-              <div className="topMetricSub">Target: 1B</div>
-            </div>
+
+          {/* View Tabs */}
+          <div className="viewTabs">
+            <button
+              className={`viewTab ${viewMode === 'accounts' ? 'active' : ''}`}
+              onClick={() => setViewMode('accounts')}
+            >
+              Accounts
+            </button>
+            <button
+              className={`viewTab ${viewMode === 'growth' ? 'active' : ''}`}
+              onClick={() => setViewMode('growth')}
+            >
+              Growth Insights
+            </button>
           </div>
+
+          {/* Growth View */}
+          {viewMode === 'growth' && (
+            <>
+              <div className="topMetricsRow">
+                <div className="topMetricCard">
+                  <div className="topMetricLabel">Capital Efficiency</div>
+                  <div className="topMetricValue" style={{ color: '#16A34A' }}>
+                    {(() => {
+                      const profit = totals.netWorth - totals.capitalDeployed;
+                      const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
+                      return (
+                        <>
+                          {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                          <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className="topMetricSub">
+                    Return on Capital
+                  </div>
+                </div>
+                <div className="topMetricCard">
+                  <div className="topMetricLabel">Capital Coverage</div>
+                  <div className="topMetricValue" style={{
+                    color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
+                  }}>
+                    {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
+                  </div>
+                  <div className="topMetricSub" style={{ marginBottom: 2 }}>
+                    {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 'auto', display: 'flex', gap: 8 }}>
+                    <span>Ret: {totals.monthlyReturn.toFixed(1)}%</span>
+                    <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overviewTitle" style={{ marginTop: 24 }}>Capital Allocation</div>
+              <div className="allocationGrid">
+                {groups.filter(g => g.type === 'asset' || g.type === 'debit').map(g => {
+                  const groupAccounts = visibleAccounts.filter(a => a.groupId === g.id);
+                  if (groupAccounts.length === 0) return null;
+
+                  const totalValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
+                  const allocation = totals.netWorth > 0 ? (totalValue / totals.netWorth) * 100 : 0;
+
+                  let totalCost = 0;
+                  if (g.type === 'asset') {
+                    totalCost = groupAccounts.reduce((sum, a) => {
+                      const info = getAssetInfo(a, accountTxns, g);
+                      return sum + (info.costBasis || 0);
+                    }, 0);
+                  } else {
+                    totalCost = totalValue;
+                  }
+
+                  const profit = totalValue - totalCost;
+                  const perf = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+                  return (
+                    <div className="allocationRow" key={g.id}>
+                      <div className="allocLeft">
+                        <div className="allocName">{g.name}</div>
+                        <div className="allocPerf" style={{ color: perf >= 0 ? '#16A34A' : '#DC2626' }}>
+                          {g.type === 'asset' && totalCost > 0 ? (
+                            <>{perf > 0 ? '+' : ''}{perf.toFixed(1)}%</>
+                          ) : (
+                            <span style={{ color: '#9ca3af' }}>-</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="allocRight">
+                        <div className="allocValue">{fmtTZS(totalValue)}</div>
+                        <div className="allocSub">{allocation.toFixed(1)}% of NW</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {targetModalOpen && (
+            <div className="modalBackdrop" onClick={() => setTargetModalOpen(false)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+                <div className="modalTitle">Set Net Worth Target</div>
+                <div className="accQuickForm">
+                  <div className="field">
+                    <label>Target Amount (TZS)</label>
+                    <input
+                      inputMode="decimal"
+                      value={editTargetValue}
+                      onChange={(e) => setEditTargetValue(e.target.value)}
+                      placeholder="e.g. 1000000000"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Target Year</label>
+                    <input
+                      inputMode="numeric"
+                      value={editTargetYear}
+                      onChange={(e) => setEditTargetYear(e.target.value)}
+                      placeholder="e.g. 2029"
+                    />
+                  </div>
+                  <div className="btnRow">
+                    <button className="btn" onClick={() => setTargetModalOpen(false)}>Cancel</button>
+                    <button className="btn primary" onClick={() => {
+                      onUpdateSettings({
+                        ...settings,
+                        netWorthTarget: editTargetValue,
+                        netWorthTargetYear: editTargetYear
+                      });
+                      setTargetModalOpen(false);
+                    }}>Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
 
-      <div className="overviewTitle">Accounts</div>
-
-      {shownGroups.map((group) => {
+      {/* Accounts View */}
+      {viewMode === 'accounts' && shownGroups.map((group) => {
         const items = visibleAccounts.filter((a) => a.groupId === group.id);
         const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
         const right = group.type === "credit" ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;

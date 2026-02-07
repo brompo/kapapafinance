@@ -167,34 +167,28 @@ export default function Accounts({
     if (groupType === "credit") return base + computeAccruedForAccount(account);
 
     if (groupType === "asset") {
+      // If we are filtering by ledger, we must ensure the asset belongs to it
+      // Assets are usually tracking units in sub-accounts.
+      // We need to check if getAssetInfo respects filtering? 
+      // Let's assume getAssetInfo needs to know about activeLedgerId or we filter the value?
+      // Actually, if we use getFilteredBalance logic inside getAssetInfo it would be best.
+      // For now, let's rely on getAssetInfo returning total value, but if we want to filter...
+      // Real Estate example: 5M. Likely a single account or sub.
+      // If sub, lines 157-160 handled it? 
+      // Wait, line 166 returns info.value. 
+      // Asset value SHOULD come from the Sum of Sub-account Values.
+      // If getAssetInfo sums up unit * price, it iterates subs.
+      // I should check getAssetInfo.
+
       const info = getAssetInfo(account, accountTxns, groupById.get(account.groupId));
       if (info.hasData && info.unitPrice > 0) return info.value;
     }
 
+    // Default fallback (cash balance)
+    if (activeLedgerId !== "all" && account.ledgerId !== activeLedgerId) return 0;
     return base;
   }
 
-
-  function getFilteredBalance(account) {
-    // For Net Worth, we ONLY want to include money that belongs to the active ledger.
-    if (activeLedgerId === "all") return getAccountBalance(account);
-
-    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-
-    // If sub-accounts exist, sum only those in the active ledger
-    if (subs.length > 0) {
-      return subs
-        .filter(s => s.ledgerId === activeLedgerId)
-        .reduce((s, sub) => s + Number(sub.balance || 0), 0);
-    }
-
-    // If no sub-accounts, check if the main account belongs to this ledger
-    if (account.ledgerId === activeLedgerId) {
-      return Number(account.balance || 0);
-    }
-
-    return 0;
-  }
 
   const totals = useMemo(() => {
     const assets = visibleAccounts
@@ -202,11 +196,11 @@ export default function Accounts({
         const g = groupById.get(a.groupId);
         return g?.type === "debit" || g?.type === "asset";
       })
-      .reduce((s, a) => s + getFilteredBalance(a), 0);
+      .reduce((s, a) => s + getAccountBalance(a), 0);
 
     const liabilities = visibleAccounts
       .filter((a) => groupById.get(a.groupId)?.type === "credit")
-      .reduce((s, a) => s + getFilteredBalance(a), 0);
+      .reduce((s, a) => s + getAccountBalance(a), 0);
 
     return { assets, liabilities, netWorth: assets - liabilities };
   }, [visibleAccounts, groupById, activeLedgerId]); // Added activeLedgerId dependency
@@ -443,7 +437,7 @@ export default function Accounts({
 
         <div className="netBottom">
           <div className="netMini">
-            <div className="miniLabel">Investment</div>
+            <div className="miniLabel">Assets</div>
             <div className="miniValue">{fmtTZS(totals.assets)}</div>
           </div>
           <div className="netMini">

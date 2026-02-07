@@ -1691,7 +1691,7 @@ export default function App() {
       if (!trimmed) return
       const list = type === 'expense' ? expenseCats : incomeCats
       if (list.some(c => c.toLowerCase() === trimmed.toLowerCase())) return
-      const next = [trimmed, ...list]
+      const next = [...list, trimmed]
       const nextCategories = {
         ...categories,
         [type]: next

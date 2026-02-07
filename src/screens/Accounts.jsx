@@ -153,9 +153,14 @@ export default function Accounts({
 
   function getAccountBalance(account) {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    // Always show global total regardless of active ledger filter
+    // Show only the total of sub-accounts associated with the active ledger
     const base = subs.length > 0
-      ? subs.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+      ? subs.reduce((s, sub) => {
+        if (activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
+          return s + Number(sub.balance || 0)
+        }
+        return s
+      }, 0)
       : Number(account.balance || 0);
 
     const groupType = groupById.get(account.groupId)?.type;

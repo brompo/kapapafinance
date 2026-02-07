@@ -2702,12 +2702,14 @@ label {
 /* Top Metrics Cards */
 .topMetricsRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 24px;
 }
 
 .topMetricCard {
-  flex: 1;
+  flex: 1 1 calc(50% - 12px);
+  min-width: 140px;
   background: white;
   border-radius: 16px;
   padding: 16px;

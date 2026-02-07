@@ -623,9 +623,38 @@ export default function Accounts({
                     <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
                   </div>
                 </div>
+                <div className="topMetricCard">
+                  <div className="topMetricLabel">Source of Capital</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                    {(() => {
+                      const selfFunded = Math.max(0, totals.invested - totals.liabilities);
+                      const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
+                      const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                            <span style={{ color: '#6b7280' }}>Self Funded</span>
+                            <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
+                          </div>
+                          <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                            <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
+                            <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                            <span style={{ color: '#6b7280' }}>Credit</span>
+                            <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                </div>
               </div>
 
-              <div className="overviewTitle" style={{ marginTop: 24 }}>Capital Allocation</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
+                <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
+              </div>
               <div className="allocationGrid">
                 {groups.filter(g => g.type === 'asset' || g.type === 'debit').map(g => {
                   const groupAccounts = visibleAccounts.filter(a => a.groupId === g.id);

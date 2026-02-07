@@ -2700,7 +2700,6 @@ label {
 .topMetricsRow {
   display: flex;
   gap: 12px;
-  padding: 0 16px;
   margin-bottom: 24px;
 }
 
@@ -2758,8 +2757,8 @@ label {
 .overviewCard {
   background: linear-gradient(140deg, #8e8ad0, #1e158e);
   border-radius: 20px;
-  margin: 0 16px 24px;
-  padding: 24px;
+  margin: 0 8px 8px;
+  padding: 16px;
   color: white;
   text-align: center;
   box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);
@@ -2774,7 +2773,7 @@ label {
 .ovMainValue {
   font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .ovGrid {
@@ -2800,8 +2799,7 @@ label {
 .assetRowCard {
   background: white;
   border-radius: 16px;
-  padding: 16px;
-  margin: 0 16px 12px;
+  padding: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
   display: flex;
   align-items: center;
@@ -2882,8 +2880,7 @@ label {
 .stdRowCard {
   background: white;
   border-radius: 16px;
-  padding: 16px;
-  margin: 0 16px 10px;
+  padding: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
   display: flex;
   align-items: center;

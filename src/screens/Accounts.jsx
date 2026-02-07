@@ -442,6 +442,7 @@ export default function Accounts({
       {showOverview && (
         <>
           {/* Dashboard Header */}
+          {/* 
           <div className="dashboardHeader">
             <div className="goalTitle">Goal: TZS 1,000,000,000 by Dec 2029</div>
             <div className="goalProgressBg">
@@ -451,6 +452,7 @@ export default function Accounts({
             </div>
             <div className="goalMeta">On Track: {Math.ceil(daysBetween(todayISO(), '2029-12-31'))} Days Left</div>
           </div>
+          */}
 
           {/* Overview Card */}
           <div className="overviewCard">

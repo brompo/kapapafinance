@@ -1013,7 +1013,7 @@ label {
 .accDetailCard {
   background: #eef7f0;
   border-radius: 20px;
-  padding: 16px;
+  padding: 0px;
   box-shadow: 0 10px 24px rgba(30, 40, 60, .10);
   position: relative;
   margin-bottom: 14px;
@@ -2383,7 +2383,7 @@ label {
 .accDetailTitleRow {
   display: flex;
   align-items: center;
-  margin-bottom: 24px;
+  margin: 24px;
 }
 
 .accDetailIcon {
@@ -2437,7 +2437,7 @@ label {
 .accDetailInnerCard {
   background: white;
   border-radius: 20px;
-  padding: 20px;
+  padding: 10px;
   color: #1a1a1a;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
@@ -2481,18 +2481,19 @@ label {
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin: 20px 0;
+  margin: 15px 0;
 }
 
 .actionBtnLarge {
-  width: 50px;
+  min-width: 70px;
   height: 50px;
   border-radius: 14px;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: white;
   /* Default text color, overridden by specific styles if needed */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);

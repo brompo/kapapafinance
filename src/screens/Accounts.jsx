@@ -1433,7 +1433,7 @@ function AccountDetail({
                 else setMode("adjust");
               }}
             >
-              +
+              BUY
             </button>
             {currentGroup?.type === 'asset' && (
               <button
@@ -1444,7 +1444,7 @@ function AccountDetail({
                   setShowValuationModal(true)
                 }}
               >
-                ≈
+                UPDATE
               </button>
             )}
             {(currentGroup?.type === 'asset' || currentGroup?.type !== 'asset') && (
@@ -1463,7 +1463,7 @@ function AccountDetail({
                   }
                 }}
               >
-                {currentGroup?.type === 'asset' ? '−' : '⇄'}
+                {currentGroup?.type === 'asset' ? 'SALE' : 'UPDATE'}
               </button>
             )}
           </div>

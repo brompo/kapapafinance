@@ -628,7 +628,7 @@ export default function Accounts({
                   if (groupAccounts.length === 0) return null;
 
                   const totalValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
-                  const allocation = totals.netWorth > 0 ? (totalValue / totals.netWorth) * 100 : 0;
+                  const allocation = totals.assets > 0 ? (totalValue / totals.assets) * 100 : 0;
 
                   let totalCost = 0;
                   if (g.type === 'asset') {
@@ -657,7 +657,7 @@ export default function Accounts({
                       </div>
                       <div className="allocRight">
                         <div className="allocValue">{fmtTZS(totalValue)}</div>
-                        <div className="allocSub">{allocation.toFixed(1)}% of NW</div>
+                        <div className="allocSub">{allocation.toFixed(1)}% of Assets</div>
                       </div>
                     </div>
                   );

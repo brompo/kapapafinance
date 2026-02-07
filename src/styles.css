@@ -3010,7 +3010,7 @@ label {
 .allocationGrid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 1px;
 }
 
 .allocationRow {
@@ -3018,7 +3018,7 @@ label {
   justify-content: space-between;
   align-items: center;
   background: white;
-  padding: 16px;
+  padding: 10px 16px 10px 16px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }

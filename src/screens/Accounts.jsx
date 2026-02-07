@@ -236,65 +236,59 @@ export default function Accounts({
       }
     }
 
+    // --- Capital Coverage Metrics ---
+    // 1. Monthly Return (Avg last 3 months)
+    const now = new Date();
+    let totalProfit3m = 0;
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
+
+    // Filter txns for income/expense in last 3 months
+    // Note: txns prop passed from App.jsx contains all ledger txns
+    const recentTxns = txns.filter(t => t.date >= iso3m);
+    let income3m = 0;
+    let expense3m = 0;
+    for (const t of recentTxns) {
+      const amt = Number(t.amount || 0);
+      if (t.type === 'income') income3m += amt;
+      else if (t.type === 'expense') expense3m += amt;
+    }
+    const avgMonthlyProfit = (income3m - expense3m) / 3;
+    const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
+
+    // 2. Cost of Capital (Weighted Avg Monthly Interest)
+    let totalDebt = 0;
+    let totalWeightedRate = 0;
+    for (const a of visibleAccounts) {
+      const g = groupById.get(a.groupId);
+      if (g?.type === 'credit') {
+        const bal = getAccountBalance(a); // This includes accrued
+        // We need the rate. It's on the account object, usually 'creditRate' (annual %)
+        // If not present, assume 0.
+        const rate = Number(a.creditRate || 0);
+        if (bal > 0) {
+          totalDebt += bal;
+          totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
+        }
+      }
+    }
+    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
+
+    // 3. Coverage
+    const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
+
     return {
       assets,
       liabilities,
       netWorth: assets - liabilities,
       capitalDeployed,
       invested, // Total Invested Capital (Cash + Asset Cost Basis)
-
-      // --- Capital Coverage Metrics ---
-      // 1. Monthly Return (Avg last 3 months)
-      const now = new Date();
-      let totalProfit3m = 0;
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(now.getMonth() - 3);
-      const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
-
-      // Filter txns for income/expense in last 3 months
-      // Note: txns prop passed from App.jsx contains all ledger txns
-      const recentTxns = txns.filter(t => t.date >= iso3m);
-      let income3m = 0;
-      let expense3m = 0;
-      for(const t of recentTxns) {
-        const amt = Number(t.amount || 0);
-        if (t.type === 'income') income3m += amt;
-        else if (t.type === 'expense') expense3m += amt;
-      }
-    const avgMonthlyProfit = (income3m - expense3m) / 3;
-      const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
-
-      // 2. Cost of Capital (Weighted Avg Monthly Interest)
-      let totalDebt = 0;
-      let totalWeightedRate = 0;
-      for(const a of visibleAccounts) {
-        const g = groupById.get(a.groupId);
-        if (g?.type === 'credit') {
-          const bal = getAccountBalance(a); // This includes accrued
-          // We need the rate. It's on the account object, usually 'creditRate' (annual %)
-          // If not present, assume 0.
-          const rate = Number(a.creditRate || 0);
-          if (bal > 0) {
-            totalDebt += bal;
-            totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
-          }
-        }
-      }
-    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
-
-      // 3. Coverage
-      const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
-
-      return {
-        assets,
-        liabilities,
-        netWorth: assets - liabilities,
-        capitalDeployed,
-        monthlyReturn,
-        costOfCapital,
-        coverage
-      };
-    }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
+      monthlyReturn,
+      costOfCapital,
+      coverage
+    };
+  }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
   const shownGroups = useMemo(() => {

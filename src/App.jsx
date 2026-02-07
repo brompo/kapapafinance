@@ -1485,6 +1485,17 @@ export default function App() {
     const resolvedToSub = toSubs.length ? (toSubAccountId || toSubs[0]?.id) : null
 
     const nextAccounts = allAccounts.map(a => {
+      if (a.id === fromId && a.id === toId) {
+        // Intra-account transfer (between sub-accounts)
+        const currentSubs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+        const nextSubs = currentSubs.map(s => {
+          let bal = Number(s.balance || 0)
+          if (s.id === resolvedFromSub) bal -= amount
+          if (s.id === resolvedToSub) bal += amount
+          return { ...s, balance: bal }
+        })
+        return { ...a, subAccounts: nextSubs }
+      }
       if (a.id === fromId) {
         if (!fromSubs.length) return { ...a, balance: Number(a.balance || 0) - amount }
         const nextSubs = fromSubs.map(s => (

@@ -68,8 +68,10 @@ function getAssetInfo(account, accountTxns, group) {
     qty: Math.max(qty, 0),
     unit,
     unitPrice,
-    avgPrice: Math.max(0, avgPrice), // Ensure no negative cost basis
-    value: unitPrice * Math.max(qty, 0)
+    avgPrice: Math.max(0, avgPrice),
+    costBasis: Math.max(0, runningCost), // Accounting Value
+    marketValue: unitPrice * Math.max(qty, 0), // Market Value
+    value: unitPrice * Math.max(qty, 0) // Backward compat
   };
 }
 
@@ -99,6 +101,7 @@ export default function Accounts({
   const [draggingGroupId, setDraggingGroupId] = useState(null);
   const [draggingAccountId, setDraggingAccountId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
+  const [showOverview, setShowOverview] = useState(true);
   const [dragOverAccountId, setDragOverAccountId] = useState(null);
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
@@ -429,27 +432,69 @@ export default function Accounts({
         </div>
       )}
 
-      <div className="netCard">
-        <div className="netTop">
-          <div className="netLabel">Net Worth</div>
-          <div className="netValue">{fmtTZS(totals.netWorth)}</div>
-        </div>
-
-        <div className="netBottom">
-          <div className="netMini">
-            <div className="miniLabel">Assets</div>
-            <div className="miniValue">{fmtTZS(totals.assets)}</div>
-          </div>
-          <div className="netMini">
-            <div className="miniLabel">Liabilities</div>
-            <div className="miniValue">{fmtTZS(totals.liabilities)}</div>
-          </div>
-        </div>
+      <div className="overviewTitle"
+        onClick={() => setShowOverview(!showOverview)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+        <span>Financial Overview</span>
+        <span style={{ fontSize: '1.2rem', opacity: 0.6 }}>{showOverview ? '▾' : '▸'}</span>
       </div>
 
-      <div className="accHeader">
-        <div className="accTitle">Accounts</div>
-      </div>
+      {showOverview && (
+        <>
+          {/* Dashboard Header */}
+          <div className="dashboardHeader">
+            <div className="goalTitle">Goal: TZS 1,000,000,000 by Dec 2029</div>
+            <div className="goalProgressBg">
+              <div className="goalProgressBar" style={{ width: `${Math.min((totals.netWorth / 1000000000) * 100, 100)}%` }}>
+                <div className="goalThumb"></div>
+              </div>
+            </div>
+            <div className="goalMeta">On Track: {Math.ceil(daysBetween(todayISO(), '2029-12-31'))} Days Left</div>
+          </div>
+
+          {/* Overview Card */}
+          <div className="overviewCard">
+            <div className="ovMainLabel">Net Worth</div>
+            <div className="ovMainValue">{fmtTZS(totals.netWorth)}</div>
+            <div className="ovGrid">
+              <div>
+                <div className="ovItemLabel">Assets</div>
+                <div className="ovItemValue">{fmtTZS(totals.assets)}</div>
+              </div>
+              <div>
+                <div className="ovItemLabel">Liabilities</div>
+                <div className="ovItemValue">{fmtTZS(totals.liabilities)}</div>
+              </div>
+            </div>
+          </div>
+
+
+          {/* Top Metrics Cards */}
+          <div className="topMetricsRow">
+            <div className="topMetricCard">
+              <div className="topMetricLabel">Net Worth</div>
+              <div className="topMetricValue" style={{ color: totals.netWorth < 0 ? '#DC2626' : '#16A34A' }}>
+                {fmtTZS(totals.netWorth)}
+                <span className="trendIcon">{totals.netWorth >= 0 ? '↑' : '↓'}</span>
+              </div>
+              <div className="topMetricSub">
+                {totals.assets > 0 ? ((totals.netWorth / totals.assets) * 100).toFixed(1) : 0}% of Assets
+              </div>
+            </div>
+            <div className="topMetricCard">
+              <div className="topMetricLabel">Total Invested</div>
+              <div className="topMetricValue" style={{ color: '#16A34A' }}>
+                {fmtTZS(totals.assets)}
+                <span className="trendIcon">↑</span>
+              </div>
+              <div className="topMetricSub">Target: 1B</div>
+            </div>
+          </div>
+        </>
+      )}
+
+
+      <div className="overviewTitle">Accounts</div>
 
       {shownGroups.map((group) => {
         const items = visibleAccounts.filter((a) => a.groupId === group.id);
@@ -577,17 +622,15 @@ function Section({
             <div className="emptyRow">No accounts</div>
           ) : (
             items.reduce((nodes, a) => {
+              const isAsset = group.type === 'asset'
+              const bal = getAccountBalance(a)
+
               nodes.push(
                 <div
-                  className={`rowItem clickable ${draggingAccountId === a.id ? "dragging" : ""
+                  className={`clickable ${draggingAccountId === a.id ? "dragging" : ""
                     } ${dragOverAccountId === a.id ? "dragOver" : ""}`}
                   key={a.id}
                   onClick={() => onSelectAccount?.(a.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") onSelectAccount?.(a.id);
-                  }}
-                  role="button"
-                  tabIndex={0}
                   draggable
                   onDragStart={() => onAccountDragStart?.(a.id)}
                   onDragOver={(e) => {
@@ -597,40 +640,67 @@ function Section({
                   onDrop={() => onAccountDrop?.(a.id, group.id)}
                   onDragEnd={() => onAccountDragOver?.(null)}
                 >
-                  <div className="rowLeft">
-                    <div className="avatar">{a.name.slice(0, 1).toUpperCase()}</div>
-                    <div>
-                      <div className="rowName">{a.name}</div>
-                      <div className="rowMeta">
-                        {getAssetInfo && getAssetInfo(a, accountTxns, group).hasData
-                          ? `${getAssetInfo(a, accountTxns, group).qty} ${getAssetInfo(a, accountTxns, group).unit || ""}`
-                          : group.type}
+                  {isAsset ? (
+                    <div className="assetRowCard">
+                      <div className="assetRowLeft">
+                        <div className="assetIcon">
+                          {a.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="assetInfo">
+                          <h4>{a.name}</h4>
+                          <div style={{ fontSize: '0.75rem', color: '#666' }}>
+                            {(() => {
+                              const info = getAssetInfo(a, accountTxns, group)
+                              return info.hasData ? `${info.qty} Units` : '0 Units'
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div className="assetBalance">
+                          {fmtTZS(bal)}
+                        </div>
+                        <div className="assetActions">
+                          <button className="actBtn btnBuy" onClick={(e) => {
+                            e.stopPropagation()
+                            // Open detail then purchase modal? 
+                            // Ideally we pass a special prop or handle it here.
+                            // For now, let's just open account detail, the user can click + there.
+                            // Or we can try to trigger purchase modal if we add a handler.
+                            onSelectAccount?.(a.id)
+                          }}>BUY</button>
+                          <button className="actBtn btnUpd" onClick={(e) => {
+                            e.stopPropagation()
+                            onSelectAccount?.(a.id)
+                          }}>UPDATE</button>
+                          <button className="actBtn btnSell" onClick={(e) => {
+                            e.stopPropagation()
+                            onSelectAccount?.(a.id)
+                          }}>SELL</button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className={`rowRight ${Array.isArray(a.subAccounts) && a.subAccounts.length ? "rowRightStack" : ""}`}>
-                    <div
-                      className={`rowAmount ${group.type === "credit" || getAccountBalance(a) < 0 ? "neg" : ""
-                        }`}
-                    >
-                      {fmtTZS(getAccountBalance(a))}
+                  ) : (
+                    <div className="stdRowCard">
+                      <div className="stdRowLeft">
+                        <div className="stdIcon">
+                          {a.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="stdName">{a.name}</div>
+                      </div>
+                      <div className="stdRight">
+                        <div className="stdBalPrefix">Bal.</div>
+                        <div className="stdBalLabel">{fmtTZS(bal)}</div>
+                        <button className="stdActionBtn" onClick={(e) => {
+                          e.stopPropagation()
+                          onSelectAccount?.(a.id)
+                        }}>+</button>
+                      </div>
                     </div>
-                    {Array.isArray(a.subAccounts) && a.subAccounts.length > 0 && (
-                      <button
-                        className="miniBtn"
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleAccountExpand?.(a.id);
-                        }}
-                      >
-                        {expandedAccounts?.[a.id] ? "Hide Sub Accounts" : "Show Sub Accounts"}
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
+
 
               const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
               const visibleSubs = activeLedgerId === "all"
@@ -662,21 +732,33 @@ function Section({
             }, [])
           )}
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }
 
+// Helpers
+
 function formatDay(dateStr) {
+  if (!dateStr) return "";
   const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
+  return d.toLocaleDateString(undefined, {
     month: "short",
-    year: "numeric",
+    day: "numeric",
+    year: "numeric"
   });
 }
+
+function todayISO() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+
 
 function AccountDetail({
   account,
@@ -701,6 +783,7 @@ function AccountDetail({
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
   const [mode, setMode] = useState(null); // adjust | transfer | null
+
   const [direction, setDirection] = useState("in"); // in | out
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -1162,7 +1245,9 @@ function AccountDetail({
       unit: info.unit,
       unitPrice: info.unitPrice,
       avgPrice: info.avgPrice,
-      currentValue: info.value
+      currentValue: info.value,
+      costBasis: info.costBasis,
+      marketValue: info.marketValue
     };
   }
 
@@ -1317,147 +1402,150 @@ function AccountDetail({
 
   return (
     <div className="accountsScreen accountDetail">
-      <div className="accDetailHeader">
-        <div className="accDetailHeaderLeft">
-          <button className="iconBtn" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-
-        <div className="accDetailHeaderRight">
-          <button className="pillBtn" onClick={handleEdit}>
-            Edit
-          </button>
-          <button className="pillBtn danger" onClick={handleDelete}>
-            Delete
-          </button>
-        </div>
-      </div>
-
       <div className="accDetailCard">
-        <div className="accDetailTopRow">
-          <div className="rowLeft">
-            <div className="avatar">{account.name.slice(0, 1).toUpperCase()}</div>
-            <div>
-              <div className="accDetailName">{account.name}</div>
-              <div className="rowMeta">
-                {currentGroup?.name}
-              </div>
-            </div>
+        {/* Title Row */}
+        <div className="accDetailTitleRow">
+          <div className="accDetailIcon">
+            {account.name.slice(0, 1).toUpperCase()}
           </div>
-          <div className="accDetailBalance">
-            {(() => {
-              const base = Array.isArray(account.subAccounts) && account.subAccounts.length
-                ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
-                : account.balance
-              if (currentGroup?.type === "credit") {
-                const summary = computeCreditSummary()
-                return fmtTZS(Number(base || 0) + summary.accrued)
-              }
-              if (currentGroup?.type === "asset") {
-                const summary = computeAssetSummary()
-                return fmtTZS(summary.currentValue || base)
-              }
-              return fmtTZS(base)
-            })()}
+          <div className="accDetailTitle">
+            <h2>{account.name}</h2>
+            <span>{currentGroup?.name}</span>
+          </div>
+          <div className="accDetailActionsTop">
+            <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
+            <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
+            <button className="miniActionBtn" onClick={onClose}>✕</button>
           </div>
         </div>
-        {currentGroup?.type === "credit" && (() => {
-          const summary = computeCreditSummary();
-          return (
-            <div className="small" style={{ marginTop: 4 }}>
-              Accrued interest: {fmtTZS(summary.accrued)}
-            </div>
-          );
-        })()}
-        {currentGroup?.type === "asset" && (() => {
-          const info = computeAssetSummary();
-          return (
-            <>
-              <div className="small" style={{ marginTop: 4 }}>
-                Units: {info.qty} {info.unit || ""}
-              </div>
-              {info.unitPrice > 0 && (
-                <div className="small" style={{ marginTop: 2, opacity: 0.8 }}>
-                  Avg Price: {fmtTZS(info.unitPrice)}
-                </div>
-              )}
-            </>
-          );
-        })()}
-        <div className="accDetailActions">
-          <button
-            className={`quickBtn purchase ${mode === "adjust" ? "active" : ""}`}
-            onClick={() => {
-              if (currentGroup?.type === "credit") setShowCreditModal(true);
-              else if (currentGroup?.type === "asset") setShowPurchaseModal(true);
-              else setMode("adjust");
-            }}
-            title="Add or spend"
-            type="button"
-          >
-            +
-          </button>
-          {currentGroup?.type === "asset" && (
-            <>
+
+        {/* Inner White Stats Card */}
+        <div className="accDetailInnerCard">
+          {/* Action Buttons */}
+          <div className="actionRow">
+            <button
+              className="actionBtnLarge btnGreen"
+              onClick={() => {
+                if (currentGroup?.type === "credit") setShowCreditModal(true);
+                else if (currentGroup?.type === "asset") setShowPurchaseModal(true);
+                else setMode("adjust");
+              }}
+            >
+              +
+            </button>
+            {currentGroup?.type === 'asset' && (
               <button
-                className="quickBtn transfer"
+                className="actionBtnLarge btnYellow"
                 onClick={() => {
                   const info = getAssetInfo(account, accountTxns, currentGroup)
                   setValuationPrice(info.unitPrice || "")
                   setShowValuationModal(true)
                 }}
-                title="Revaluate"
-                type="button"
               >
                 ≈
               </button>
+            )}
+            {(currentGroup?.type === 'asset' || currentGroup?.type !== 'asset') && (
               <button
-                className="quickBtn danger"
+                className={`actionBtnLarge ${currentGroup?.type === 'asset' ? 'btnRed' : 'btnYellow'}`}
                 onClick={() => {
-                  const info = getAvailableUnits(account.id);
-                  setSaleUnit(info.unit);
-                  const target = accounts.find((a) => a.id !== account.id);
-                  setSaleToAccountId(target?.id || "");
-                  setSaleToSubId("");
-                  setShowSaleModal(true);
+                  if (currentGroup?.type === 'asset') {
+                    const info = getAvailableUnits(account.id);
+                    setSaleUnit(info.unit);
+                    const target = accounts.find((a) => a.id !== account.id);
+                    setSaleToAccountId(target?.id || "");
+                    setSaleToSubId("");
+                    setShowSaleModal(true);
+                  } else {
+                    setMode("transfer")
+                  }
                 }}
-                title="Sell asset"
-                type="button"
               >
-                −
+                {currentGroup?.type === 'asset' ? '−' : '⇄'}
               </button>
-            </>
-          )}
-          {currentGroup?.type !== "asset" && (
-            <button
-              className={`quickBtn transfer ${mode === "transfer" ? "active" : ""}`}
-              onClick={() => setMode("transfer")}
-              title="Transfer"
-              type="button"
-            >
-              ⇄
-            </button>
-          )}
+            )}
+          </div>
+
+          {/* Metrics Grid */}
+          {currentGroup?.type === 'asset' && (() => {
+            const info = computeAssetSummary()
+            const pl = info.marketValue - info.costBasis
+            const plPercent = info.costBasis > 0 ? (pl / info.costBasis) * 100 : 0
+            return (
+              <>
+                <div className="metricGrid">
+                  <div className="metricBox">
+                    <div className="metricLabel">Market Value</div>
+                    <div className="metricValue">{fmtTZS(info.marketValue)}</div>
+                    <div className="metricSub">Current Value</div>
+                  </div>
+                  <div className="metricBox">
+                    <div className="metricLabel">Book Value</div>
+                    <div className="metricValue">{fmtTZS(info.costBasis)}</div>
+                    <div className="metricSub">(Invested)</div>
+                  </div>
+                </div>
+
+                <div className={`gainPill ${pl < 0 ? 'loss' : ''}`}>
+                  Unrealized Gain: {pl > 0 ? '+' : ''}{fmtTZS(pl)} ({pl > 0 ? '+' : ''}{plPercent.toFixed(1)}%)
+                </div>
+              </>
+            )
+          })()}
+
+          {currentGroup?.type === 'credit' && (() => {
+            const summary = computeCreditSummary()
+            return (
+              <div className="metricGrid">
+                <div className="metricBox">
+                  <div className="metricLabel">Principal</div>
+                  <div className="metricValue">{fmtTZS(summary.principal)}</div>
+                </div>
+                <div className="metricBox">
+                  <div className="metricLabel">Accrued Interest</div>
+                  <div className="metricValue">{fmtTZS(summary.accrued)}</div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
-      {currentGroup?.type === "credit" && (() => {
-        const summary = computeCreditSummary();
-        return (
-          <div className="accHistory">
-            <div className="accHistoryTitle">Credit Summary</div>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <div className="small">Principal Received</div>
-              <div style={{ fontWeight: 700 }}>{fmtTZS(summary.principal)}</div>
+      <div className="activitySection">
+        <div className="activityListHeader">Recent activity</div>
+        {(() => {
+          const relevantTxns = accountTxns
+            .filter(t => t.accountId === account.id)
+            .sort((a, b) => (a.date < b.date ? 1 : -1))
+            .slice(0, 10);
+
+          if (!relevantTxns.length) {
+            return <div style={{ padding: '0 20px', fontSize: '0.9rem', color: '#666', fontStyle: 'italic', marginBottom: 20 }}>No recent activity.</div>
+          }
+
+          return relevantTxns.map(t => (
+            <div className="activityCard" key={t.id}>
+              <div className="actIcon">
+                {t.kind === 'purchase' ? 'P' : t.kind === 'sale' ? 'S' : t.kind === 'valuation' ? 'M' : t.direction === 'in' ? 'IN' : 'OUT'}
+              </div>
+              <div className="actDetails">
+                <div className="actTop">
+                  <div className="actTitle">
+                    {t.note || (t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : 'Transaction')}
+                    {t.kind === 'purchase' && t.quantity && ` ${t.quantity} Units @ ${t.unitPrice}`}
+                  </div>
+                  <div className={`actAmount ${t.direction}`}>
+                    {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
+                  </div>
+                </div>
+                <div className="actMeta">
+                  {formatDay(t.date || t.receiveDate)} • {t.kind || 'Transfer'}
+                </div>
+              </div>
             </div>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <div className="small">Accrued Interest</div>
-              <div style={{ fontWeight: 700 }}>{fmtTZS(summary.accrued)}</div>
-            </div>
-          </div>
-        );
-      })()}
+          ));
+        })()}
+      </div>
 
       <div className="accHistory">
         <div className="accHistoryTitle">Sub-accounts</div>

@@ -213,6 +213,7 @@ export default function Accounts({
     let assets = 0;
     let liabilities = 0;
     let capitalDeployed = 0;
+    let invested = 0;
 
     for (const a of visibleAccounts) {
       const g = groupById.get(a.groupId);
@@ -226,65 +227,74 @@ export default function Accounts({
         assets += val;
         const info = getAssetInfo(a, accountTxns, g);
         capitalDeployed += (info.costBasis || 0);
+        invested += (info.costBasis || 0);
       } else {
         // Debit
         assets += val;
         capitalDeployed += val;
+        invested += val;
       }
     }
-
-    // --- Capital Coverage Metrics ---
-    // 1. Monthly Return (Avg last 3 months)
-    const now = new Date();
-    let totalProfit3m = 0;
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(now.getMonth() - 3);
-    const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
-
-    // Filter txns for income/expense in last 3 months
-    // Note: txns prop passed from App.jsx contains all ledger txns
-    const recentTxns = txns.filter(t => t.date >= iso3m);
-    let income3m = 0;
-    let expense3m = 0;
-    for (const t of recentTxns) {
-      const amt = Number(t.amount || 0);
-      if (t.type === 'income') income3m += amt;
-      else if (t.type === 'expense') expense3m += amt;
-    }
-    const avgMonthlyProfit = (income3m - expense3m) / 3;
-    const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
-
-    // 2. Cost of Capital (Weighted Avg Monthly Interest)
-    let totalDebt = 0;
-    let totalWeightedRate = 0;
-    for (const a of visibleAccounts) {
-      const g = groupById.get(a.groupId);
-      if (g?.type === 'credit') {
-        const bal = getAccountBalance(a); // This includes accrued
-        // We need the rate. It's on the account object, usually 'creditRate' (annual %)
-        // If not present, assume 0.
-        const rate = Number(a.creditRate || 0);
-        if (bal > 0) {
-          totalDebt += bal;
-          totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
-        }
-      }
-    }
-    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
-
-    // 3. Coverage
-    const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
 
     return {
       assets,
       liabilities,
       netWorth: assets - liabilities,
       capitalDeployed,
-      monthlyReturn,
-      costOfCapital,
-      coverage
-    };
-  }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
+      invested, // Total Invested Capital (Cash + Asset Cost Basis)
+
+      // --- Capital Coverage Metrics ---
+      // 1. Monthly Return (Avg last 3 months)
+      const now = new Date();
+      let totalProfit3m = 0;
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(now.getMonth() - 3);
+      const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
+
+      // Filter txns for income/expense in last 3 months
+      // Note: txns prop passed from App.jsx contains all ledger txns
+      const recentTxns = txns.filter(t => t.date >= iso3m);
+      let income3m = 0;
+      let expense3m = 0;
+      for(const t of recentTxns) {
+        const amt = Number(t.amount || 0);
+        if (t.type === 'income') income3m += amt;
+        else if (t.type === 'expense') expense3m += amt;
+      }
+    const avgMonthlyProfit = (income3m - expense3m) / 3;
+      const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
+
+      // 2. Cost of Capital (Weighted Avg Monthly Interest)
+      let totalDebt = 0;
+      let totalWeightedRate = 0;
+      for(const a of visibleAccounts) {
+        const g = groupById.get(a.groupId);
+        if (g?.type === 'credit') {
+          const bal = getAccountBalance(a); // This includes accrued
+          // We need the rate. It's on the account object, usually 'creditRate' (annual %)
+          // If not present, assume 0.
+          const rate = Number(a.creditRate || 0);
+          if (bal > 0) {
+            totalDebt += bal;
+            totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
+          }
+        }
+      }
+    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
+
+      // 3. Coverage
+      const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
+
+      return {
+        assets,
+        liabilities,
+        netWorth: assets - liabilities,
+        capitalDeployed,
+        monthlyReturn,
+        costOfCapital,
+        coverage
+      };
+    }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
   const shownGroups = useMemo(() => {
@@ -627,28 +637,33 @@ export default function Accounts({
                   const groupAccounts = visibleAccounts.filter(a => a.groupId === g.id);
                   if (groupAccounts.length === 0) return null;
 
-                  const totalValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
-                  const allocation = totals.assets > 0 ? (totalValue / totals.assets) * 100 : 0;
-
-                  let totalCost = 0;
+                  let displayValue = 0;
                   if (g.type === 'asset') {
-                    totalCost = groupAccounts.reduce((sum, a) => {
+                    // For Capital Allocation, user wants Book Value (Cost Basis)
+                    displayValue = groupAccounts.reduce((sum, a) => {
                       const info = getAssetInfo(a, accountTxns, g);
                       return sum + (info.costBasis || 0);
                     }, 0);
                   } else {
-                    totalCost = totalValue;
+                    // For Debit (Cash), value is the balance
+                    displayValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
                   }
 
-                  const profit = totalValue - totalCost;
-                  const perf = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+                  // Denominator is Total Invested Capital (Cash + Asset Cost Basis)
+                  const allocation = totals.invested > 0 ? (displayValue / totals.invested) * 100 : 0;
+
+                  // Performance is still Market Value vs Cost Basis
+                  const currentMarketValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
+                  const costBasis = (g.type === 'asset') ? displayValue : currentMarketValue;
+                  const profit = currentMarketValue - costBasis;
+                  const perf = costBasis > 0 ? (profit / costBasis) * 100 : 0;
 
                   return (
                     <div className="allocationRow" key={g.id}>
                       <div className="allocLeft">
                         <div className="allocName">{g.name}</div>
                         <div className="allocPerf" style={{ color: perf >= 0 ? '#16A34A' : '#DC2626' }}>
-                          {g.type === 'asset' && totalCost > 0 ? (
+                          {g.type === 'asset' && costBasis > 0 ? (
                             <>{perf > 0 ? '+' : ''}{perf.toFixed(1)}%</>
                           ) : (
                             <span style={{ color: '#9ca3af' }}>-</span>
@@ -656,8 +671,8 @@ export default function Accounts({
                         </div>
                       </div>
                       <div className="allocRight">
-                        <div className="allocValue">{fmtTZS(totalValue)}</div>
-                        <div className="allocSub">{allocation.toFixed(1)}% of Assets</div>
+                        <div className="allocValue">{fmtTZS(displayValue)}</div>
+                        <div className="allocSub">{allocation.toFixed(1)}% of Invested</div>
                       </div>
                     </div>
                   );

@@ -2375,9 +2375,6 @@ label {
   /* Main Container acts as the Dark Background Card */
   background: linear-gradient(135deg, #2e1a47 0%, #4a2b72 100%);
   color: white;
-  border-radius: 24px;
-  padding: 24px 20px 20px;
-  margin: 0 16px 24px;
   box-shadow: 0 10px 30px rgba(46, 26, 71, 0.3);
   position: relative;
   overflow: hidden;
@@ -2826,8 +2823,8 @@ label {
 
 .assetInfo h4 {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: #111;
 }
 
@@ -2907,9 +2904,9 @@ label {
 }
 
 .stdName {
-  font-weight: 600;
+  font-weight: 500;
   color: #374151;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .stdRight {

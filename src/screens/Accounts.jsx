@@ -200,6 +200,10 @@ export default function Accounts({
     }
 
     // Default fallback (cash balance)
+    // If we have sub-accounts, we trust the base sum (which filters subs by ledger)
+    if (subs.length > 0) return base;
+
+    // Otherwise, check if the parent account belongs to the active ledger
     if (activeLedgerId !== "all" && account.ledgerId !== activeLedgerId) return 0;
     return base;
   }

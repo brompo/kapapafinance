@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fmtTZS } from "../money.js";
+import { fmtTZS, fmtCompact } from "../money.js";
 
 function daysBetween(a, b) {
   const start = new Date(a);
@@ -477,6 +477,7 @@ export default function Accounts({
           </div>
 
 
+          {/* Top Metrics Cards */}
           {/* Top Metrics Cards */}
           <div className="topMetricsRow">
             <div className="topMetricCard">

@@ -26,3 +26,14 @@ export function todayISO() {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+
+export function fmtCompact(amount) {
+  const n = Number(amount || 0);
+  if (Math.abs(n) >= 1_000_000_000) {
+    return (n / 1_000_000_000).toFixed(1) + 'B';
+  }
+  if (Math.abs(n) >= 1_000_000) {
+    return (n / 1_000_000).toFixed(1) + 'M';
+  }
+  return fmtTZS(amount);
+}

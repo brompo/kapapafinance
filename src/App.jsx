@@ -11,7 +11,7 @@ import {
   resetAll
 } from './cryptoVault.js'
 
-import { fmtTZS, monthKey, todayISO, calculateAssetMetrics } from './money.js'
+import { fmtTZS, fmtCompact, monthKey, todayISO, calculateAssetMetrics } from './money.js'
 
 import AccountsScreen from './screens/Accounts.jsx'
 import BottomNav from './components/BottomNav.jsx'
@@ -2747,6 +2747,22 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
+                  {(() => {
+                    const totals = monthlyStats.reduce((acc, m) => ({
+                      inc: acc.inc + m.inc,
+                      exp: acc.exp + m.exp,
+                      bal: acc.bal + m.bal
+                    }), { inc: 0, exp: 0, bal: 0 })
+
+                    return (
+                      <tr style={{ fontWeight: 800, backgroundColor: 'var(--bg-2)', borderBottom: '2px solid var(--border)' }}>
+                        <td style={{ padding: '12px 8px' }}>TOTAL</td>
+                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--income)' }}>{fmtCompact(totals.inc)}</td>
+                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(totals.exp)}</td>
+                        <td style={{ textAlign: 'right', padding: '12px 8px' }}>{fmtCompact(totals.bal)}</td>
+                      </tr>
+                    )
+                  })()}
                   {monthlyStats.map(m => (
                     <tr key={m.key}>
                       <td style={{ padding: '10px 8px', fontWeight: 600, color: '#555' }}>

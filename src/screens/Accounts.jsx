@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fmtTZS, fmtCompact } from "../money.js";
+import { fmtTZS, fmtCompact, calculateAssetMetrics } from "../money.js";
 
 function daysBetween(a, b) {
   const start = new Date(a);
@@ -17,68 +17,7 @@ function monthsBetween(a, b) {
   return Math.max(0, months);
 }
 
-function getAssetInfo(account, accountTxns, group) {
-  if (group?.type !== "asset") return { hasData: false };
 
-  const txns = accountTxns.filter((t) => t.accountId === account.id);
-  const purchases = txns.filter((t) => t.kind === "purchase");
-  const sales = txns.filter((t) => t.kind === "sale");
-  const valuations = txns
-    .filter((t) => t.kind === "valuation")
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  // Calculate Weighted Average Cost
-  const sortedTxns = txns.sort((a, b) => (a.date > b.date ? 1 : -1));
-  let runningQty = 0;
-  let runningCost = 0;
-  let realizedGain = 0;
-
-  for (const t of sortedTxns) {
-    if (t.kind === "purchase") {
-      const q = Number(t.quantity || 0);
-      const cost = Number(t.amount || 0); // Amount matches total + fee
-      runningQty += q;
-      runningCost += cost;
-    } else if (t.kind === "sale") {
-      const q = Number(t.quantity || 0);
-      const proceeds = Number(t.amount || 0);
-      if (runningQty > 0) {
-        const avg = runningCost / runningQty;
-        const costOfSold = avg * q;
-        runningCost -= costOfSold;
-        runningQty -= q;
-        realizedGain += (proceeds - costOfSold);
-      }
-    }
-  }
-
-  const avgPrice = runningQty > 0 ? runningCost / runningQty : 0;
-  const qty = runningQty;
-
-  const latestVal = valuations.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
-  const latestPurchase = purchases.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
-  const latestSale = sales.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
-
-  const unit = latestVal?.unit || latestSale?.unit || latestPurchase?.unit || "";
-  const unitPrice = Number(
-    latestVal?.unitPrice ||
-    latestSale?.unitPrice ||
-    avgPrice ||
-    0
-  );
-
-  return {
-    hasData: true,
-    qty: Math.max(qty, 0),
-    unit,
-    unitPrice,
-    avgPrice: Math.max(0, avgPrice),
-    costBasis: Math.max(0, runningCost), // Accounting Value
-    marketValue: unitPrice * Math.max(qty, 0), // Market Value
-    value: unitPrice * Math.max(qty, 0), // Backward compat
-    realizedGain
-  };
-}
 
 export default function Accounts({
   accounts,
@@ -102,6 +41,7 @@ export default function Accounts({
   onUpdateAccounts,
   settings = {},
   onUpdateSettings,
+  categories = {}, // { income: [], expense: [] }
   txns = [] // Ledger transactions for return calc
 }) {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
@@ -195,7 +135,7 @@ export default function Accounts({
       // If getAssetInfo sums up unit * price, it iterates subs.
       // I should check getAssetInfo.
 
-      const info = getAssetInfo(account, accountTxns, groupById.get(account.groupId));
+      const info = calculateAssetMetrics(account, accountTxns, groupType);
       if (info.hasData && info.unitPrice > 0) return info.value;
     }
 
@@ -225,7 +165,7 @@ export default function Accounts({
         capitalDeployed -= val;
       } else if (type === "asset") {
         assets += val;
-        const info = getAssetInfo(a, accountTxns, g);
+        const info = calculateAssetMetrics(a, accountTxns, g.type);
         capitalDeployed += (info.costBasis || 0);
         invested += (info.costBasis || 0);
       } else {
@@ -458,6 +398,7 @@ export default function Accounts({
         accountTxns={accountTxns}
         activeLedgerId={activeLedgerId}
         ledgers={ledgers}
+        categories={categories}
         onSwitchLedger={onSwitchLedger}
         onClose={() => setSelectedId(null)}
         getAccountBalance={getAccountBalance}
@@ -664,7 +605,7 @@ export default function Accounts({
                   if (g.type === 'asset') {
                     // For Capital Allocation, user wants Book Value (Cost Basis)
                     displayValue = groupAccounts.reduce((sum, a) => {
-                      const info = getAssetInfo(a, accountTxns, g);
+                      const info = calculateAssetMetrics(a, accountTxns, g.type);
                       return sum + (info.costBasis || 0);
                     }, 0);
                   } else {
@@ -790,10 +731,10 @@ export default function Accounts({
             draggingAccountId={draggingAccountId}
             dragOverAccountId={dragOverAccountId}
             getAccountBalance={getAccountBalance}
-            getAssetInfo={getAssetInfo}
             expandedAccounts={expandedAccounts}
             onToggleAccountExpand={toggleAccountExpand}
             activeLedgerId={activeLedgerId}
+            categories={categories}
           />
         );
       })}
@@ -824,7 +765,6 @@ function Section({
   draggingAccountId,
   dragOverAccountId,
   getAccountBalance,
-  getAssetInfo,
   expandedAccounts,
   onToggleAccountExpand,
   activeLedgerId,
@@ -901,7 +841,7 @@ function Section({
                           <h4>{a.name}</h4>
                           <div style={{ fontSize: '0.75rem', color: '#666' }}>
                             {(() => {
-                              const info = getAssetInfo(a, accountTxns, group)
+                              const info = calculateAssetMetrics(a, accountTxns, group.type)
                               return info.hasData ? `${info.qty} Units` : '0 Units'
                             })()}
                           </div>
@@ -912,7 +852,7 @@ function Section({
                           {fmtTZS(bal)}
                         </div>
                         <div style={{ fontSize: '0.65rem', color: '#666', marginTop: 2 }}>
-                          Invested: {fmtTZS(getAssetInfo(a, accountTxns, group).costBasis)}
+                          Invested: {fmtTZS(calculateAssetMetrics(a, accountTxns, group.type).costBasis)}
                         </div>
                       </div>
                     </div>
@@ -1000,6 +940,7 @@ function AccountDetail({
   account,
   accounts,
   groups,
+  categories,
   accountTxns,
   activeLedgerId,
   ledgers,
@@ -1058,6 +999,7 @@ function AccountDetail({
   const [saleToAccountId, setSaleToAccountId] = useState("");
   const [saleToSubId, setSaleToSubId] = useState("");
   const [saleNote, setSaleNote] = useState("");
+  const [saleCategory, setSaleCategory] = useState("");
   const [creditToAccountId, setCreditToAccountId] = useState("");
   const [creditToSubId, setCreditToSubId] = useState("");
   const [error, setError] = useState("");
@@ -1265,8 +1207,13 @@ function AccountDetail({
       setError("Select where the money is going.");
       return;
     }
+    if (!saleCategory) {
+      setError("Select an Income Category.");
+      return;
+    }
     setError("");
     const unitPrice = total / qty;
+    const linkId = `sale-${Date.now()}`;
     const batch = [
       {
         accountId: account.id,
@@ -1277,7 +1224,9 @@ function AccountDetail({
         receiveDate: saleDate,
         unit: available.unit,
         quantity: qty,
-        unitPrice
+        unitPrice,
+        category: saleCategory,
+        linkId
       },
       {
         accountId: account.id,
@@ -1288,7 +1237,8 @@ function AccountDetail({
         receiveDate: saleDate,
         unit: available.unit,
         quantity: qty,
-        unitPrice
+        unitPrice,
+        linkId
       },
       {
         accountId: saleToAccountId,
@@ -1297,7 +1247,8 @@ function AccountDetail({
         direction: "in",
         note: saleNote ? `${saleNote} • from ${account.name}` : `Asset sale from ${account.name}`,
         kind: "adjust",
-        receiveDate: saleDate
+        receiveDate: saleDate,
+        linkId
       }
     ];
     await onAddAccountTxn(batch);
@@ -1307,6 +1258,7 @@ function AccountDetail({
     setSaleToAccountId("");
     setSaleToSubId("");
     setSaleNote("");
+    setSaleCategory("");
     setShowSaleModal(false);
   }
 
@@ -1475,7 +1427,7 @@ function AccountDetail({
   }
 
   function computeAssetSummary() {
-    const info = getAssetInfo(account, accountTxns, currentGroup);
+    const info = calculateAssetMetrics(account, accountTxns, currentGroup?.type);
     if (!info.hasData) return { qty: 0, unit: "", unitPrice: 0, currentValue: 0 };
     return {
       qty: info.qty,
@@ -1656,8 +1608,8 @@ function AccountDetail({
           <div className="accDetailTitle">
             <h2>{account.name}</h2>
             <span>
-              {getAssetInfo(account, accountTxns, currentGroup).hasData
-                ? `${getAssetInfo(account, accountTxns, currentGroup).qty} ${getAssetInfo(account, accountTxns, currentGroup).unit || currentGroup?.name}`
+              {calculateAssetMetrics(account, accountTxns, currentGroup?.type).hasData
+                ? `${calculateAssetMetrics(account, accountTxns, currentGroup?.type).qty} ${calculateAssetMetrics(account, accountTxns, currentGroup?.type).unit || currentGroup?.name}`
                 : currentGroup?.name}
             </span>
           </div>
@@ -1684,7 +1636,7 @@ function AccountDetail({
               <button
                 className="actionBtnLarge btnYellow"
                 onClick={() => {
-                  const info = getAssetInfo(account, accountTxns, currentGroup)
+                  const info = calculateAssetMetrics(account, accountTxns, currentGroup?.type)
                   setValuationPrice(info.unitPrice || "")
                   setShowValuationModal(true)
                 }}
@@ -2192,6 +2144,18 @@ function AccountDetail({
                     onChange={(e) => setSaleNote(e.target.value)}
                     placeholder="e.g. Market sale"
                   />
+                </div>
+                <div className="field">
+                  <label>Income Category for Gain</label>
+                  <select
+                    value={saleCategory}
+                    onChange={(e) => setSaleCategory(e.target.value)}
+                  >
+                    <option value="">Select Category</option>
+                    {categories?.income?.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
                 {error && <div className="formError">{error}</div>}
                 <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>

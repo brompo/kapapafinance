@@ -37,3 +37,87 @@ export function fmtCompact(amount) {
   }
   return fmtTZS(amount);
 }
+
+/**
+ * Calculates asset metrics including Cost Basis, Market Value, and Realized Gains.
+ * Uses Weighted Average Cost (WAC) method.
+ *
+ * @param {Object} account - The account object
+ * @param {Array} accountTxns - All account transactions (will be filtered for this account)
+ * @param {Object} group - The group object (to check if type is 'asset')
+ * @returns {Object} { hasData, qty, unitPrice, costBasis, marketValue, value, realizedGain, realizedGains: [] }
+ */
+export function calculateAssetMetrics(account, accountTxns, groupType) {
+  if (groupType !== "asset") return { hasData: false };
+
+  const txns = accountTxns.filter((t) => t.accountId === account.id);
+  const purchases = txns.filter((t) => t.kind === "purchase");
+  const sales = txns.filter((t) => t.kind === "sale");
+  const valuations = txns
+    .filter((t) => t.kind === "valuation")
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  // Calculate Weighted Average Cost
+  const sortedTxns = txns.sort((a, b) => (a.date > b.date ? 1 : -1));
+  let runningQty = 0;
+  let runningCost = 0;
+  let totalRealizedGain = 0;
+  const realizedGains = []; // { date, amount }
+
+  for (const t of sortedTxns) {
+    if (t.kind === "purchase") {
+      const q = Number(t.quantity || 0);
+      const cost = Number(t.amount || 0); // Amount matches total + fee
+      runningQty += q;
+      runningCost += cost;
+    } else if (t.kind === "sale") {
+      const q = Number(t.quantity || 0);
+      const proceeds = Number(t.amount || 0);
+      if (runningQty > 0) {
+        const avg = runningCost / runningQty;
+        // WAC logic
+        const costOfSold = avg * q;
+        runningCost -= costOfSold;
+        runningQty -= q;
+
+        const gain = proceeds - costOfSold;
+        totalRealizedGain += gain;
+        realizedGains.push({
+          date: t.date,
+          amount: gain,
+          accountId: account.id,
+          symbol: account.name,
+          category: t.category || 'Capital Gains'
+        });
+      }
+    }
+  }
+
+  const avgPrice = runningQty > 0 ? runningCost / runningQty : 0;
+  const qty = runningQty;
+
+  const latestVal = valuations.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
+  const latestPurchase = purchases.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
+  const latestSale = sales.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
+
+  const unit = latestVal?.unit || latestSale?.unit || latestPurchase?.unit || "";
+  const unitPrice = Number(
+    latestVal?.unitPrice ||
+    latestSale?.unitPrice ||
+    avgPrice ||
+    0
+  );
+
+  return {
+    hasData: true,
+    qty: Math.max(qty, 0),
+    unit,
+    unitPrice,
+    avgPrice: Math.max(0, avgPrice),
+    costBasis: Math.max(0, runningCost), // Accounting Value
+    marketValue: unitPrice * Math.max(qty, 0), // Market Value
+    value: unitPrice * Math.max(qty, 0), // Backward compat
+    realizedGain: totalRealizedGain,
+    realizedGains // Array of { date, amount }
+  };
+}

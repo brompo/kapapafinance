@@ -10,7 +10,8 @@ import {
   importEncryptedBackup,
   resetAll
 } from './cryptoVault.js'
-import { fmtTZS, monthKey, todayISO } from './money.js'
+
+import { fmtTZS, monthKey, todayISO, calculateAssetMetrics } from './money.js'
 
 import AccountsScreen from './screens/Accounts.jsx'
 import BottomNav from './components/BottomNav.jsx'
@@ -870,8 +871,27 @@ export default function App() {
       if (t.type === 'income') inc += amt
       else exp += amt
     }
+
+    // Add Realized Gains from Asset Sales
+    const assets = accounts.filter(a => {
+      const g = activeLedger.groups.find(g => g.id === a.groupId);
+      return g && g.type === 'asset';
+    });
+
+    let totalGains = 0;
+    for (const acc of assets) {
+      // We need all txns for this account to calculate WAC
+      // But we only sum gains that happened in *this month*
+      const info = calculateAssetMetrics(acc, accountTxns, 'asset');
+      const monthsGains = info.realizedGains.filter(g => monthKey(g.date) === month);
+      for (const g of monthsGains) {
+        totalGains += g.amount;
+      }
+    }
+    inc += totalGains;
+
     return { inc, exp, bal: inc - exp }
-  }, [filteredTxns])
+  }, [filteredTxns, accounts, activeLedger.groups, accountTxns, month])
 
   const cloudLastBackup = cloudGoogle.lastBackupAt ? new Date(cloudGoogle.lastBackupAt) : null
   const cloudWarnDays = cloudBackup.warnDays || CLOUD_BACKUP_WARN_DAYS_DEFAULT
@@ -1285,7 +1305,9 @@ export default function App() {
         unit = null,
         quantity = null,
         unitPrice = null,
-        fee = null
+        fee = null,
+        category = null,
+        linkId = null
       } = txnData
 
       const acct = nextAccounts.find(a => a.id === accountId)
@@ -1322,7 +1344,9 @@ export default function App() {
         unit,
         quantity,
         unitPrice,
-        fee
+        fee,
+        category,
+        linkId
       }
       newEntries.push(entry)
 
@@ -1371,7 +1395,13 @@ export default function App() {
     const entry = allAccountTxns.find(t => t.id === entryId)
     if (!entry) return
     let targets = [entry]
-    if (entry.kind === 'transfer') {
+
+    // Cascade delete linked transactions (e.g. Asset Sale + Deposit)
+    if (entry.linkId) {
+      targets = allAccountTxns.filter(t => t.linkId === entry.linkId)
+    }
+    // Legacy transfer handling (kept for backward compatibility if needed, though linkId is better)
+    else if (entry.kind === 'transfer') {
       const baseId = entry.id.replace(/-(in|out)$/, '')
       targets = allAccountTxns.filter(t => t.kind === 'transfer' && t.id.startsWith(baseId))
     }
@@ -1648,8 +1678,25 @@ export default function App() {
         const key = t.category || 'Other'
         map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
       }
+
+      // Add Capital Gains
+      // Add Capital Gains
+      const assets = accounts.filter(a => {
+        const g = activeLedger.groups.find(g => g.id === a.groupId);
+        return g && g.type === 'asset';
+      });
+      let totalGains = 0;
+      for (const acc of assets) {
+        const info = calculateAssetMetrics(acc, accountTxns, 'asset');
+        const monthsGains = info.realizedGains.filter(g => monthKey(g.date) === month);
+        for (const g of monthsGains) {
+          const cat = g.category || 'Capital Gains';
+          map.set(cat, (map.get(cat) || 0) + g.amount);
+        }
+      }
+
       return map
-    }, [filteredTxns, incomeCats])
+    }, [filteredTxns, incomeCats, accounts, activeLedger.groups, accountTxns, month])
 
     useEffect(() => {
       try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch { }
@@ -2026,11 +2073,43 @@ export default function App() {
     const over = budget > 0 ? Math.max(spent - budget, 0) : 0
 
     const recentTxns = useMemo(() => {
-      return filteredTxns
+      // 1. Regular transactions
+      const regular = filteredTxns
         .filter(t => t.category === category.name)
-        .sort((a, b) => (a.date < b.date ? 1 : -1))
-        .slice(0, 20)
-    }, [filteredTxns, category.name])
+        .map(t => ({ ...t, _sortDate: t.date, _isGain: false }))
+
+      // 2. Realized Gains (if Income)
+      let gains = []
+      if (category.type === 'income') {
+        const assets = accounts.filter(a => {
+          const g = activeLedger.groups.find(g => g.id === a.groupId);
+          return g && g.type === 'asset';
+        });
+
+        for (const acc of assets) {
+          const info = calculateAssetMetrics(acc, accountTxns, 'asset');
+          const catGains = info.realizedGains.filter(g => {
+            const cat = g.category || 'Capital Gains';
+            return cat === category.name;
+          });
+
+          gains = gains.concat(catGains.map(g => ({
+            id: `gain-${g.date}-${g.symbol}`, // pseudo ID
+            date: g.date,
+            amount: g.amount,
+            category: category.name,
+            type: 'income',
+            note: `Gain from ${g.symbol}`,
+            _sortDate: g.date,
+            _isGain: true
+          })));
+        }
+      }
+
+      return [...regular, ...gains]
+        .sort((a, b) => (a._sortDate < b._sortDate ? 1 : -1))
+        .slice(0, 50)
+    }, [filteredTxns, category.name, accounts, activeLedger.groups, accountTxns])
 
     const groupedRecent = useMemo(() => {
       const map = new Map()
@@ -2466,6 +2545,27 @@ export default function App() {
         else if (t.type === 'expense') entry.exp += amt
       })
 
+      // Add Realized Gains
+      const assets = accounts.filter(a => {
+        const g = activeLedger.groups.find(g => g.id === a.groupId);
+        return g && g.type === 'asset';
+      });
+
+      for (const acc of assets) {
+        // We need all txns for this account to calculate WAC
+        const info = calculateAssetMetrics(acc, accountTxns, 'asset');
+        for (const g of info.realizedGains) {
+          const date = g.date || todayISO();
+          const y = Number(date.slice(0, 4));
+          if (y !== statYear) continue;
+
+          const key = date.slice(0, 7);
+          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0 });
+          const entry = stats.get(key);
+          entry.inc += g.amount;
+        }
+      }
+
       // Fill in all months for the year
       const result = []
       for (let m = 1; m <= 12; m++) {
@@ -2482,7 +2582,7 @@ export default function App() {
         })
       }
       return result.reverse() // Dec to Jan
-    }, [statYear, txns])
+    }, [statYear, txns, accounts, activeLedger.groups, accountTxns])
 
     if (selectedTxn) {
       return (
@@ -3239,6 +3339,7 @@ export default function App() {
             accountTxns={allAccountTxns}
             txns={activeLedger.txns || []}
             groups={activeLedger.groups || []}
+            categories={activeLedger.categories}
             activeLedgerId={activeLedger.id}
             ledgers={ledgers}
             focusAccountId={focusAccountId}

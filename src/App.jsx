@@ -2743,8 +2743,12 @@ export default function App() {
         const entry = stats.get(key)
 
         const amt = Number(t.amount || 0)
-        if (t.type === 'income') entry.inc += amt
-        else if (t.type === 'expense') entry.exp += amt
+        if (t.type === 'income') {
+          if (!t.reimbursementOf) entry.inc += amt
+        } else if (t.type === 'expense') {
+          const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+          entry.exp += amt - reimbursed
+        }
       })
 
       // Add Realized Gains

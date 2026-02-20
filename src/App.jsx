@@ -868,8 +868,12 @@ export default function App() {
     let inc = 0, exp = 0
     for (const t of filteredTxns) {
       const amt = Number(t.amount || 0)
-      if (t.type === 'income') inc += amt
-      else exp += amt
+      if (t.type === 'income') {
+        if (!t.reimbursementOf) inc += amt
+      } else {
+        const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+        exp += amt - reimbursed
+      }
     }
 
     // Add Realized Gains from Asset Sales
@@ -1154,6 +1158,71 @@ export default function App() {
       nextAccountTxns
     })
     show('Saved.')
+  }
+
+  async function addReimbursement({ originalTxnId, amount, accountId, subAccountId, date }) {
+    const amt = Number(amount || 0)
+    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    if (!accountId) return show('Select an account to receive the reimbursement.')
+
+    const originalTxn = txns.find(t => t.id === originalTxnId)
+    if (!originalTxn) return show('Original transaction not found.')
+
+    const alreadyReimbursed = (originalTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+    const remaining = Number(originalTxn.amount || 0) - alreadyReimbursed
+    if (amt > remaining) return show(`Cannot reimburse more than the remaining ${fmtTZS(remaining)}.`)
+
+    const reimbTxn = {
+      id: uid(),
+      type: 'income',
+      amount: amt,
+      category: 'Reimbursement',
+      note: `Reimbursement for: ${originalTxn.note || originalTxn.category || 'Expense'}`,
+      date: date || todayISO(),
+      accountId: accountId || '',
+      subAccountId: subAccountId || '',
+      reimbursementOf: originalTxnId
+    }
+
+    const updatedOriginal = {
+      ...originalTxn,
+      reimbursedBy: [...(originalTxn.reimbursedBy || []), { txnId: reimbTxn.id, amount: amt }]
+    }
+
+    const nextTxns = txns.map(t => t.id === originalTxnId ? updatedOriginal : t)
+    nextTxns.unshift(reimbTxn)
+
+    let nextAccounts = allAccounts
+    let nextAccountTxns = allAccountTxns
+    if (accountId) {
+      const acct = allAccounts.find(a => a.id === accountId)
+      if (acct) {
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const targetSubId = subs.length
+          ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+          : null
+        nextAccounts = applyAccountDelta(nextAccounts, accountId, targetSubId, amt)
+        const entry = {
+          id: `txn-${reimbTxn.id}`,
+          accountId,
+          subAccountId: targetSubId,
+          amount: amt,
+          direction: 'in',
+          kind: 'txn',
+          relatedAccountId: null,
+          note: reimbTxn.note,
+          date: reimbTxn.date
+        }
+        nextAccountTxns = [entry, ...allAccountTxns]
+      }
+    }
+
+    persistLedgerAndAccounts({
+      nextLedger: { ...activeLedger, txns: nextTxns },
+      nextAccounts,
+      nextAccountTxns
+    })
+    show('Reimbursement saved.')
   }
 
   function findAccountByIdOrName(idOrName) {
@@ -1665,7 +1734,8 @@ export default function App() {
       for (const t of filteredTxns) {
         if (t.type !== 'expense') continue
         const key = t.category || 'Other'
-        map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
+        const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+        map.set(key, (map.get(key) || 0) + Number(t.amount || 0) - reimbursed)
       }
       return map
     }, [filteredTxns, expenseCats])
@@ -1675,6 +1745,7 @@ export default function App() {
       for (const c of incomeCats) map.set(c, 0)
       for (const t of filteredTxns) {
         if (t.type !== 'income') continue
+        if (t.reimbursementOf) continue
         const key = t.category || 'Other'
         map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
       }
@@ -2028,6 +2099,26 @@ export default function App() {
     const [accountId, setAccountId] = useState('')
     const [selectedSub, setSelectedSub] = useState('')
     const [subAccountId, setSubAccountId] = useState('')
+    const [showReimburseModal, setShowReimburseModal] = useState(false)
+    const [reimburseTxn, setReimburseTxn] = useState(null)
+    const [reimburseAmount, setReimburseAmount] = useState('')
+    const [reimburseAccountId, setReimburseAccountId] = useState('')
+    const [reimburseSubAccountId, setReimburseSubAccountId] = useState('')
+    const [reimburseDate, setReimburseDate] = useState(todayISO())
+    const [reimburseError, setReimburseError] = useState(false)
+
+    const reimburseAccount = accounts.find(a => a.id === reimburseAccountId)
+    const showReimburseSubSelect = reimburseAccount && Array.isArray(reimburseAccount.subAccounts) && reimburseAccount.subAccounts.length > 0
+
+    useEffect(() => {
+      if (!reimburseAccountId) { setReimburseSubAccountId(''); return }
+      const acct = accounts.find(a => a.id === reimburseAccountId)
+      if (acct && Array.isArray(acct.subAccounts)) {
+        const match = acct.subAccounts.find(s => s.ledgerId === activeLedgerId)
+        if (match) { setReimburseSubAccountId(match.id); return }
+      }
+      setReimburseSubAccountId('')
+    }, [reimburseAccountId, activeLedgerId])
 
     // Reset subAccountId when accountId changes, defaulting to Active Ledger if possible
     useEffect(() => {
@@ -2247,6 +2338,17 @@ export default function App() {
             delTxn(selectedTxn.raw.id)
             setSelectedTxn(null)
           }}
+          onReimburse={selectedTxn.type === 'expense' ? () => {
+            const t = selectedTxn.raw
+            setSelectedTxn(null)
+            setReimburseTxn(t)
+            const alreadyReimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+            setReimburseAmount(String(Number(t.amount || 0) - alreadyReimbursed))
+            setReimburseAccountId('')
+            setReimburseSubAccountId('')
+            setReimburseDate(todayISO())
+            setShowReimburseModal(true)
+          } : null}
         />
       )
     }
@@ -2410,6 +2512,11 @@ export default function App() {
                           <div className="catHistoryInfo">
                             <div className="catHistoryTitleRow">{t.note || category.name}</div>
                             <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
+                            {category.type === 'expense' && t.reimbursedBy && t.reimbursedBy.length > 0 && (
+                              <div className="reimbursedBadge">
+                                ✓ Reimbursed {fmtTZS(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                              </div>
+                            )}
                           </div>
                           <div className={`catHistoryAmount ${category.type === 'income' ? 'pos' : 'neg'}`}>
                             {category.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
@@ -2467,6 +2574,101 @@ export default function App() {
             </div>
           )
         }
+
+        {showReimburseModal && reimburseTxn && (
+          <div className="modalBackdrop" onClick={() => setShowReimburseModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Reimburse</div>
+              <div className="reimburseOriginal">
+                <div className="reimburseOriginalLabel">Original Expense</div>
+                <div className="reimburseOriginalInfo">
+                  <span>{reimburseTxn.note || reimburseTxn.category || 'Expense'}</span>
+                  <span className="reimburseOriginalAmt">{fmtTZS(reimburseTxn.amount)}</span>
+                </div>
+                {reimburseTxn.reimbursedBy && reimburseTxn.reimbursedBy.length > 0 && (
+                  <div className="reimburseAlready">
+                    Already reimbursed: {fmtTZS(reimburseTxn.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                  </div>
+                )}
+              </div>
+              <div className="accQuickForm">
+                <div className="field">
+                  <label>Reimbursement Amount (TZS) — Max: {fmtTZS(Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0))}</label>
+                  <input
+                    inputMode="decimal"
+                    value={reimburseAmount}
+                    onChange={e => {
+                      const max = Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                      const val = Number(e.target.value || 0)
+                      if (val > max) setReimburseAmount(String(max))
+                      else setReimburseAmount(e.target.value)
+                    }}
+                    placeholder="e.g. 10000"
+                  />
+                </div>
+                <div className="field">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={reimburseDate}
+                    onChange={e => setReimburseDate(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label style={reimburseError ? { color: '#e24b4b' } : undefined}>Receive Into Account {reimburseError ? '— Required' : ''}</label>
+                  <select
+                    value={reimburseAccountId}
+                    onChange={e => { setReimburseAccountId(e.target.value); setReimburseError(false) }}
+                    style={reimburseError ? { borderColor: '#e24b4b', background: 'rgba(226,75,75,0.05)' } : undefined}
+                  >
+                    <option value="">Select account</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {showReimburseSubSelect && (
+                  <div className="field">
+                    <label>Sub-account</label>
+                    <select value={reimburseSubAccountId} onChange={e => setReimburseSubAccountId(e.target.value)}>
+                      <option value="">Select sub-account</option>
+                      {reimburseAccount.subAccounts.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="modalActions">
+                  <button className="btn" type="button" onClick={() => setShowReimburseModal(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => {
+                      if (!reimburseAccountId) {
+                        setReimburseError(true)
+                        return
+                      }
+                      addReimbursement({
+                        originalTxnId: reimburseTxn.id,
+                        amount: reimburseAmount,
+                        accountId: reimburseAccountId,
+                        subAccountId: reimburseSubAccountId,
+                        date: reimburseDate
+                      })
+                      setReimburseError(false)
+                      setShowReimburseModal(false)
+                      setReimburseTxn(null)
+                    }}
+                  >
+                    Save Reimbursement
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div >
     )
   }
@@ -2802,7 +3004,7 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose, onDelete }) {
+  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose, onDelete, onReimburse }) {
     const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
@@ -2968,6 +3170,24 @@ export default function App() {
             {txn.note}
           </div>
         ) : null}
+
+        {onReimburse && (
+          <div style={{ padding: '12px 0' }}>
+            {txn.raw?.reimbursedBy && txn.raw.reimbursedBy.length > 0 && (
+              <div className="reimbursedBadge" style={{ marginBottom: 10, fontSize: 13, padding: '6px 12px' }}>
+                ✓ Reimbursed {fmtTZS(txn.raw.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+              </div>
+            )}
+            <button
+              className="btn primary"
+              type="button"
+              style={{ width: '100%' }}
+              onClick={onReimburse}
+            >
+              Reimburse This Expense
+            </button>
+          </div>
+        )}
       </div>
     )
   }

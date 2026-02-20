@@ -1711,7 +1711,6 @@ function AccountDetail({
           {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
             <div className="list">
               {account.subAccounts
-                .filter(s => activeLedgerId === "all" || s.ledgerId === activeLedgerId)
                 .map((s) => (
                   <div className="rowItem subRow" key={s.id}>
                     <div className="rowLeft">

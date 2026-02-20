@@ -1572,7 +1572,7 @@ export default function App() {
     show('Updated.')
   }
 
-  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date }) {
+  async function transferAccount({ fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date, patchTxn }) {
     const from = allAccounts.find(a => a.id === fromId)
     const to = allAccounts.find(a => a.id === toId)
     if (!from || !to) return
@@ -1633,8 +1633,22 @@ export default function App() {
       ...base
     }
 
-    await persist({ ...vault, accounts: nextAccounts, accountTxns: [inEntry, outEntry, ...allAccountTxns] })
+    let finalAccountTxns = [inEntry, outEntry, ...allAccountTxns]
+    if (patchTxn && patchTxn.id && patchTxn.fields) {
+      finalAccountTxns = finalAccountTxns.map(t =>
+        t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t
+      )
+    }
+
+    await persist({ ...vault, accounts: nextAccounts, accountTxns: finalAccountTxns })
     show('Transfer saved.')
+  }
+
+  async function updateAccountTxnMeta(entryId, metaFields) {
+    const nextAccountTxns = allAccountTxns.map(t =>
+      t.id === entryId ? { ...t, ...metaFields } : t
+    )
+    await persist({ ...vault, accountTxns: nextAccountTxns })
   }
 
   async function updateAccountGroups(nextGroups) {
@@ -3598,6 +3612,7 @@ export default function App() {
             onAddAccountTxn={addAccountTxn}
             onTransferAccount={transferAccount}
             onUpdateAccountTxn={updateAccountTxn}
+            onUpdateAccountTxnMeta={updateAccountTxnMeta}
             onDeleteAccountTxn={deleteAccountTxn}
             onUpdateGroups={updateAccountGroups}
             onUpdateAccounts={updateAccounts}

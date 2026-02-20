@@ -36,6 +36,7 @@ export default function Accounts({
   onAddAccountTxn,
   onTransferAccount,
   onUpdateAccountTxn,
+  onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
   onUpdateGroups,
   onUpdateAccounts,
@@ -396,6 +397,7 @@ export default function Accounts({
         onUpsertAccount={onUpsertAccount}
         onDeleteAccount={onDeleteAccount}
         onUpdateAccountTxn={onUpdateAccountTxn}
+        onUpdateAccountTxnMeta={onUpdateAccountTxnMeta}
         onDeleteAccountTxn={onDeleteAccountTxn}
         onToast={onToast}
       />
@@ -945,6 +947,7 @@ function AccountDetail({
   onUpsertAccount,
   onDeleteAccount,
   onUpdateAccountTxn,
+  onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
   getAccountBalance,
 }) {
@@ -963,9 +966,19 @@ function AccountDetail({
       : ""
   );
   const [fromAccountId, setFromAccountId] = useState(account.id);
+  const [filterSubAccountId, setFilterSubAccountId] = useState(null);
+  const [showPaybackModal, setShowPaybackModal] = useState(false);
+  const [paybackTxn, setPaybackTxn] = useState(null);
+  const [paybackAmount, setPaybackAmount] = useState('');
+  const [paybackAccountId, setPaybackAccountId] = useState('');
+  const [paybackSubAccountId, setPaybackSubAccountId] = useState('');
+  const [paybackDate, setPaybackDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paybackError, setPaybackError] = useState(false);
   const [targetSubId, setTargetSubId] = useState("");
   const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [adjustDate, setAdjustDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [adjustFromAccountId, setAdjustFromAccountId] = useState('');
+  const [adjustFromSubAccountId, setAdjustFromSubAccountId] = useState('');
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [creditAmount, setCreditAmount] = useState("");
   const [creditRate, setCreditRate] = useState("");
@@ -1060,10 +1073,13 @@ function AccountDetail({
   }, [selectedTxn]);
 
   const entries = useMemo(() => {
-    return accountTxns
+    let filtered = accountTxns
       .filter((t) => t.accountId === account.id)
-      .sort((a, b) => (a.date > b.date ? -1 : (a.date < b.date ? 1 : 0)));
-  }, [accountTxns, account.id]);
+    if (filterSubAccountId) {
+      filtered = filtered.filter((t) => t.subAccountId === filterSubAccountId)
+    }
+    return filtered.sort((a, b) => (a.date > b.date ? -1 : (a.date < b.date ? 1 : 0)));
+  }, [accountTxns, account.id, filterSubAccountId]);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -1089,17 +1105,33 @@ function AccountDetail({
       return;
     }
     setError("");
-    await onAddAccountTxn({
-      accountId: account.id,
-      subAccountId: subAccountId || null,
-      amount: amt,
-      direction,
-      note,
-      receiveDate: adjustDate,
-    });
+
+    // If a From Account is specified, treat as a transfer
+    if (adjustFromAccountId) {
+      await onTransferAccount({
+        fromId: adjustFromAccountId,
+        toId: account.id,
+        amount: amt,
+        note: note || '',
+        fromSubAccountId: adjustFromSubAccountId || null,
+        toSubAccountId: subAccountId || null,
+        date: adjustDate
+      })
+    } else {
+      await onAddAccountTxn({
+        accountId: account.id,
+        subAccountId: subAccountId || null,
+        amount: amt,
+        direction,
+        note,
+        receiveDate: adjustDate,
+      });
+    }
     setAmount("");
     setNote("");
     setAdjustDate(new Date().toISOString().slice(0, 10));
+    setAdjustFromAccountId('');
+    setAdjustFromSubAccountId('');
     setMode(null);
   }
 
@@ -1717,7 +1749,14 @@ function AccountDetail({
             <div className="list">
               {account.subAccounts
                 .map((s) => (
-                  <div className="rowItem subRow" key={s.id}>
+                  <div
+                    className={`rowItem subRow ${filterSubAccountId === s.id ? 'active' : ''}`}
+                    key={s.id}
+                    onClick={() => setFilterSubAccountId(filterSubAccountId === s.id ? null : s.id)}
+                    role="button"
+                    tabIndex={0}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <div className="rowLeft">
                       <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
                       <div>
@@ -1884,6 +1923,38 @@ function AccountDetail({
                         </select>
                       </div>
                     )}
+
+                    <div className="field">
+                      <label>From Account (optional)</label>
+                      <select
+                        value={adjustFromAccountId}
+                        onChange={(e) => {
+                          setAdjustFromAccountId(e.target.value)
+                          setAdjustFromSubAccountId('')
+                        }}
+                      >
+                        <option value="">None — direct add</option>
+                        {accounts.filter(a => a.id !== account.id).map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {(() => {
+                      const fromAcct = accounts.find(a => a.id === adjustFromAccountId)
+                      const fromSubs = fromAcct && Array.isArray(fromAcct.subAccounts) ? fromAcct.subAccounts : []
+                      if (!fromSubs.length) return null
+                      return (
+                        <div className="field">
+                          <label>From sub-account</label>
+                          <select value={adjustFromSubAccountId} onChange={e => setAdjustFromSubAccountId(e.target.value)}>
+                            <option value="">Select</option>
+                            {fromSubs.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })()}
                   </>
                 )}
 
@@ -2223,8 +2294,9 @@ function AccountDetail({
         selectedTxn && (
           <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <div className="modalTitle">
-                {selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}
+              <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}</span>
+                <button className="iconBtn" type="button" onClick={() => setSelectedTxn(null)} style={{ fontSize: 18 }}>✕</button>
               </div>
 
               <div className="accQuickForm">
@@ -2291,10 +2363,33 @@ function AccountDetail({
                   />
                 </div>
                 {error && <div className="formError">{error}</div>}
+                {selectedTxn.direction === 'in' && selectedTxn.paidBack && selectedTxn.paidBack.length > 0 && (
+                  <div className="reimbursedBadge" style={{ marginBottom: 4, fontSize: 13, padding: '6px 12px' }}>
+                    ✓ Paid back {fmtTZS(selectedTxn.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                  </div>
+                )}
                 <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                  <button className="btn" type="button" onClick={() => setSelectedTxn(null)}>
-                    Close
-                  </button>
+                  {selectedTxn.direction === 'in' && (
+                    <button
+                      className="btn"
+                      type="button"
+                      style={{ borderColor: '#1a9a50', background: '#1a9a50', color: '#fff' }}
+                      onClick={() => {
+                        const t = selectedTxn
+                        setPaybackTxn(t)
+                        const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                        setPaybackAmount(String(Number(t.amount || 0) - alreadyPaid))
+                        setPaybackAccountId('')
+                        setPaybackSubAccountId('')
+                        setPaybackDate(new Date().toISOString().slice(0, 10))
+                        setPaybackError(false)
+                        setSelectedTxn(null)
+                        setShowPaybackModal(true)
+                      }}
+                    >
+                      Receive Money
+                    </button>
+                  )}
                   <button
                     className="btn danger"
                     type="button"
@@ -2314,6 +2409,123 @@ function AccountDetail({
           </div>
         )
       }
+
+      {showPaybackModal && paybackTxn && (
+        <div className="modalBackdrop" onClick={() => setShowPaybackModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Receive Money</div>
+            <div className="reimburseOriginal">
+              <div className="reimburseOriginalLabel">Original Transaction</div>
+              <div className="reimburseOriginalInfo">
+                <span>{paybackTxn.note || 'Loan'}</span>
+                <span className="reimburseOriginalAmt" style={{ color: '#2fbf71' }}>+{fmtTZS(paybackTxn.amount)}</span>
+              </div>
+              {paybackTxn.paidBack && paybackTxn.paidBack.length > 0 && (
+                <div className="reimburseAlready">
+                  Already paid back: {fmtTZS(paybackTxn.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                </div>
+              )}
+            </div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Payback Amount (TZS) — Max: {fmtTZS(Number(paybackTxn.amount || 0) - (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0))}</label>
+                <input
+                  inputMode="decimal"
+                  value={paybackAmount}
+                  onChange={e => {
+                    const max = Number(paybackTxn.amount || 0) - (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                    const val = Number(e.target.value || 0)
+                    if (val > max) setPaybackAmount(String(max))
+                    else setPaybackAmount(e.target.value)
+                  }}
+                  placeholder="e.g. 10000"
+                />
+              </div>
+              <div className="field">
+                <label>Date</label>
+                <input
+                  type="date"
+                  value={paybackDate}
+                  onChange={e => setPaybackDate(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label style={paybackError ? { color: '#e24b4b' } : undefined}>Account To Receive Money {paybackError ? '— Required' : ''}</label>
+                <select
+                  value={paybackAccountId}
+                  onChange={e => {
+                    setPaybackAccountId(e.target.value);
+                    setPaybackError(false);
+                    const acct = accounts.find(a => a.id === e.target.value)
+                    const subs = acct && Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+                    const ledger = activeLedgerId === 'all' ? account.ledgerId : activeLedgerId
+                    const match = subs.find(s => s.ledgerId === ledger)
+                    setPaybackSubAccountId(match ? match.id : (subs[0]?.id || ''))
+                  }}
+                  style={paybackError ? { borderColor: '#e24b4b', background: 'rgba(226,75,75,0.05)' } : undefined}
+                >
+                  <option value="">Select account</option>
+                  {accounts.filter(a => a.id !== account.id).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                const payAcct = accounts.find(a => a.id === paybackAccountId)
+                const paySubs = payAcct && Array.isArray(payAcct.subAccounts) ? payAcct.subAccounts : []
+                if (!paySubs.length) return null
+                return (
+                  <div className="field">
+                    <label>Sub-account</label>
+                    <select value={paybackSubAccountId} onChange={e => setPaybackSubAccountId(e.target.value)}>
+                      <option value="">Select sub-account</option>
+                      {paySubs.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })()}
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowPaybackModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={async () => {
+                    const amt = Number(paybackAmount || 0)
+                    if (!amt || amt <= 0) { onToast?.('Enter a valid amount.'); return }
+                    if (!paybackAccountId) { setPaybackError(true); return }
+                    const alreadyPaid = (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                    const remaining = Number(paybackTxn.amount || 0) - alreadyPaid
+                    if (amt > remaining) { onToast?.(`Cannot pay back more than ${fmtTZS(remaining)}.`); return }
+
+                    const updatedPaidBack = [...(paybackTxn.paidBack || []), { amount: amt, date: paybackDate }]
+
+                    await onTransferAccount({
+                      fromId: account.id,
+                      toId: paybackAccountId,
+                      amount: amt,
+                      note: `Payback: ${paybackTxn.note || 'Loan'}`,
+                      fromSubAccountId: paybackTxn.subAccountId || null,
+                      toSubAccountId: paybackSubAccountId || null,
+                      date: paybackDate,
+                      patchTxn: { id: paybackTxn.id, fields: { paidBack: updatedPaidBack } }
+                    })
+
+                    setShowPaybackModal(false)
+                    setPaybackTxn(null)
+                    onToast?.('Payback saved.')
+                  }}
+                >
+                  Save Payback
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {
         showEditModal && (
@@ -2436,7 +2648,24 @@ function AccountDetail({
       }
 
       <div className="accHistory">
-        <div className="accHistoryTitle">Recent activity</div>
+        <div className="accHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>
+            {filterSubAccountId
+              ? `${account.subAccounts?.find(s => s.id === filterSubAccountId)?.name || 'Sub-account'} activity`
+              : 'Recent activity'
+            }
+          </span>
+          {filterSubAccountId && (
+            <button
+              className="miniBtn"
+              type="button"
+              style={{ fontSize: 11 }}
+              onClick={() => setFilterSubAccountId(null)}
+            >
+              Show All
+            </button>
+          )}
+        </div>
         {grouped.length === 0 ? (
           <div className="emptyRow">No activity yet.</div>
         ) : (
@@ -2497,6 +2726,11 @@ function AccountDetail({
                         <div className="accHistoryInfo">
                           <div className="accHistoryTitleRow">{title}</div>
                           <div className="accHistoryMeta">{meta}</div>
+                          {t.paidBack && t.paidBack.length > 0 && (
+                            <div className="reimbursedBadge">
+                              ✓ Paid back {fmtTZS(t.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                            </div>
+                          )}
                         </div>
                         <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
                           {t.direction === "in" ? "+" : "-"}

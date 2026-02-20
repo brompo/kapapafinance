@@ -663,6 +663,12 @@ label {
   padding: 9px;
 }
 
+.rowItem.subRow.active {
+  background: #eceffd;
+  border-color: #c5caf0;
+  box-shadow: 0 2px 8px rgba(90, 95, 176, 0.12);
+}
+
 .avatar.subAvatar {
   width: 28px;
   height: 28px;

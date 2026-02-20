@@ -2695,27 +2695,30 @@ export default function App() {
         raw: t
       }))
 
-      const acctTxns = filteredAccountTxns.map(t => {
-        const acct = accounts.find(a => a.id === t.accountId)
-        const other = t.relatedAccountId && accounts.find(a => a.id === t.relatedAccountId)
-        const title = t.kind === 'transfer'
-          ? `Transfer ${t.direction === 'out' ? 'to' : 'from'} ${other ? other.name : 'account'}`
-          : (t.note || 'Balance update')
-        return {
-          id: `acct-${t.id}`,
-          date: t.date,
-          title,
-          sub: acct ? acct.name : '',
-          amount: Number(t.amount || 0),
-          direction: t.direction,
-          type: t.direction === 'in' ? 'income' : 'expense',
-          category: acct ? acct.name : 'Account',
-          accountId: t.accountId || '',
-          note: t.note || '',
-          kind: 'account',
-          raw: t
-        }
-      })
+      // Exclude account txns that mirror ledger txns (kind === 'txn') to avoid duplicates
+      const acctTxns = filteredAccountTxns
+        .filter(t => t.kind !== 'txn')
+        .map(t => {
+          const acct = accounts.find(a => a.id === t.accountId)
+          const other = t.relatedAccountId && accounts.find(a => a.id === t.relatedAccountId)
+          const title = t.kind === 'transfer'
+            ? `Transfer ${t.direction === 'out' ? 'to' : 'from'} ${other ? other.name : 'account'}`
+            : (t.note || 'Balance update')
+          return {
+            id: `acct-${t.id}`,
+            date: t.date,
+            title,
+            sub: acct ? acct.name : '',
+            amount: Number(t.amount || 0),
+            direction: t.direction,
+            type: t.direction === 'in' ? 'income' : 'expense',
+            category: acct ? acct.name : 'Account',
+            accountId: t.accountId || '',
+            note: t.note || '',
+            kind: 'account',
+            raw: t
+          }
+        })
 
       return [...baseTxns, ...acctTxns].sort((a, b) => (a.date < b.date ? 1 : -1))
     }, [filteredTxns, filteredAccountTxns, accounts])

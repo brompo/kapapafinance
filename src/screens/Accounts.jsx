@@ -1603,7 +1603,11 @@ function AccountDetail({
             </span>
           </div>
           <div style={{ marginLeft: "auto", fontSize: "1.5rem", fontWeight: "700" }}>
-            {fmtTZS(getAccountBalance(account))}
+            {fmtTZS(
+              Array.isArray(account.subAccounts) && account.subAccounts.length > 0
+                ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
+                : getAccountBalance(account)
+            )}
           </div>
         </div>
 

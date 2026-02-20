@@ -962,6 +962,7 @@ function AccountDetail({
       ? account.subAccounts[0].id
       : ""
   );
+  const [fromAccountId, setFromAccountId] = useState(account.id);
   const [targetSubId, setTargetSubId] = useState("");
   const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [adjustDate, setAdjustDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1270,13 +1271,13 @@ function AccountDetail({
       setError("Select a target sub-account.");
       return;
     }
-    if (targetId === account.id && subAccountId === targetSubId) {
+    if (targetId === fromAccountId && subAccountId === targetSubId) {
       setError("Select a different sub-account.");
       return;
     }
     setError("");
     await onTransferAccount({
-      fromId: account.id,
+      fromId: fromAccountId,
       toId: targetId,
       amount: amt,
       note,
@@ -1778,23 +1779,38 @@ function AccountDetail({
 
                     <div className="field">
                       <label>From account</label>
-                      <input value={account.name} readOnly />
+                      <select value={fromAccountId} onChange={(e) => {
+                        setFromAccountId(e.target.value)
+                        const acct = accounts.find(a => a.id === e.target.value)
+                        const subs = acct && Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+                        setSubAccountId(subs.length ? subs[0].id : '')
+                      }}>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
-                      <div className="field">
-                        <label>From sub-account</label>
-                        <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
-                          <option value="">Select</option>
-                          {account.subAccounts
-                            .map((s) => (
+                    {(() => {
+                      const fromAcct = accounts.find(a => a.id === fromAccountId)
+                      const fromSubs = fromAcct && Array.isArray(fromAcct.subAccounts) ? fromAcct.subAccounts : []
+                      if (!fromSubs.length) return null
+                      return (
+                        <div className="field">
+                          <label>From sub-account</label>
+                          <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
+                            <option value="">Select</option>
+                            {fromSubs.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
                               </option>
                             ))}
-                        </select>
-                      </div>
-                    )}
+                          </select>
+                        </div>
+                      )
+                    })()}
 
                     <div className="field">
                       <label>To account</label>

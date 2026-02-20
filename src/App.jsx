@@ -2674,7 +2674,7 @@ export default function App() {
   }
 
   function TransactionsScreen() {
-    const [txTab, setTxTab] = useState('daily') // daily, monthly, stats
+    const [txTab, setTxTab] = useState('monthly') // daily, monthly, stats
     const [statYear, setStatYear] = useState(() => new Date().getFullYear())
     const periodLabel = useMemo(() => formatMonthLabel(month), [month])
     const [selectedTxn, setSelectedTxn] = useState(null)

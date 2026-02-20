@@ -122,19 +122,8 @@ export default function Accounts({
     if (groupType === "credit") return base + computeAccruedForAccount(account);
 
     if (groupType === "asset") {
-      // If we are filtering by ledger, we must ensure the asset belongs to it
-      // Assets are usually tracking units in sub-accounts.
-      // We need to check if getAssetInfo respects filtering? 
-      // Let's assume getAssetInfo needs to know about activeLedgerId or we filter the value?
-      // Actually, if we use getFilteredBalance logic inside getAssetInfo it would be best.
-      // For now, let's rely on getAssetInfo returning total value, but if we want to filter...
-      // Real Estate example: 5M. Likely a single account or sub.
-      // If sub, lines 157-160 handled it? 
-      // Wait, line 166 returns info.value. 
-      // Asset value SHOULD come from the Sum of Sub-account Values.
-      // If getAssetInfo sums up unit * price, it iterates subs.
-      // I should check getAssetInfo.
-
+      // If account has subaccounts, trust the base sum (which filters subs by ledger)
+      if (subs.length > 0) return base;
       const info = calculateAssetMetrics(account, accountTxns, groupType);
       if (info.hasData && info.unitPrice > 0) return info.value;
     }
@@ -1722,6 +1711,7 @@ function AccountDetail({
           {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
             <div className="list">
               {account.subAccounts
+                .filter(s => activeLedgerId === "all" || s.ledgerId === activeLedgerId)
                 .map((s) => (
                   <div className="rowItem subRow" key={s.id}>
                     <div className="rowLeft">

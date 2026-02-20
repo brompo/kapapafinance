@@ -1623,7 +1623,7 @@ function AccountDetail({
                 else setMode("adjust");
               }}
             >
-              BUY
+              {currentGroup?.type === 'asset' ? 'BUY' : currentGroup?.type === 'credit' ? 'BORROW' : 'ADD'}
             </button>
             {currentGroup?.type === 'asset' && (
               <button
@@ -1653,7 +1653,7 @@ function AccountDetail({
                   }
                 }}
               >
-                {currentGroup?.type === 'asset' ? 'SALE' : 'UPDATE'}
+                {currentGroup?.type === 'asset' ? 'SALE' : 'TRANSFER'}
               </button>
             )}
           </div>

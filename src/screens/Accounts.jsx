@@ -1091,13 +1091,28 @@ function AccountDetail({
   }, [entries]);
 
   function exportToCSV() {
-    const rows = [['Date', 'Description', 'Debit', 'Credit']]
-    for (const t of entries) {
+    const rows = [['Date', 'Description', 'Source', 'Credit', 'Debit', 'Cumulative Total']]
+    // Process oldest-first for running total
+    const sorted = [...entries].reverse()
+    let runningTotal = 0
+    for (const t of sorted) {
       const date = t.date || ''
       const desc = (t.note || t.kind || 'Transaction').replace(/"/g, '""')
-      const debit = t.direction === 'out' ? Number(t.amount || 0) : ''
+      const relatedAcct = t.relatedAccountId ? accounts.find(a => a.id === t.relatedAccountId) : null
+      const subName = account.subAccounts?.find(s => s.id === t.subAccountId)?.name || ''
+      let source = ''
+      if (t.direction === 'in' && relatedAcct) {
+        source = relatedAcct.name
+      } else if (t.direction === 'out') {
+        source = subName || account.name
+      } else {
+        source = subName || account.name
+      }
       const credit = t.direction === 'in' ? Number(t.amount || 0) : ''
-      rows.push([date, `"${desc}"`, debit, credit])
+      const debit = t.direction === 'out' ? Number(t.amount || 0) : ''
+      if (t.direction === 'in') runningTotal += Number(t.amount || 0)
+      else runningTotal -= Number(t.amount || 0)
+      rows.push([date, `"${desc}"`, `"${source.replace(/"/g, '""')}"`, credit, debit, runningTotal])
     }
     const csv = rows.map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })

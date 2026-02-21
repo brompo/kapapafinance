@@ -943,8 +943,11 @@ function Section({
           >
             ≡
           </button>
-          <button className="sectionTitleBtn" type="button" onClick={onRenameGroup}>
-            {group.name}
+          <button className="sectionTitleBtn" type="button" onClick={onRenameGroup} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <span>{group.name}</span>
+            <span style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px', lineHeight: 1 }}>
+              {group.type}
+            </span>
           </button>
         </div>
         <div className="sectionRightWrap">

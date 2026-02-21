@@ -1561,8 +1561,19 @@ export default function App() {
 
     } else {
       // Normal transaction update
-      const delta = entry.direction === 'in' ? (newAmt - oldAmt) : -(newAmt - oldAmt)
-      nextAccounts = applyAccountDelta(allAccounts, entry.accountId, entry.subAccountId, delta)
+      const oldAccountId = entry.accountId
+      const oldSubAccountId = entry.subAccountId
+      const newAccountId = next.accountId || oldAccountId
+      const newSubAccountId = next.subAccountId !== undefined ? next.subAccountId : oldSubAccountId
+
+      // Step 1: Revert the old transaction entirely from the old account/sub-account
+      const revertDelta = entry.direction === 'in' ? -oldAmt : oldAmt
+      nextAccounts = applyAccountDelta(allAccounts, oldAccountId, oldSubAccountId, revertDelta)
+
+      // Step 2: Apply the new transaction entirely to the new account/sub-account
+      const applyDelta = entry.direction === 'in' ? newAmt : -newAmt
+      nextAccounts = applyAccountDelta(nextAccounts, newAccountId, newSubAccountId, applyDelta)
+
       nextAccountTxns = allAccountTxns.map(t => (
         t.id === entryId ? { ...t, ...next } : t
       ))

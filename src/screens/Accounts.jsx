@@ -1211,6 +1211,8 @@ function AccountDetail({
   const [editTxnAmount, setEditTxnAmount] = useState("");
   const [editTxnNote, setEditTxnNote] = useState("");
   const [editTxnDate, setEditTxnDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editTxnAccountId, setEditTxnAccountId] = useState("");
+  const [editTxnSubAccountId, setEditTxnSubAccountId] = useState(null);
   const [editCreditRate, setEditCreditRate] = useState("");
   const [editCreditType, setEditCreditType] = useState("simple");
   const [editReceiveDate, setEditReceiveDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1767,6 +1769,8 @@ function AccountDetail({
         amount: amt,
         note: editTxnNote || "",
         date: editTxnDate || selectedTxn.date,
+        accountId: editTxnAccountId,
+        subAccountId: editTxnSubAccountId,
         creditRate: Number(editCreditRate || 0),
         creditType: editCreditType,
         receiveDate: editReceiveDate || editTxnDate || selectedTxn.date,
@@ -1776,7 +1780,9 @@ function AccountDetail({
       onUpdateAccountTxn?.(selectedTxn.id, {
         amount: amt,
         note: editTxnNote || "",
-        date: editTxnDate || selectedTxn.date
+        date: editTxnDate || selectedTxn.date,
+        accountId: editTxnAccountId,
+        subAccountId: editTxnSubAccountId
       });
     }
     setSelectedTxn(null);
@@ -2542,6 +2548,30 @@ function AccountDetail({
               </div>
 
               <div className="accQuickForm">
+                <div className="field">
+                  <label>Account</label>
+                  <select value={editTxnAccountId} onChange={(e) => {
+                    setEditTxnAccountId(e.target.value);
+                    const acct = accounts.find(a => a.id === e.target.value);
+                    const subs = Array.isArray(acct?.subAccounts) ? acct.subAccounts : [];
+                    setEditTxnSubAccountId(subs.length > 0 ? subs[0].id : null);
+                  }}>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                {(() => {
+                  const acct = accounts.find(a => a.id === editTxnAccountId);
+                  const subs = Array.isArray(acct?.subAccounts) ? acct.subAccounts : [];
+                  if (subs.length === 0) return null;
+                  return (
+                    <div className="field">
+                      <label>Sub-account</label>
+                      <select value={editTxnSubAccountId || ""} onChange={(e) => setEditTxnSubAccountId(e.target.value)}>
+                        {subs.map(s => <option key={s.id} value={s.id}>{s.name || 'Sub-account'}</option>)}
+                      </select>
+                    </div>
+                  );
+                })()}
                 <div className="field">
                   <label>Amount (TZS)</label>
                   <input

@@ -510,13 +510,128 @@ export default function Accounts({
             >
               Accounts
             </button>
+
             <button
               className={`viewTab ${viewMode === 'growth' ? 'active' : ''}`}
               onClick={() => setViewMode('growth')}
             >
-              Growth Insights
+              Capital
+            </button>
+            <button
+              className={`viewTab ${viewMode === 'capital' ? 'active' : ''}`}
+              onClick={() => setViewMode('capital')}
+            >
+              Insights
             </button>
           </div>
+
+          {/* Capital View */}
+          {viewMode === 'capital' && (() => {
+            // Compute capital metrics
+            let liquidCash = 0
+            let totalDebt = 0
+            let assetValue = 0
+            let assetCost = 0
+            let loanBook = 0
+
+            for (const a of visibleAccounts) {
+              const g = groupById.get(a.groupId)
+              const val = getAccountBalance(a)
+              if (g?.type === 'debit') liquidCash += val
+              else if (g?.type === 'credit') totalDebt += val
+              else if (g?.type === 'asset') {
+                assetValue += val
+                const info = calculateAssetMetrics(a, accountTxns, g.type)
+                assetCost += (info.costBasis || 0)
+              }
+            }
+
+            // Check loan accounts for receivables
+            for (const a of visibleAccounts) {
+              const g = groupById.get(a.groupId)
+              if (g?.type === 'debit') {
+                const name = (a.name || '').toLowerCase()
+                if (name.includes('loan') || name.includes('receivable') || name.includes('lent')) {
+                  loanBook += getAccountBalance(a)
+                }
+              }
+            }
+
+            const totalAssets = liquidCash + assetValue
+            const netPosition = totalAssets - totalDebt
+            const liquidRatio = totalAssets > 0 ? (liquidCash / totalAssets) * 100 : 0
+            const debtRatio = totalAssets > 0 ? (totalDebt / totalAssets) * 100 : 0
+            const deployedCapital = assetCost + loanBook
+            const idleCash = liquidCash - loanBook
+            const workingRatio = (deployedCapital + idleCash) > 0 ? (deployedCapital / (deployedCapital + idleCash)) * 100 : 0
+            const safetyBuffer = liquidCash * 0.2
+            const deployableCapital = Math.max(0, idleCash - safetyBuffer)
+
+            const getStatus = (good) => good ? { color: '#16A34A', label: '✓ Good' } : { color: '#DC2626', label: '⚠ Caution' }
+            const getAmber = (val, low, high) => val >= high ? { color: '#16A34A', label: '✓ Good' } : val >= low ? { color: '#F59E0B', label: '◉ Fair' } : { color: '#DC2626', label: '⚠ Caution' }
+
+            const cards = [
+              {
+                question: 'Am I liquid right now?',
+                metric: `${liquidRatio.toFixed(0)}%`,
+                metricLabel: 'Liquid / Total Assets',
+                detail: `Cash: ${fmtTZS(liquidCash)} of ${fmtTZS(totalAssets)}`,
+                status: getAmber(liquidRatio, 15, 30),
+                explanation: liquidRatio >= 30 ? 'Healthy cash position.' : liquidRatio >= 15 ? 'Moderate liquidity — monitor closely.' : 'Low liquidity — consider freeing up cash.'
+              },
+              {
+                question: 'Am I exposed?',
+                metric: `${debtRatio.toFixed(0)}%`,
+                metricLabel: 'Debt / Total Assets',
+                detail: `Debt: ${fmtTZS(totalDebt)} vs Assets: ${fmtTZS(totalAssets)}`,
+                status: getAmber(100 - debtRatio, 30, 60),
+                explanation: debtRatio < 40 ? 'Low leverage — comfortably positioned.' : debtRatio < 70 ? 'Moderate leverage — be cautious with new debt.' : 'High leverage — prioritize debt reduction.'
+              },
+              {
+                question: 'Is my capital working?',
+                metric: `${workingRatio.toFixed(0)}%`,
+                metricLabel: 'Deployed / Total Capital',
+                detail: `Deployed: ${fmtTZS(deployedCapital)} | Idle: ${fmtTZS(Math.max(0, idleCash))}`,
+                status: getAmber(workingRatio, 40, 65),
+                explanation: workingRatio >= 65 ? 'Capital is well utilized.' : workingRatio >= 40 ? 'Some capital is idle — look for opportunities.' : 'Most capital is sitting idle.'
+              },
+              {
+                question: 'What is my real net position?',
+                metric: fmtTZS(netPosition),
+                metricLabel: 'Assets − Liabilities',
+                detail: `Total Assets: ${fmtTZS(totalAssets)} | Liabilities: ${fmtTZS(totalDebt)}`,
+                status: getStatus(netPosition > 0),
+                explanation: netPosition > 0 ? 'You own more than you owe.' : 'Your liabilities exceed your assets.'
+              },
+              {
+                question: 'Can I deploy more capital safely?',
+                metric: fmtTZS(deployableCapital),
+                metricLabel: 'Available after 20% safety buffer',
+                detail: `Safety buffer: ${fmtTZS(safetyBuffer)} (20% of liquid cash)`,
+                status: getStatus(deployableCapital > 0),
+                explanation: deployableCapital > 0
+                  ? `You can safely deploy up to ${fmtTZS(deployableCapital)}.`
+                  : 'No safe deployable capital — build up cash first.'
+              }
+            ]
+
+            return (
+              <div className="capitalCards">
+                {cards.map((c, i) => (
+                  <div className="capitalCard" key={i}>
+                    <div className="capitalQuestion">{c.question}</div>
+                    <div className="capitalMetricRow">
+                      <div className="capitalMetric">{c.metric}</div>
+                      <div className="capitalStatus" style={{ color: c.status.color }}>{c.status.label}</div>
+                    </div>
+                    <div className="capitalMetricLabel">{c.metricLabel}</div>
+                    <div className="capitalDetail">{c.detail}</div>
+                    <div className="capitalExplanation">{c.explanation}</div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
 
           {/* Growth View */}
           {viewMode === 'growth' && (

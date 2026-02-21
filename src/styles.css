@@ -3082,6 +3082,69 @@ label {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* Capital Tab Cards */
+.capitalCards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 12px;
+}
+
+.capitalCard {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid #e8e8ee;
+  box-shadow: 0 2px 8px rgba(60, 60, 100, 0.06);
+}
+
+.capitalQuestion {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin-bottom: 8px;
+}
+
+.capitalMetricRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.capitalMetric {
+  font-size: 26px;
+  font-weight: 800;
+  color: #312e81;
+}
+
+.capitalStatus {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.capitalMetricLabel {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.capitalDetail {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.capitalExplanation {
+  font-size: 12px;
+  color: #4b5563;
+  font-style: italic;
+  padding-top: 6px;
+  border-top: 1px solid #f3f3f8;
+}
+
 /* Capital Allocation Area */
 .allocationGrid {
   display: flex;

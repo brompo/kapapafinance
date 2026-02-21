@@ -159,7 +159,7 @@ function createLedger({
       return {
         id,
         name,
-        type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : 'debit'),
+        type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit')),
         collapsed: !!g.collapsed
       }
     })

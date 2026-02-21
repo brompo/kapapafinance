@@ -286,6 +286,28 @@ export default function Accounts({
     setDragOverGroupId(null);
   }
 
+  function handleMoveGroupUp(id) {
+    const index = groups.findIndex((g) => g.id === id);
+    if (index > 0) {
+      const next = [...groups];
+      const temp = next[index - 1];
+      next[index - 1] = next[index];
+      next[index] = temp;
+      onUpdateGroups?.(next);
+    }
+  }
+
+  function handleMoveGroupDown(id) {
+    const index = groups.findIndex((g) => g.id === id);
+    if (index >= 0 && index < groups.length - 1) {
+      const next = [...groups];
+      const temp = next[index + 1];
+      next[index + 1] = next[index];
+      next[index] = temp;
+      onUpdateGroups?.(next);
+    }
+  }
+
   function handleAccountDragStart(id) {
     setDraggingAccountId(id);
   }
@@ -828,6 +850,8 @@ export default function Accounts({
               onUpdateGroups?.(groups.filter(g => g.id !== group.id));
             }}
             onAddAccount={() => handleAddAccount(group)}
+            onMoveGroupUp={() => handleMoveGroupUp(group.id)}
+            onMoveGroupDown={() => handleMoveGroupDown(group.id)}
             isDragging={draggingGroupId === group.id}
             dragOver={dragOverGroupId === group.id}
             onDragStart={() => handleGroupDragStart(group.id)}
@@ -913,6 +937,8 @@ function Section({
   onRenameGroup,
   onAddAccount,
   onDeleteGroup,
+  onMoveGroupUp,
+  onMoveGroupDown,
   isDragging,
   dragOver,
   onDragStart,
@@ -938,16 +964,8 @@ function Section({
     >
       <div className="sectionHead">
         <div className="sectionTitle">
-          <button
-            className="sectionDragHandle"
-            type="button"
-            draggable
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            title="Drag to reorder"
-            aria-label="Drag to reorder"
-          >
-            ≡
+          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
+            +
           </button>
           <button className="sectionTitleBtn" type="button" onClick={onRenameGroup} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             <span>{group.name}</span>
@@ -956,10 +974,13 @@ function Section({
             </span>
           </button>
         </div>
-        <div className="sectionRightWrap">
+        <div className="sectionRightWrap" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <div className={`sectionRight ${(group.type === "credit" || group.type === "loan") ? "owed" : ""}`}>{right}</div>
-          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
-            +
+          <button className="sectionAddBtn" type="button" onClick={onMoveGroupUp} style={{ fontSize: 13, background: 'none' }} title="Move group up">
+            ↑
+          </button>
+          <button className="sectionAddBtn" type="button" onClick={onMoveGroupDown} style={{ fontSize: 13, background: 'none' }} title="Move group down">
+            ↓
           </button>
           {items.length === 0 && (
             <button className="sectionAddBtn" type="button" onClick={onDeleteGroup} style={{ color: '#DC2626', fontSize: 13 }} title="Delete empty group">

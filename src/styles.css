@@ -467,25 +467,6 @@ label {
   padding: 0;
 }
 
-.sectionDragHandle {
-  border: 1px solid #e2e4f6;
-  background: #f5f6ff;
-  color: #6a6fb0;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.sectionDragHandle:active {
-  cursor: grabbing
-}
-
 .sectionRightWrap {
   display: flex;
   align-items: center;

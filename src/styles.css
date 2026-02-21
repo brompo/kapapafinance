@@ -478,7 +478,8 @@ label {
   font-weight: 600
 }
 
-.sectionRight.owed {
+.sectionRight.owed,
+.sectionRight.neg {
   color: #e24b4b
 }
 
@@ -2985,11 +2986,19 @@ label {
   color: #111;
 }
 
+.stdBalLabel.neg {
+  color: #e24b4b;
+}
+
 .stdBalPrefix {
   font-size: 0.8rem;
   color: #6B7280;
   font-weight: 500;
   margin-right: 4px;
+}
+
+.stdBalPrefix.neg {
+  color: #e24b4b;
 }
 
 .stdActionBtn {

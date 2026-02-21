@@ -975,7 +975,7 @@ function Section({
           </button>
         </div>
         <div className="sectionRightWrap" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <div className={`sectionRight ${(group.type === "credit" || group.type === "loan") ? "owed" : ""}`}>{right}</div>
+          <div className={`sectionRight ${(group.type === "credit" || group.type === "loan") ? "owed" : ""} ${total < 0 ? "neg" : ""}`}>{right}</div>
           <button className="sectionAddBtn" type="button" onClick={onMoveGroupUp} style={{ fontSize: 13, background: 'none' }} title="Move group up">
             ↑
           </button>
@@ -1055,8 +1055,8 @@ function Section({
                         <div className="stdName">{a.name}</div>
                       </div>
                       <div className="stdRight">
-                        <div className="stdBalPrefix">Bal.</div>
-                        <div className="stdBalLabel">{fmtTZS(bal)}</div>
+                        <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
+                        <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>{fmtTZS(bal)}</div>
                         <button className="stdActionBtn" onClick={(e) => {
                           e.stopPropagation()
                           onSelectAccount?.(a.id)

@@ -822,6 +822,11 @@ export default function Accounts({
             onSelectAccount={(id) => setSelectedId(id)}
             onToggleCollapse={() => toggleGroupCollapse(group)}
             onRenameGroup={handleRenameGroup}
+            onDeleteGroup={() => {
+              if (items.length > 0) return;
+              if (!confirm(`Delete group "${group.name}"?`)) return;
+              onUpdateGroups?.(groups.filter(g => g.id !== group.id));
+            }}
             onAddAccount={() => handleAddAccount(group)}
             isDragging={draggingGroupId === group.id}
             dragOver={dragOverGroupId === group.id}
@@ -907,6 +912,7 @@ function Section({
   onToggleCollapse,
   onRenameGroup,
   onAddAccount,
+  onDeleteGroup,
   isDragging,
   dragOver,
   onDragStart,
@@ -955,6 +961,11 @@ function Section({
           <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
             +
           </button>
+          {items.length === 0 && (
+            <button className="sectionAddBtn" type="button" onClick={onDeleteGroup} style={{ color: '#DC2626', fontSize: 13 }} title="Delete empty group">
+              ✕
+            </button>
+          )}
           <button className="sectionCollapse" type="button" onClick={onToggleCollapse}>
             {group.collapsed ? "▸" : "▾"}
           </button>

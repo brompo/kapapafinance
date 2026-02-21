@@ -1090,6 +1090,30 @@ function AccountDetail({
     return Array.from(map.entries());
   }, [entries]);
 
+  function exportToCSV() {
+    const rows = [['Date', 'Description', 'Debit', 'Credit']]
+    for (const t of entries) {
+      const date = t.date || ''
+      const desc = (t.note || t.kind || 'Transaction').replace(/"/g, '""')
+      const debit = t.direction === 'out' ? Number(t.amount || 0) : ''
+      const credit = t.direction === 'in' ? Number(t.amount || 0) : ''
+      rows.push([date, `"${desc}"`, debit, credit])
+    }
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const subName = filterSubAccountId
+      ? account.subAccounts?.find(s => s.id === filterSubAccountId)?.name || 'sub'
+      : ''
+    a.href = url
+    a.download = `${account.name}${subName ? ' - ' + subName : ''} Transactions.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async function handleAdjust() {
     const amt = Number(amount || 0);
     if (!amt || amt <= 0) {
@@ -2655,16 +2679,28 @@ function AccountDetail({
               : 'Recent activity'
             }
           </span>
-          {filterSubAccountId && (
-            <button
-              className="miniBtn"
-              type="button"
-              style={{ fontSize: 11 }}
-              onClick={() => setFilterSubAccountId(null)}
-            >
-              Show All
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {entries.length > 0 && (
+              <button
+                className="miniBtn"
+                type="button"
+                style={{ fontSize: 11 }}
+                onClick={exportToCSV}
+              >
+                Export
+              </button>
+            )}
+            {filterSubAccountId && (
+              <button
+                className="miniBtn"
+                type="button"
+                style={{ fontSize: 11 }}
+                onClick={() => setFilterSubAccountId(null)}
+              >
+                Show All
+              </button>
+            )}
+          </div>
         </div>
         {grouped.length === 0 ? (
           <div className="emptyRow">No activity yet.</div>

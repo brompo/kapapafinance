@@ -839,6 +839,7 @@ export default function Accounts({
             group={group}
             accountTxns={accountTxns}
             right={right}
+            total={total}
             items={items}
             onDeleteAccount={onDeleteAccount}
             onSelectAccount={(id) => setSelectedId(id)}
@@ -930,6 +931,7 @@ function Section({
   group,
   accountTxns,
   right,
+  total,
   items,
   onDeleteAccount,
   onSelectAccount,

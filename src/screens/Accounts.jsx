@@ -1562,10 +1562,11 @@ function AccountDetail({
     const nextLedgerId = editLedgerId || account.ledgerId || activeLedgerId;
     const targetLedger = ledgers.find((l) => l.id === nextLedgerId);
     const targetGroups = Array.isArray(targetLedger?.groups) ? targetLedger.groups : [];
-    const type = currentGroup?.type || account.groupType || "debit";
+    const newGroup = editGroupId ? groups.find(g => g.id === editGroupId) : null;
+    const type = newGroup?.type || currentGroup?.type || account.groupType || "debit";
 
     // Try to find a group in the target ledger that matches both Name and Type
-    let targetGroup = targetGroups.find((g) => g.name === currentGroup?.name && g.type === type);
+    let targetGroup = targetGroups.find((g) => g.name === (newGroup?.name || currentGroup?.name) && g.type === type);
     // Fallback to matching by Type only
     if (!targetGroup) targetGroup = targetGroups.find((g) => g.type === type);
     // Final fallback
@@ -1580,12 +1581,12 @@ function AccountDetail({
       name,
       ledgerId: nextLedgerId,
       groupId: (nextLedgerId === activeLedgerId && editGroupId) ? editGroupId : (targetGroup?.id || account.groupId),
-      groupType: (nextLedgerId === activeLedgerId && editGroupId && groups.find(g => g.id === editGroupId)?.type) || targetGroup?.type || account.groupType,
+      groupType: type,
       subAccounts: nextSubs
     });
 
-    // Balance update logic for Debit accounts
-    if (type === 'debit') {
+    // Balance update logic for Debit and Loan accounts
+    if (type === 'debit' || type === 'loan') {
       const oldBal = Number(account.balance || 0);
       const newBal = Number(editBalance || 0);
       const delta = newBal - oldBal;

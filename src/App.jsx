@@ -1524,6 +1524,9 @@ export default function App() {
       const baseId = entry.id.replace(/-(in|out)$/, '')
       const pair = allAccountTxns.find(t => t.id !== entry.id && t.id.startsWith(baseId))
 
+      const newAccountId = next.accountId || entry.accountId
+      const newSubAccountId = next.subAccountId !== undefined ? next.subAccountId : entry.subAccountId
+
       // 1. Revert old amounts
       const deltaRevertEntry = entry.direction === 'in' ? -oldAmt : oldAmt
       nextAccounts = applyAccountDelta(nextAccounts, entry.accountId, entry.subAccountId, deltaRevertEntry)
@@ -1535,7 +1538,7 @@ export default function App() {
 
       // 2. Apply new amounts
       const deltaApplyEntry = entry.direction === 'in' ? newAmt : -newAmt
-      nextAccounts = applyAccountDelta(nextAccounts, entry.accountId, entry.subAccountId, deltaApplyEntry)
+      nextAccounts = applyAccountDelta(nextAccounts, newAccountId, newSubAccountId, deltaApplyEntry)
 
       if (pair) {
         const deltaApplyPair = pair.direction === 'in' ? newAmt : -newAmt

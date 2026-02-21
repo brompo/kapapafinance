@@ -1227,6 +1227,21 @@ function AccountDetail({
   const [subEditName, setSubEditName] = useState("")
   const [subEditLedgerId, setSubEditLedgerId] = useState("")
 
+  function handleOpenTxnEdit(t) {
+    setSelectedTxn(t);
+    setEditTxnAmount(t.amount || "");
+    setEditTxnNote(t.note || "");
+    setEditTxnDate(t.date || new Date().toISOString().slice(0, 10));
+    setEditTxnAccountId(t.accountId || "");
+    setEditTxnSubAccountId(t.subAccountId || null);
+    if (t.kind === "credit") {
+      setEditCreditRate(t.creditRate || "");
+      setEditCreditType(t.creditType || "simple");
+      setEditReceiveDate(t.receiveDate || t.date || new Date().toISOString().slice(0, 10));
+      setEditInterestStartDate(t.interestStartDate || t.date || new Date().toISOString().slice(0, 10));
+    }
+  }
+
   useEffect(() => {
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     if (subs.length && !subAccountId) setSubAccountId(subs[0].id);
@@ -3006,9 +3021,9 @@ function AccountDetail({
                         key={t.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => setSelectedTxn(t)}
+                        onClick={() => handleOpenTxnEdit(t)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") setSelectedTxn(t);
+                          if (e.key === "Enter" || e.key === " ") handleOpenTxnEdit(t);
                         }}
                       >
                         <div className="accHistoryIcon">

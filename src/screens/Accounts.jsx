@@ -48,14 +48,17 @@ export default function Accounts({
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [editTargetValue, setEditTargetValue] = useState("");
   const [editTargetYear, setEditTargetYear] = useState("");
-  const [filter, setFilter] = useState("all"); // all | debit | credit | asset
+  const [filter, setFilter] = useState("all"); // all | debit | credit | loan | asset
   const [selectedId, setSelectedId] = useState(null);
   const [draggingGroupId, setDraggingGroupId] = useState(null);
   const [draggingAccountId, setDraggingAccountId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
+  const [dragOverAccountId, setDragOverAccountId] = useState(null);
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupType, setNewGroupType] = useState('debit');
   const [showOverview, setShowOverview] = useState(true);
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
-  const [dragOverAccountId, setDragOverAccountId] = useState(null);
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
   const [newAccountName, setNewAccountName] = useState("");
@@ -153,6 +156,9 @@ export default function Accounts({
       if (type === "credit") {
         liabilities += val;
         capitalDeployed -= val;
+      } else if (type === "loan") {
+        assets += val;
+        capitalDeployed += val;
       } else if (type === "asset") {
         assets += val;
         const info = calculateAssetMetrics(a, accountTxns, g.type);
@@ -227,17 +233,16 @@ export default function Accounts({
   }, [groups, filter]);
 
   function handleAddGroup() {
-    const name = prompt("Group name?");
-    if (!name) return;
-    const trimmed = name.trim();
+    const trimmed = newGroupName.trim();
     if (!trimmed) return;
-    const type = prompt('Group type: "debit", "credit", or "asset"?', "debit");
-    if (!type || (type !== "debit" && type !== "credit" && type !== "asset")) return;
     const next = [
       ...groups,
-      { id: crypto.randomUUID(), name: trimmed, type, collapsed: false },
+      { id: crypto.randomUUID(), name: trimmed, type: newGroupType, collapsed: false },
     ];
     onUpdateGroups?.(next);
+    setNewGroupName('');
+    setNewGroupType('debit');
+    setShowAddGroupModal(false);
   }
 
   function handleAddAccount(group) {
@@ -797,7 +802,7 @@ export default function Accounts({
       {viewMode === 'accounts' && shownGroups.map((group) => {
         const items = visibleAccounts.filter((a) => a.groupId === group.id);
         const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
-        const right = group.type === "credit" ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
+        const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
         const handleRenameGroup = () => {
           const name = prompt("Rename group?", group.name);
           if (!name) return;
@@ -844,6 +849,50 @@ export default function Accounts({
           />
         );
       })}
+
+      {viewMode === 'accounts' && (
+        <>
+          <button
+            className="btn"
+            type="button"
+            style={{ width: '100%', marginTop: 12, background: '#f5f5fa', border: '1px dashed #c5c5d3', color: '#6b7280', fontSize: 13 }}
+            onClick={() => setShowAddGroupModal(true)}
+          >
+            + Add Group
+          </button>
+
+          {showAddGroupModal && (
+            <div className="modalBackdrop" onClick={() => setShowAddGroupModal(false)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+                <div className="modalTitle">Add Group</div>
+                <div className="accQuickForm">
+                  <div className="field">
+                    <label>Group Name</label>
+                    <input
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="e.g. Loans"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Type</label>
+                    <select value={newGroupType} onChange={(e) => setNewGroupType(e.target.value)}>
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                      <option value="loan">Loan</option>
+                      <option value="asset">Asset</option>
+                    </select>
+                  </div>
+                  <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                    <button className="btn" type="button" onClick={() => setShowAddGroupModal(false)}>Cancel</button>
+                    <button className="btn primary" type="button" onClick={handleAddGroup}>Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -899,7 +948,7 @@ function Section({
           </button>
         </div>
         <div className="sectionRightWrap">
-          <div className={`sectionRight ${group.type === "credit" ? "owed" : ""}`}>{right}</div>
+          <div className={`sectionRight ${(group.type === "credit" || group.type === "loan") ? "owed" : ""}`}>{right}</div>
           <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
             +
           </button>
@@ -1806,11 +1855,12 @@ function AccountDetail({
               className="actionBtnLarge btnGreen"
               onClick={() => {
                 if (currentGroup?.type === "credit") setShowCreditModal(true);
+                else if (currentGroup?.type === "loan") setMode("adjust");
                 else if (currentGroup?.type === "asset") setShowPurchaseModal(true);
                 else setMode("adjust");
               }}
             >
-              {currentGroup?.type === 'asset' ? 'BUY' : currentGroup?.type === 'credit' ? 'BORROW' : 'ADD'}
+              {currentGroup?.type === 'asset' ? 'BUY' : currentGroup?.type === 'credit' ? 'BORROW' : currentGroup?.type === 'loan' ? 'LEND' : 'ADD'}
             </button>
             {currentGroup?.type === 'asset' && (
               <button
@@ -2712,7 +2762,14 @@ function AccountDetail({
                   onChange={(e) => setEditGroupId(e.target.value)}
                 >
                   {groups
-                    .filter(g => g.type === (currentGroup?.type || 'debit'))
+                    .filter(g => {
+                      const currentType = currentGroup?.type || 'debit'
+                      // Allow moving between debit and loan groups
+                      if (currentType === 'debit' || currentType === 'loan') {
+                        return g.type === 'debit' || g.type === 'loan'
+                      }
+                      return g.type === currentType
+                    })
                     .map(g => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))

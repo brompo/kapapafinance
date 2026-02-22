@@ -3151,6 +3151,250 @@ label {
   border-top: 1px solid #f3f3f8;
 }
 
+/* Intelligence Dashboard */
+.intelDashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 0 20px;
+}
+
+.intelSection {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid #e8e8ee;
+  box-shadow: 0 2px 10px rgba(60, 60, 100, 0.06);
+}
+
+.intelSectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e1b4b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+}
+
+.intelMetricRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.intelMetricCard {
+  text-align: center;
+  padding: 10px 4px;
+  background: #f8f8fc;
+  border-radius: 12px;
+}
+
+.intelMetricValue {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.intelMetricLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  margin-top: 4px;
+}
+
+.intelMetricTarget {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.intelMetricSub {
+  font-size: 9px;
+  color: #9ca3af;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+/* Allocation Bar */
+.allocationBarWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.allocationBar {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.allocSegment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.allocationLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.allocLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.allocDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.allocLegendVal {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Risk Cards */
+.riskGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.riskCard {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  align-items: flex-start;
+}
+
+.riskCard.safe {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.riskCard.warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.riskCard.danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.riskIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+.riskBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.riskTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin-bottom: 4px;
+}
+
+.riskMetric {
+  font-size: 18px;
+  font-weight: 800;
+  color: #111;
+}
+
+.riskSub {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Engine Cards */
+.engineGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.engineCard {
+  background: #f8f8fc;
+  border-radius: 12px;
+  padding: 14px 12px;
+}
+
+.engineHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.engineEmoji {
+  font-size: 18px;
+}
+
+.engineName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e1b4b;
+}
+
+.engineRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: #6b7280;
+  padding: 4px 0;
+  border-bottom: 1px solid #eef0f6;
+}
+
+.engineRow:last-child {
+  border-bottom: none;
+}
+
+.engineVal {
+  font-weight: 700;
+  font-size: 12px;
+  color: #111;
+}
+
+/* Next Best Action */
+.nextActionCard {
+  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.nextActionLine {
+  font-size: 13px;
+  color: #3730a3;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.nextActionLine+.nextActionLine {
+  border-top: 1px solid rgba(99, 102, 241, 0.15);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
 /* Capital Allocation Area */
 .allocationGrid {
   display: flex;

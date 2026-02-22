@@ -150,30 +150,64 @@ export default function Accounts({
     let liabilities = 0;
     let capitalDeployed = 0;
     let invested = 0;
+    let loanBook = 0;
+    let liquidCash = 0;
+    let assetCost = 0;
+    let assetValue = 0;
+    let landCapital = 0;
+    let landValue = 0;
+    let landRealizedGains = 0;
+    let sharesCapital = 0;
+    let sharesValue = 0;
+    let sharesRealizedGains = 0;
+    let totalRealizedGains = 0;
+    let totalDebt = 0;
 
     for (const a of visibleAccounts) {
       const g = groupById.get(a.groupId);
-      const type = g?.type;
+      const type = a.accountType || g?.type;
       const val = getAccountBalance(a); // Market Value
 
       if (type === "credit") {
         liabilities += val;
+        totalDebt += val;
         capitalDeployed -= val;
       } else if (type === "loan") {
         assets += val;
+        loanBook += val;
         capitalDeployed += val;
       } else if (type === "asset") {
         assets += val;
-        const info = calculateAssetMetrics(a, accountTxns, g.type);
+        const info = calculateAssetMetrics(a, accountTxns, 'asset');
         capitalDeployed += (info.costBasis || 0);
         invested += (info.costBasis || 0);
+        assetCost += (info.costBasis || 0);
+        assetValue += val;
+        totalRealizedGains += (info.realizedGain || 0);
+        // Classify as land or shares based on account name
+        const name = (a.name || '').toLowerCase();
+        if (name.includes('land') || name.includes('plot') || name.includes('property') || name.includes('shamba')) {
+          landCapital += (info.costBasis || 0);
+          landValue += val;
+          landRealizedGains += (info.realizedGain || 0);
+        } else {
+          sharesCapital += (info.costBasis || 0);
+          sharesValue += val;
+          sharesRealizedGains += (info.realizedGain || 0);
+        }
       } else {
         // Debit
         assets += val;
+        liquidCash += val;
         capitalDeployed += val;
         invested += val;
       }
     }
+
+    const productiveCapital = assetCost + loanBook;
+    const idleCash = Math.max(0, liquidCash - loanBook);
+    const netWorth = assets - liabilities;
+    const friendLoanExposure = netWorth > 0 ? (loanBook / netWorth) * 100 : 0;
 
     // --- Capital Coverage Metrics ---
     // 1. Monthly Return (Avg last 3 months)
@@ -183,8 +217,6 @@ export default function Accounts({
     threeMonthsAgo.setMonth(now.getMonth() - 3);
     const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
 
-    // Filter txns for income/expense in last 3 months
-    // Note: txns prop passed from App.jsx contains all ledger txns
     const recentTxns = txns.filter(t => t.date >= iso3m);
     let income3m = 0;
     let expense3m = 0;
@@ -197,35 +229,59 @@ export default function Accounts({
     const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
 
     // 2. Cost of Capital (Weighted Avg Monthly Interest)
-    let totalDebt = 0;
     let totalWeightedRate = 0;
     for (const a of visibleAccounts) {
       const g = groupById.get(a.groupId);
-      if (g?.type === 'credit') {
-        const bal = getAccountBalance(a); // This includes accrued
-        // We need the rate. It's on the account object, usually 'creditRate' (annual %)
-        // If not present, assume 0.
+      const type = a.accountType || g?.type;
+      if (type === 'credit') {
+        const bal = getAccountBalance(a);
         const rate = Number(a.creditRate || 0);
         if (bal > 0) {
-          totalDebt += bal;
-          totalWeightedRate += (bal * (rate / 12)); // Monthly rate weight
+          totalWeightedRate += (bal * (rate / 12));
         }
       }
     }
-    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0; // Monthly %
+    const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0;
+    const costOfDebtAnnual = costOfCapital * 12;
 
     // 3. Coverage
     const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
 
+    // ROC = annualized monthly return
+    const roc = monthlyReturn * 12;
+    // ROBC = ROC / Cost of Debt
+    const robc = costOfDebtAnnual > 0 ? (roc / costOfDebtAnnual) : 0;
+    // Capital Turns
+    const capitalTurns = productiveCapital > 0 ? (totalRealizedGains / productiveCapital) : 0;
+
     return {
       assets,
       liabilities,
-      netWorth: assets - liabilities,
+      netWorth,
       capitalDeployed,
-      invested, // Total Invested Capital (Cash + Asset Cost Basis)
+      invested,
       monthlyReturn,
       costOfCapital,
-      coverage
+      costOfDebtAnnual,
+      coverage,
+      loanBook,
+      liquidCash,
+      idleCash,
+      assetCost,
+      assetValue,
+      productiveCapital,
+      friendLoanExposure,
+      totalDebt,
+      totalRealizedGains,
+      roc,
+      robc,
+      capitalTurns,
+      landCapital,
+      landValue,
+      landRealizedGains,
+      sharesCapital,
+      sharesValue,
+      sharesRealizedGains
     };
   }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
@@ -551,114 +607,228 @@ export default function Accounts({
               className={`viewTab ${viewMode === 'capital' ? 'active' : ''}`}
               onClick={() => setViewMode('capital')}
             >
-              Insights
+              Intelligence
             </button>
           </div>
 
-          {/* Capital View */}
+          {/* Intelligence View */}
           {viewMode === 'capital' && (() => {
-            // Compute capital metrics
-            let liquidCash = 0
-            let totalDebt = 0
-            let assetValue = 0
-            let assetCost = 0
-            let loanBook = 0
+            // Allocation percentages
+            const totalCap = totals.productiveCapital + totals.idleCash + totals.loanBook
+            const productivePct = totalCap > 0 ? (totals.assetCost / totalCap) * 100 : 0
+            const idlePct = totalCap > 0 ? (totals.idleCash / totalCap) * 100 : 0
+            const loanPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
+            const otherPct = Math.max(0, 100 - productivePct - idlePct - loanPct)
 
-            for (const a of visibleAccounts) {
-              const g = groupById.get(a.groupId)
-              const val = getAccountBalance(a)
-              if (g?.type === 'debit') liquidCash += val
-              else if (g?.type === 'credit') totalDebt += val
-              else if (g?.type === 'asset') {
-                assetValue += val
-                const info = calculateAssetMetrics(a, accountTxns, g.type)
-                assetCost += (info.costBasis || 0)
-              }
+            // Next Best Action rules
+            const actions = []
+            if (totals.friendLoanExposure > 5) {
+              actions.push(`Friend-loan exposure is ${totals.friendLoanExposure.toFixed(0)}% (above 5%): Pause new loans until exposure drops below threshold.`)
             }
-
-            // Check loan accounts for receivables
-            for (const a of visibleAccounts) {
-              const g = groupById.get(a.groupId)
-              if (g?.type === 'debit') {
-                const name = (a.name || '').toLowerCase()
-                if (name.includes('loan') || name.includes('receivable') || name.includes('lent')) {
-                  loanBook += getAccountBalance(a)
-                }
-              }
+            if (totalCap > 0 && idlePct > 25) {
+              actions.push(`Idle cash is ${idlePct.toFixed(0)}%: Deploy into highest-velocity pipeline.`)
             }
-
-            const totalAssets = liquidCash + assetValue
-            const netPosition = totalAssets - totalDebt
-            const liquidRatio = totalAssets > 0 ? (liquidCash / totalAssets) * 100 : 0
-            const debtRatio = totalAssets > 0 ? (totalDebt / totalAssets) * 100 : 0
-            const deployedCapital = assetCost + loanBook
-            const idleCash = liquidCash - loanBook
-            const workingRatio = (deployedCapital + idleCash) > 0 ? (deployedCapital / (deployedCapital + idleCash)) * 100 : 0
-            const safetyBuffer = liquidCash * 0.2
-            const deployableCapital = Math.max(0, idleCash - safetyBuffer)
-
-            const getStatus = (good) => good ? { color: '#16A34A', label: '✓ Good' } : { color: '#DC2626', label: '⚠ Caution' }
-            const getAmber = (val, low, high) => val >= high ? { color: '#16A34A', label: '✓ Good' } : val >= low ? { color: '#F59E0B', label: '◉ Fair' } : { color: '#DC2626', label: '⚠ Caution' }
-
-            const cards = [
-              {
-                question: 'Am I liquid right now?',
-                metric: `${liquidRatio.toFixed(0)}%`,
-                metricLabel: 'Liquid / Total Assets',
-                detail: `Cash: ${fmtTZS(liquidCash)} of ${fmtTZS(totalAssets)}`,
-                status: getAmber(liquidRatio, 15, 30),
-                explanation: liquidRatio >= 30 ? 'Healthy cash position.' : liquidRatio >= 15 ? 'Moderate liquidity — monitor closely.' : 'Low liquidity — consider freeing up cash.'
-              },
-              {
-                question: 'Am I exposed?',
-                metric: `${debtRatio.toFixed(0)}%`,
-                metricLabel: 'Debt / Total Assets',
-                detail: `Debt: ${fmtTZS(totalDebt)} vs Assets: ${fmtTZS(totalAssets)}`,
-                status: getAmber(100 - debtRatio, 30, 60),
-                explanation: debtRatio < 40 ? 'Low leverage — comfortably positioned.' : debtRatio < 70 ? 'Moderate leverage — be cautious with new debt.' : 'High leverage — prioritize debt reduction.'
-              },
-              {
-                question: 'Is my capital working?',
-                metric: `${workingRatio.toFixed(0)}%`,
-                metricLabel: 'Deployed / Total Capital',
-                detail: `Deployed: ${fmtTZS(deployedCapital)} | Idle: ${fmtTZS(Math.max(0, idleCash))}`,
-                status: getAmber(workingRatio, 40, 65),
-                explanation: workingRatio >= 65 ? 'Capital is well utilized.' : workingRatio >= 40 ? 'Some capital is idle — look for opportunities.' : 'Most capital is sitting idle.'
-              },
-              {
-                question: 'What is my real net position?',
-                metric: fmtTZS(netPosition),
-                metricLabel: 'Assets − Liabilities',
-                detail: `Total Assets: ${fmtTZS(totalAssets)} | Liabilities: ${fmtTZS(totalDebt)}`,
-                status: getStatus(netPosition > 0),
-                explanation: netPosition > 0 ? 'You own more than you owe.' : 'Your liabilities exceed your assets.'
-              },
-              {
-                question: 'Can I deploy more capital safely?',
-                metric: fmtTZS(deployableCapital),
-                metricLabel: 'Available after 20% safety buffer',
-                detail: `Safety buffer: ${fmtTZS(safetyBuffer)} (20% of liquid cash)`,
-                status: getStatus(deployableCapital > 0),
-                explanation: deployableCapital > 0
-                  ? `You can safely deploy up to ${fmtTZS(deployableCapital)}.`
-                  : 'No safe deployable capital — build up cash first.'
-              }
-            ]
+            if (totals.totalDebt > 0 && totals.robc < 1.2) {
+              actions.push(`ROBC is ${totals.robc.toFixed(1)}×: Don't borrow more — focus on higher-yield deals.`)
+            }
+            if (totals.totalDebt > 0 && totals.roc < totals.costOfDebtAnnual) {
+              actions.push(`ROC (${totals.roc.toFixed(1)}%) < Cost of Debt (${totals.costOfDebtAnnual.toFixed(1)}%): Returns don't cover borrowing costs.`)
+            }
+            if (actions.length === 0) {
+              actions.push('All metrics within healthy thresholds. Keep deploying capital into productive assets.')
+            }
 
             return (
-              <div className="capitalCards">
-                {cards.map((c, i) => (
-                  <div className="capitalCard" key={i}>
-                    <div className="capitalQuestion">{c.question}</div>
-                    <div className="capitalMetricRow">
-                      <div className="capitalMetric">{c.metric}</div>
-                      <div className="capitalStatus" style={{ color: c.status.color }}>{c.status.label}</div>
+              <div className="intelDashboard">
+                {/* 1. Decision Numbers */}
+                <div className="intelSection">
+                  <div className="intelSectionTitle">Decision Numbers</div>
+                  <div className="intelMetricRow">
+                    <div className="intelMetricCard">
+                      <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626' }}>
+                        {totals.roc.toFixed(1)}%
+                      </div>
+                      <div className="intelMetricLabel">ROC (YTD)</div>
+                      <div className="intelMetricTarget">Target: ≥ 24%</div>
+                      <div className="intelMetricSub">Profit ÷ Avg productive capital</div>
                     </div>
-                    <div className="capitalMetricLabel">{c.metricLabel}</div>
-                    <div className="capitalDetail">{c.detail}</div>
-                    <div className="capitalExplanation">{c.explanation}</div>
+
+                    {totals.totalDebt > 0 ? (
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: totals.robc >= 2 ? '#16A34A' : totals.robc >= 1.2 ? '#F59E0B' : '#DC2626' }}>
+                          {totals.robc.toFixed(1)}×
+                        </div>
+                        <div className="intelMetricLabel">ROBC Ratio</div>
+                        <div className="intelMetricTarget">Target: ≥ 2.0×</div>
+                        <div className="intelMetricSub" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span>Cost of Debt: {totals.costOfDebtAnnual.toFixed(1)}%</span>
+                          <span>Leveraged Yield: {(totals.roc + totals.costOfDebtAnnual).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: totals.capitalTurns >= 1 ? '#16A34A' : '#F59E0B' }}>
+                          {totals.capitalTurns.toFixed(1)}×
+                        </div>
+                        <div className="intelMetricLabel">Capital Turns</div>
+                        <div className="intelMetricTarget">Velocity of capital</div>
+                        <div className="intelMetricSub">How many times capital cycled</div>
+                      </div>
+                    )}
+
+                    <div className="intelMetricCard">
+                      <div className="intelMetricValue" style={{ color: '#6366F1' }}>
+                        {totals.capitalTurns.toFixed(1)}×
+                      </div>
+                      <div className="intelMetricLabel">Capital Turns</div>
+                      <div className="intelMetricTarget">YTD velocity</div>
+                      <div className="intelMetricSub">Realized ÷ Productive capital</div>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* 2. Capital Allocation Bar */}
+                <div className="intelSection">
+                  <div className="intelSectionTitle">Where Your Capital Sits</div>
+                  <div className="allocationBarWrap">
+                    <div className="allocationBar">
+                      {productivePct > 0 && <div className="allocSegment" style={{ width: `${productivePct}%`, background: '#16A34A' }} />}
+                      {idlePct > 0 && <div className="allocSegment" style={{ width: `${idlePct}%`, background: '#F59E0B' }} />}
+                      {loanPct > 0 && <div className="allocSegment" style={{ width: `${loanPct}%`, background: '#DC2626' }} />}
+                      {otherPct > 0 && <div className="allocSegment" style={{ width: `${otherPct}%`, background: '#6366F1' }} />}
+                    </div>
+                    <div className="allocationLegend">
+                      <div className="allocLegendItem">
+                        <span className="allocDot" style={{ background: '#16A34A' }} />
+                        <span>Productive {productivePct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.assetCost)}</span>
+                      </div>
+                      <div className="allocLegendItem">
+                        <span className="allocDot" style={{ background: '#F59E0B' }} />
+                        <span>Idle Cash {idlePct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.idleCash)}</span>
+                      </div>
+                      <div className="allocLegendItem" style={{ color: '#DC2626' }}>
+                        <span className="allocDot" style={{ background: '#DC2626' }} />
+                        <span>Friend Loans {loanPct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Risk & Leakage */}
+                <div className="intelSection">
+                  <div className="intelSectionTitle">Risk & Leakage</div>
+                  <div className="riskGrid">
+                    <div className={`riskCard ${totals.friendLoanExposure > 5 ? 'danger' : 'safe'}`}>
+                      <div className="riskIcon">{totals.friendLoanExposure > 5 ? '⚠' : '✓'}</div>
+                      <div className="riskBody">
+                        <div className="riskTitle">Friend Loan Exposure</div>
+                        <div className="riskMetric">{fmtTZS(totals.loanBook)}</div>
+                        <div className="riskSub">
+                          Leakage Ratio: {totals.friendLoanExposure.toFixed(1)}% of Net Worth
+                          <br />Target: ≤ 5%
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`riskCard ${idlePct > 25 ? 'warning' : 'safe'}`}>
+                      <div className="riskIcon">{idlePct > 25 ? '◉' : '✓'}</div>
+                      <div className="riskBody">
+                        <div className="riskTitle">Dead Capital Warning</div>
+                        <div className="riskMetric">{idlePct.toFixed(0)}% Idle</div>
+                        <div className="riskSub">
+                          {idlePct > 25 ? `Idle cash exceeds 25% — deploy capital.` : 'Idle cash within healthy range.'}
+                        </div>
+                      </div>
+                    </div>
+                    {totals.totalDebt > 0 && (
+                      <div className={`riskCard ${totals.roc < totals.costOfDebtAnnual ? 'danger' : totals.robc < 1.2 ? 'warning' : 'safe'}`}>
+                        <div className="riskIcon">{totals.roc < totals.costOfDebtAnnual ? '⚠' : totals.robc < 1.2 ? '◉' : '✓'}</div>
+                        <div className="riskBody">
+                          <div className="riskTitle">Leverage Warning</div>
+                          <div className="riskMetric">{totals.robc.toFixed(1)}× ROBC</div>
+                          <div className="riskSub">
+                            {totals.roc < totals.costOfDebtAnnual
+                              ? 'ROC < Cost of Debt — danger zone.'
+                              : totals.robc < 1.2
+                                ? 'ROBC < 1.2× — stop new borrowing.'
+                                : 'Leverage is productive.'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Engine Cards */}
+                <div className="intelSection">
+                  <div className="intelSectionTitle">Performance Engines</div>
+                  <div className="engineGrid">
+                    <div className="engineCard">
+                      <div className="engineHeader">
+                        <span className="engineEmoji">🏗️</span>
+                        <span className="engineName">Land Engine</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Capital in Land</span>
+                        <span className="engineVal">{fmtTZS(totals.landCapital)}</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Market Value</span>
+                        <span className="engineVal">{fmtTZS(totals.landValue)}</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Realized Profit</span>
+                        <span className="engineVal" style={{ color: totals.landRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
+                          {fmtTZS(totals.landRealizedGains)}
+                        </span>
+                      </div>
+                      <div className="engineRow">
+                        <span>ROI</span>
+                        <span className="engineVal" style={{ color: '#6366F1' }}>
+                          {totals.landCapital > 0 ? ((totals.landValue - totals.landCapital) / totals.landCapital * 100).toFixed(1) : '0.0'}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="engineCard">
+                      <div className="engineHeader">
+                        <span className="engineEmoji">📈</span>
+                        <span className="engineName">Shares Engine</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Market Value</span>
+                        <span className="engineVal">{fmtTZS(totals.sharesValue)}</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Cost Basis</span>
+                        <span className="engineVal">{fmtTZS(totals.sharesCapital)}</span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Realized Gains</span>
+                        <span className="engineVal" style={{ color: totals.sharesRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
+                          {fmtTZS(totals.sharesRealizedGains)}
+                        </span>
+                      </div>
+                      <div className="engineRow">
+                        <span>Total Return</span>
+                        <span className="engineVal" style={{ color: '#6366F1' }}>
+                          {totals.sharesCapital > 0 ? (((totals.sharesValue - totals.sharesCapital + totals.sharesRealizedGains) / totals.sharesCapital) * 100).toFixed(1) : '0.0'}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Next Best Action */}
+                <div className="intelSection">
+                  <div className="intelSectionTitle">🧠 Next Best Action</div>
+                  <div className="nextActionCard">
+                    {actions.map((a, i) => (
+                      <div className="nextActionLine" key={i}>{a}</div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )
           })()}

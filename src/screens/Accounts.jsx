@@ -214,11 +214,11 @@ export default function Accounts({
     // --- Capital Coverage Metrics ---
     // 1. Monthly Return (Avg last 3 months)
     const now = new Date();
-    let totalProfit3m = 0;
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(now.getMonth() - 3);
     const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
 
+    // Ledger income/expense
     const recentTxns = txns.filter(t => t.date >= iso3m);
     let income3m = 0;
     let expense3m = 0;
@@ -227,7 +227,23 @@ export default function Accounts({
       if (t.type === 'income') income3m += amt;
       else if (t.type === 'expense') expense3m += amt;
     }
-    const avgMonthlyProfit = (income3m - expense3m) / 3;
+
+    // Also include realized gains from asset sales in the last 3 months
+    let recentRealizedGains = 0;
+    for (const a of visibleAccounts) {
+      const g = groupById.get(a.groupId);
+      const type = a.accountType || g?.type;
+      if (type === 'asset') {
+        const info = calculateAssetMetrics(a, accountTxns, 'asset');
+        if (info.realizedGains) {
+          for (const rg of info.realizedGains) {
+            if (rg.date >= iso3m) recentRealizedGains += (rg.amount || 0);
+          }
+        }
+      }
+    }
+
+    const avgMonthlyProfit = (income3m - expense3m + recentRealizedGains) / 3;
     const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
 
     // 2. Cost of Capital (Weighted Avg Monthly Interest)

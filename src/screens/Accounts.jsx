@@ -58,6 +58,7 @@ export default function Accounts({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupType, setNewGroupType] = useState('debit');
   const [showOverview, setShowOverview] = useState(true);
+  const [showImportantNumbers, setShowImportantNumbers] = useState(true);
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
@@ -246,6 +247,31 @@ export default function Accounts({
     const avgMonthlyProfit = (income3m - expense3m + recentRealizedGains) / 3;
     const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
 
+    // YTD Profit computation
+    const currentYearStr = String(now.getFullYear());
+    const ytdTxns = txns.filter(t => t.date && t.date.startsWith(currentYearStr));
+    let ytdIncome = 0;
+    let ytdExpense = 0;
+    for (const t of ytdTxns) {
+      const amt = Number(t.amount || 0);
+      if (t.type === 'income') ytdIncome += amt;
+      else if (t.type === 'expense') ytdExpense += amt;
+    }
+    let ytdRealizedGains = 0;
+    for (const a of visibleAccounts) {
+      const g = groupById.get(a.groupId);
+      const type = a.accountType || g?.type;
+      if (type === 'asset') {
+        const info = calculateAssetMetrics(a, accountTxns, 'asset');
+        if (info.realizedGains) {
+          for (const rg of info.realizedGains) {
+            if (rg.date && rg.date.startsWith(currentYearStr)) ytdRealizedGains += (rg.amount || 0);
+          }
+        }
+      }
+    }
+    const profitYTD = ytdIncome - ytdExpense + ytdRealizedGains;
+
     // 2. Cost of Capital (Weighted Avg Monthly Interest)
     let totalWeightedRate = 0;
     for (const a of visibleAccounts) {
@@ -299,7 +325,8 @@ export default function Accounts({
       landRealizedGains,
       sharesCapital,
       sharesValue,
-      sharesRealizedGains
+      sharesRealizedGains,
+      profitYTD
     };
   }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
@@ -658,9 +685,39 @@ export default function Accounts({
 
             return (
               <div className="intelDashboard">
-                {/* 1. Decision Numbers */}
+                {/* 1. Important Numbers (Collapsible) */}
+                <div className="intelSection" style={{ paddingBottom: showImportantNumbers ? 16 : 0, padding: showImportantNumbers ? 16 : '12px 16px' }}>
+                  <div
+                    className="intelSectionTitle"
+                    onClick={() => setShowImportantNumbers(!showImportantNumbers)}
+                    style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', marginBottom: showImportantNumbers ? 14 : 0 }}
+                  >
+                    <span>1. Important Numbers</span>
+                    <span>{showImportantNumbers ? '▼' : '▶'}</span>
+                  </div>
+                  {showImportantNumbers && (
+                    <div className="intelMetricRow">
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: totals.profitYTD >= 0 ? '#16A34A' : '#DC2626' }}>
+                          {fmtCompact(totals.profitYTD)}
+                        </div>
+                        <div className="intelMetricLabel">Profit (YTD)</div>
+                        <div className="intelMetricSub">Income − Exp + Gains</div>
+                      </div>
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: '#6366F1' }}>
+                          {fmtCompact(totals.productiveCapital)}
+                        </div>
+                        <div className="intelMetricLabel">Avg Productive Capital</div>
+                        <div className="intelMetricSub">Assets + Loans</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Decision Numbers */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">Decision Numbers</div>
+                  <div className="intelSectionTitle">2. Decision Numbers</div>
                   <div className="intelMetricRow">
                     <div className="intelMetricCard">
                       <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626' }}>
@@ -705,9 +762,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 2. Capital Allocation Bar */}
+                {/* 3. Capital Allocation Bar */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">Where Your Capital Sits</div>
+                  <div className="intelSectionTitle">3. Where Your Capital Sits</div>
                   <div className="allocationBarWrap">
                     <div className="allocationBar">
                       {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
@@ -740,9 +797,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 3. Risk & Leakage */}
+                {/* 4. Risk & Leakage */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">Risk & Leakage</div>
+                  <div className="intelSectionTitle">4. Risk & Leakage</div>
                   <div className="riskGrid">
                     <div className={`riskCard ${totals.friendLoanExposure > 5 ? 'danger' : 'safe'}`}>
                       <div className="riskIcon">{totals.friendLoanExposure > 5 ? '⚠' : '✓'}</div>
@@ -784,9 +841,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 4. Engine Cards */}
+                {/* 5. Engine Cards */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">Performance Engines</div>
+                  <div className="intelSectionTitle">5. Performance Engines</div>
                   <div className="engineGrid">
                     <div className="engineCard">
                       <div className="engineHeader">
@@ -843,9 +900,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 5. Next Best Action */}
+                {/* 6. Next Best Action */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">🧠 Next Best Action</div>
+                  <div className="intelSectionTitle">6. 🧠 Next Best Action</div>
                   <div className="nextActionCard">
                     {actions.map((a, i) => (
                       <div className="nextActionLine" key={i}>{a}</div>

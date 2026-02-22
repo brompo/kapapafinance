@@ -71,7 +71,6 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
       const cost = Number(t.amount || 0); // Amount matches total + fee
       runningQty += q;
       runningCost += cost;
-      uninvestedCash -= cost; // Cash is converted to assets
     } else if (t.kind === "sale") {
       const q = Number(t.quantity || 0);
       const proceeds = Number(t.amount || 0);
@@ -84,7 +83,6 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
 
         const gain = proceeds - costOfSold;
         totalRealizedGain += gain;
-        uninvestedCash += proceeds; // Sale proceeds return to cash
         realizedGains.push({
           date: t.date,
           amount: gain,

@@ -122,7 +122,7 @@ export default function Accounts({
       }, 0)
       : Number(account.balance || 0);
 
-    const groupType = groupById.get(account.groupId)?.type;
+    const groupType = account.accountType || groupById.get(account.groupId)?.type;
     if (groupType === "credit") return base + computeAccruedForAccount(account);
 
     if (groupType === "asset") {
@@ -1052,12 +1052,12 @@ function Section({
                       </div>
                     </div>
                   ) : (
-                    <div className="stdRowCard">
+                    <div className={`stdRowCard ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>
                       <div className="stdRowLeft">
-                        <div className="stdIcon">
+                        <div className={`stdIcon ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>
                           {a.name.slice(0, 1).toUpperCase()}
                         </div>
-                        <div className="stdName">{a.name}</div>
+                        <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
                       </div>
                       <div className="stdRight">
                         <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
@@ -1156,6 +1156,7 @@ function AccountDetail({
   getAccountBalance,
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
+  const effectiveType = account.accountType || currentGroup?.type || 'debit';
   const [mode, setMode] = useState(null); // adjust | transfer | null
 
   const [direction, setDirection] = useState("in"); // in | out
@@ -1212,8 +1213,9 @@ function AccountDetail({
   const [error, setError] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportInLabel, setExportInLabel] = useState(currentGroup?.type === 'loan' ? 'Debit' : 'Credit');
-  const [exportOutLabel, setExportOutLabel] = useState(currentGroup?.type === 'loan' ? 'Credit' : 'Debit');
+  const [exportInLabel, setExportInLabel] = useState(effectiveType === 'loan' ? 'Debit' : 'Credit');
+  const [exportOutLabel, setExportOutLabel] = useState(effectiveType === 'loan' ? 'Credit' : 'Debit');
+  const [editAccountType, setEditAccountType] = useState(account.accountType || '');
   const [editTxnAmount, setEditTxnAmount] = useState("");
   const [editTxnNote, setEditTxnNote] = useState("");
   const [editTxnDate, setEditTxnDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1612,6 +1614,7 @@ function AccountDetail({
     setEditLedgerId(account.ledgerId || activeLedgerId);
     setEditBalance(account.balance || 0);
     setEditGroupId(account.groupId);
+    setEditAccountType(account.accountType || '');
     setEditError("");
     setShowEditModal(true);
   }
@@ -1626,7 +1629,7 @@ function AccountDetail({
     const targetLedger = ledgers.find((l) => l.id === nextLedgerId);
     const targetGroups = Array.isArray(targetLedger?.groups) ? targetLedger.groups : [];
     const newGroup = editGroupId ? groups.find(g => g.id === editGroupId) : null;
-    const type = newGroup?.type || currentGroup?.type || account.groupType || "debit";
+    const type = editAccountType || newGroup?.type || currentGroup?.type || account.groupType || "debit";
 
     // Try to find a group in the target ledger that matches both Name and Type
     let targetGroup = targetGroups.find((g) => g.name === (newGroup?.name || currentGroup?.name) && g.type === type);
@@ -1645,6 +1648,7 @@ function AccountDetail({
       ledgerId: nextLedgerId,
       groupId: (nextLedgerId === activeLedgerId && editGroupId) ? editGroupId : (targetGroup?.id || account.groupId),
       groupType: type,
+      accountType: editAccountType || undefined,
       subAccounts: nextSubs
     });
 
@@ -1719,7 +1723,7 @@ function AccountDetail({
   }
 
   function computeAssetSummary() {
-    const info = calculateAssetMetrics(account, accountTxns, currentGroup?.type);
+    const info = calculateAssetMetrics(account, accountTxns, effectiveType);
     if (!info.hasData) return { qty: 0, unit: "", unitPrice: 0, currentValue: 0 };
     return {
       qty: info.qty,
@@ -1904,8 +1908,8 @@ function AccountDetail({
           <div className="accDetailTitle">
             <h2>{account.name}</h2>
             <span>
-              {calculateAssetMetrics(account, accountTxns, currentGroup?.type).hasData
-                ? `${calculateAssetMetrics(account, accountTxns, currentGroup?.type).qty} ${calculateAssetMetrics(account, accountTxns, currentGroup?.type).unit || currentGroup?.name}`
+              {calculateAssetMetrics(account, accountTxns, effectiveType).hasData
+                ? `${calculateAssetMetrics(account, accountTxns, effectiveType).qty} ${calculateAssetMetrics(account, accountTxns, effectiveType).unit || currentGroup?.name}`
                 : currentGroup?.name}
             </span>
           </div>
@@ -1925,19 +1929,19 @@ function AccountDetail({
             <button
               className="actionBtnLarge btnGreen"
               onClick={() => {
-                if (currentGroup?.type === "credit") setShowCreditModal(true);
-                else if (currentGroup?.type === "loan") setMode("adjust");
-                else if (currentGroup?.type === "asset") setShowPurchaseModal(true);
+                if (effectiveType === "credit") setShowCreditModal(true);
+                else if (effectiveType === "loan") setMode("adjust");
+                else if (effectiveType === "asset") setShowPurchaseModal(true);
                 else setMode("adjust");
               }}
             >
-              {currentGroup?.type === 'asset' ? 'BUY' : currentGroup?.type === 'credit' ? 'BORROW' : currentGroup?.type === 'loan' ? 'LEND' : 'ADD'}
+              {effectiveType === 'asset' ? 'BUY' : effectiveType === 'credit' ? 'BORROW' : effectiveType === 'loan' ? 'LEND' : 'ADD'}
             </button>
-            {currentGroup?.type === 'asset' && (
+            {effectiveType === 'asset' && (
               <button
                 className="actionBtnLarge btnYellow"
                 onClick={() => {
-                  const info = calculateAssetMetrics(account, accountTxns, currentGroup?.type)
+                  const info = calculateAssetMetrics(account, accountTxns, effectiveType)
                   setValuationPrice(info.unitPrice || "")
                   setShowValuationModal(true)
                 }}
@@ -1945,11 +1949,11 @@ function AccountDetail({
                 UPDATE
               </button>
             )}
-            {(currentGroup?.type === 'asset' || currentGroup?.type !== 'asset') && (
+            {(effectiveType === 'asset' || effectiveType !== 'asset') && (
               <button
-                className={`actionBtnLarge ${currentGroup?.type === 'asset' ? 'btnRed' : 'btnYellow'}`}
+                className={`actionBtnLarge ${effectiveType === 'asset' ? 'btnRed' : 'btnYellow'}`}
                 onClick={() => {
-                  if (currentGroup?.type === 'asset') {
+                  if (effectiveType === 'asset') {
                     const info = getAvailableUnits(account.id);
                     setSaleUnit(info.unit);
                     const target = accounts.find((a) => a.id !== account.id);
@@ -1961,13 +1965,13 @@ function AccountDetail({
                   }
                 }}
               >
-                {currentGroup?.type === 'asset' ? 'SALE' : 'TRANSFER'}
+                {effectiveType === 'asset' ? 'SALE' : 'TRANSFER'}
               </button>
             )}
           </div>
 
           {/* Metrics Grid */}
-          {currentGroup?.type === 'asset' && (() => {
+          {effectiveType === 'asset' && (() => {
             const info = computeAssetSummary()
             const unrealizedPL = info.marketValue - info.costBasis
             const plPercent = info.costBasis > 0 ? (unrealizedPL / info.costBasis) * 100 : 0
@@ -1999,7 +2003,7 @@ function AccountDetail({
 
           })()}
 
-          {currentGroup?.type === 'credit' && (() => {
+          {effectiveType === 'credit' && (() => {
             const summary = computeCreditSummary()
             return (
               <div className="metricGrid">
@@ -2017,7 +2021,7 @@ function AccountDetail({
         </div>
       </div>
 
-      {(currentGroup?.type === 'debit' || (Array.isArray(account.subAccounts) && account.subAccounts.length > 0)) && (
+      {(effectiveType === 'debit' || (Array.isArray(account.subAccounts) && account.subAccounts.length > 0)) && (
         <div className="accHistory">
           <div className="accHistoryTitle">Sub-accounts</div>
           {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
@@ -2056,7 +2060,7 @@ function AccountDetail({
           ) : (
             <div className="emptyRow">No sub-accounts yet.</div>
           )}
-          {currentGroup?.type === 'debit' && (
+          {effectiveType === 'debit' && (
             <button className="btn" type="button" onClick={handleAddSubAccount}>
               Add Sub-account
             </button>
@@ -2856,22 +2860,24 @@ function AccountDetail({
                   value={editGroupId}
                   onChange={(e) => setEditGroupId(e.target.value)}
                 >
-                  {groups
-                    .filter(g => {
-                      const currentType = currentGroup?.type || 'debit'
-                      // Allow moving between debit and loan groups
-                      if (currentType === 'debit' || currentType === 'loan') {
-                        return g.type === 'debit' || g.type === 'loan'
-                      }
-                      return g.type === currentType
-                    })
-                    .map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))
-                  }
+                  {groups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
                 </select>
               </div>
-              {(currentGroup?.type === 'debit' || !currentGroup) && (
+              <div className="field">
+                <label>Type</label>
+                <select
+                  value={editAccountType || currentGroup?.type || 'debit'}
+                  onChange={(e) => setEditAccountType(e.target.value)}
+                >
+                  <option value="debit">Debit</option>
+                  <option value="loan">Loan</option>
+                  <option value="credit">Credit</option>
+                  <option value="asset">Asset</option>
+                </select>
+              </div>
+              {((editAccountType || currentGroup?.type || 'debit') === 'debit' || !currentGroup) && (
                 <div className="field">
                   <label>Balance (TZS) - Creates Adjustment</label>
                   <input

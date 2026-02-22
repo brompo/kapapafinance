@@ -2497,7 +2497,6 @@ label {
 /* Inner White Card */
 .accDetailInnerCard {
   background: white;
-  border-radius: 20px;
   padding: 10px;
   color: #1a1a1a;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -2999,6 +2998,23 @@ label {
 
 .stdBalPrefix.neg {
   color: #e24b4b;
+}
+
+.stdIcon.loan {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.stdName.loan {
+  color: #DC2626;
+}
+
+.stdRowCard.loan .stdBalLabel {
+  color: #DC2626;
+}
+
+.stdRowCard.loan .stdBalPrefix {
+  color: #DC2626;
 }
 
 .stdActionBtn {

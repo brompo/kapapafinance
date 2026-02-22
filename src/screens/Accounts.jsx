@@ -1312,7 +1312,8 @@ function AccountDetail({
   }, [entries]);
 
   function exportToCSV() {
-    const rows = [['Date', 'Description', 'Source', 'Credit', 'Debit', 'Cumulative Total']]
+    const isLoan = currentGroup?.type === 'loan'
+    const rows = [['Date', 'Description', 'Source', isLoan ? 'Debit' : 'Credit', isLoan ? 'Credit' : 'Debit', 'Cumulative Total']]
     // Process oldest-first for running total
     const sorted = [...entries].reverse()
     let runningTotal = 0
@@ -1329,11 +1330,11 @@ function AccountDetail({
       } else {
         source = subName || account.name
       }
-      const credit = t.direction === 'in' ? Number(t.amount || 0) : ''
-      const debit = t.direction === 'out' ? Number(t.amount || 0) : ''
+      const col4 = t.direction === 'in' ? Number(t.amount || 0) : ''
+      const col5 = t.direction === 'out' ? Number(t.amount || 0) : ''
       if (t.direction === 'in') runningTotal += Number(t.amount || 0)
       else runningTotal -= Number(t.amount || 0)
-      rows.push([date, `"${desc}"`, `"${source.replace(/"/g, '""')}"`, credit, debit, runningTotal])
+      rows.push([date, `"${desc}"`, `"${source.replace(/"/g, '""')}"`, col4, col5, runningTotal])
     }
     const csv = rows.map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })

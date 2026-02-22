@@ -702,17 +702,17 @@ export default function Accounts({
                     <div className="allocationLegend">
                       <div className="allocLegendItem">
                         <span className="allocDot" style={{ background: '#16A34A' }} />
-                        <span>Illiquid Strategic {illiquidPct.toFixed(0)}%</span>
+                        <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
                         <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
                       </div>
                       <div className="allocLegendItem">
                         <span className="allocDot" style={{ background: '#6366F1' }} />
-                        <span>High-Growth {highGrowthPct.toFixed(0)}%</span>
+                        <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
                         <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
                       </div>
                       <div className="allocLegendItem">
                         <span className="allocDot" style={{ background: '#F59E0B' }} />
-                        <span>Deployable {deployablePct.toFixed(0)}%</span>
+                        <span>Deployable Assets {deployablePct.toFixed(0)}%</span>
                         <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
                       </div>
                       <div className="allocLegendItem" style={{ color: '#DC2626' }}>

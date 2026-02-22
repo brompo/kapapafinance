@@ -129,7 +129,10 @@ export default function Accounts({
       // If account has subaccounts, trust the base sum (which filters subs by ledger)
       if (subs.length > 0) return base;
       const info = calculateAssetMetrics(account, accountTxns, groupType);
-      if (info.hasData && info.unitPrice > 0) return info.value;
+      if (info.hasData) {
+        const uninvestedCash = base - (info.costBasis || 0) + (info.realizedGain || 0);
+        return (info.value || 0) + uninvestedCash;
+      }
     }
 
     // Default fallback (cash balance)

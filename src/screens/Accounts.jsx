@@ -184,9 +184,11 @@ export default function Accounts({
         assetCost += (info.costBasis || 0);
         assetValue += val;
         totalRealizedGains += (info.realizedGain || 0);
-        // Classify as land or shares based on account name
+        // Classify as land or shares based on account name AND group name
         const name = (a.name || '').toLowerCase();
-        if (name.includes('land') || name.includes('plot') || name.includes('property') || name.includes('shamba')) {
+        const gName = (g?.name || '').toLowerCase();
+        const isLand = ['land', 'plot', 'property', 'shamba', 'farm', 'estate', 'real estate'].some(k => name.includes(k) || gName.includes(k));
+        if (isLand) {
           landCapital += (info.costBasis || 0);
           landValue += val;
           landRealizedGains += (info.realizedGain || 0);
@@ -613,20 +615,20 @@ export default function Accounts({
 
           {/* Intelligence View */}
           {viewMode === 'capital' && (() => {
-            // Allocation percentages
-            const totalCap = totals.productiveCapital + totals.idleCash + totals.loanBook
-            const productivePct = totalCap > 0 ? (totals.assetCost / totalCap) * 100 : 0
-            const idlePct = totalCap > 0 ? (totals.idleCash / totalCap) * 100 : 0
-            const loanPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
-            const otherPct = Math.max(0, 100 - productivePct - idlePct - loanPct)
+            // Allocation percentages — 4 buckets
+            const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook
+            const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0
+            const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0
+            const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0
+            const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
 
             // Next Best Action rules
             const actions = []
             if (totals.friendLoanExposure > 5) {
               actions.push(`Friend-loan exposure is ${totals.friendLoanExposure.toFixed(0)}% (above 5%): Pause new loans until exposure drops below threshold.`)
             }
-            if (totalCap > 0 && idlePct > 25) {
-              actions.push(`Idle cash is ${idlePct.toFixed(0)}%: Deploy into highest-velocity pipeline.`)
+            if (totalCap > 0 && deployablePct > 25) {
+              actions.push(`Idle cash is ${deployablePct.toFixed(0)}%: Deploy into highest-velocity pipeline.`)
             }
             if (totals.totalDebt > 0 && totals.robc < 1.2) {
               actions.push(`ROBC is ${totals.robc.toFixed(1)}×: Don't borrow more — focus on higher-yield deals.`)
@@ -692,25 +694,30 @@ export default function Accounts({
                   <div className="intelSectionTitle">Where Your Capital Sits</div>
                   <div className="allocationBarWrap">
                     <div className="allocationBar">
-                      {productivePct > 0 && <div className="allocSegment" style={{ width: `${productivePct}%`, background: '#16A34A' }} />}
-                      {idlePct > 0 && <div className="allocSegment" style={{ width: `${idlePct}%`, background: '#F59E0B' }} />}
-                      {loanPct > 0 && <div className="allocSegment" style={{ width: `${loanPct}%`, background: '#DC2626' }} />}
-                      {otherPct > 0 && <div className="allocSegment" style={{ width: `${otherPct}%`, background: '#6366F1' }} />}
+                      {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
+                      {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
+                      {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
+                      {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
                     </div>
                     <div className="allocationLegend">
                       <div className="allocLegendItem">
                         <span className="allocDot" style={{ background: '#16A34A' }} />
-                        <span>Productive {productivePct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.assetCost)}</span>
+                        <span>Illiquid Strategic {illiquidPct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
+                      </div>
+                      <div className="allocLegendItem">
+                        <span className="allocDot" style={{ background: '#6366F1' }} />
+                        <span>High-Growth {highGrowthPct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
                       </div>
                       <div className="allocLegendItem">
                         <span className="allocDot" style={{ background: '#F59E0B' }} />
-                        <span>Idle Cash {idlePct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.idleCash)}</span>
+                        <span>Deployable {deployablePct.toFixed(0)}%</span>
+                        <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
                       </div>
                       <div className="allocLegendItem" style={{ color: '#DC2626' }}>
                         <span className="allocDot" style={{ background: '#DC2626' }} />
-                        <span>Friend Loans {loanPct.toFixed(0)}%</span>
+                        <span>At-Risk / Emotional {atRiskPct.toFixed(0)}%</span>
                         <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
                       </div>
                     </div>
@@ -732,13 +739,13 @@ export default function Accounts({
                         </div>
                       </div>
                     </div>
-                    <div className={`riskCard ${idlePct > 25 ? 'warning' : 'safe'}`}>
-                      <div className="riskIcon">{idlePct > 25 ? '◉' : '✓'}</div>
+                    <div className={`riskCard ${deployablePct > 25 ? 'warning' : 'safe'}`}>
+                      <div className="riskIcon">{deployablePct > 25 ? '◉' : '✓'}</div>
                       <div className="riskBody">
                         <div className="riskTitle">Dead Capital Warning</div>
-                        <div className="riskMetric">{idlePct.toFixed(0)}% Idle</div>
+                        <div className="riskMetric">{deployablePct.toFixed(0)}% Idle</div>
                         <div className="riskSub">
-                          {idlePct > 25 ? `Idle cash exceeds 25% — deploy capital.` : 'Idle cash within healthy range.'}
+                          {deployablePct > 25 ? `Idle cash exceeds 25% — deploy capital.` : 'Idle cash within healthy range.'}
                         </div>
                       </div>
                     </div>

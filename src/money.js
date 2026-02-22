@@ -57,11 +57,12 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
     .filter((t) => t.kind === "valuation")
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  // Calculate Weighted Average Cost
+  // Calculate Weighted Average Cost and Uninvested Cash
   const sortedTxns = txns.sort((a, b) => (a.date > b.date ? 1 : -1));
   let runningQty = 0;
   let runningCost = 0;
   let totalRealizedGain = 0;
+  let uninvestedCash = 0;
   const realizedGains = []; // { date, amount }
 
   for (const t of sortedTxns) {
@@ -70,6 +71,7 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
       const cost = Number(t.amount || 0); // Amount matches total + fee
       runningQty += q;
       runningCost += cost;
+      uninvestedCash -= cost; // Cash is converted to assets
     } else if (t.kind === "sale") {
       const q = Number(t.quantity || 0);
       const proceeds = Number(t.amount || 0);
@@ -82,6 +84,7 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
 
         const gain = proceeds - costOfSold;
         totalRealizedGain += gain;
+        uninvestedCash += proceeds; // Sale proceeds return to cash
         realizedGains.push({
           date: t.date,
           amount: gain,
@@ -89,6 +92,14 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
           symbol: account.name,
           category: t.category || 'Capital Gains'
         });
+      }
+    } else if (t.kind !== "valuation") {
+      // General cash movements (transfers, deposits, adjustments)
+      const amt = Number(t.amount || 0);
+      if (t.direction === "in") {
+        uninvestedCash += amt;
+      } else if (t.direction === "out") {
+        uninvestedCash -= amt;
       }
     }
   }
@@ -114,9 +125,10 @@ export function calculateAssetMetrics(account, accountTxns, groupType) {
     unit,
     unitPrice,
     avgPrice: Math.max(0, avgPrice),
-    costBasis: Math.max(0, runningCost), // Accounting Value
-    marketValue: unitPrice * Math.max(qty, 0), // Market Value
-    value: unitPrice * Math.max(qty, 0), // Backward compat
+    costBasis: Math.max(0, runningCost) + uninvestedCash, // Accounting Value + Cash
+    marketValue: (unitPrice * Math.max(qty, 0)) + uninvestedCash, // Market Value + Cash
+    value: (unitPrice * Math.max(qty, 0)) + uninvestedCash, // Backward compat
+    uninvestedCash,
     realizedGain: totalRealizedGain,
     realizedGains // Array of { date, amount }
   };

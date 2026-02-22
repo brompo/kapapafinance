@@ -1211,6 +1211,9 @@ function AccountDetail({
   const [creditToSubId, setCreditToSubId] = useState("");
   const [error, setError] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportInLabel, setExportInLabel] = useState(currentGroup?.type === 'loan' ? 'Debit' : 'Credit');
+  const [exportOutLabel, setExportOutLabel] = useState(currentGroup?.type === 'loan' ? 'Credit' : 'Debit');
   const [editTxnAmount, setEditTxnAmount] = useState("");
   const [editTxnNote, setEditTxnNote] = useState("");
   const [editTxnDate, setEditTxnDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1312,8 +1315,7 @@ function AccountDetail({
   }, [entries]);
 
   function exportToCSV() {
-    const isLoan = currentGroup?.type === 'loan'
-    const rows = [['Date', 'Description', 'Source', isLoan ? 'Debit' : 'Credit', isLoan ? 'Credit' : 'Debit', 'Cumulative Total']]
+    const rows = [['Date', 'Description', 'Source', exportInLabel, exportOutLabel, 'Cumulative Total']]
     // Process oldest-first for running total
     const sorted = [...entries].reverse()
     let runningTotal = 0
@@ -1332,8 +1334,13 @@ function AccountDetail({
       }
       const col4 = t.direction === 'in' ? Number(t.amount || 0) : ''
       const col5 = t.direction === 'out' ? Number(t.amount || 0) : ''
-      if (t.direction === 'in') runningTotal += Number(t.amount || 0)
-      else runningTotal -= Number(t.amount || 0)
+      // Credit increases total, Debit decreases total
+      const amt = Number(t.amount || 0)
+      if (t.direction === 'in') {
+        runningTotal += exportInLabel === 'Credit' ? amt : -amt
+      } else {
+        runningTotal += exportOutLabel === 'Credit' ? amt : -amt
+      }
       rows.push([date, `"${desc}"`, `"${source.replace(/"/g, '""')}"`, col4, col5, runningTotal])
     }
     const csv = rows.map(r => r.join(',')).join('\n')
@@ -1349,6 +1356,7 @@ function AccountDetail({
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    setShowExportModal(false)
   }
 
   async function handleAdjust() {
@@ -2953,13 +2961,53 @@ function AccountDetail({
               : 'Recent activity'
             }
           </span>
+
+          {showExportModal && (
+            <div className="modalBackdrop" onClick={() => setShowExportModal(false)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 340 }}>
+                <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Export Settings</span>
+                  <button className="iconBtn" type="button" onClick={() => setShowExportModal(false)} style={{ fontSize: 18 }}>✕</button>
+                </div>
+                <div className="accQuickForm">
+                  <div className="field">
+                    <label>Column for IN transactions</label>
+                    <select value={exportInLabel} onChange={(e) => {
+                      setExportInLabel(e.target.value)
+                      setExportOutLabel(e.target.value === 'Credit' ? 'Debit' : 'Credit')
+                    }}>
+                      <option value="Credit">Credit</option>
+                      <option value="Debit">Debit</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Column for OUT transactions</label>
+                    <select value={exportOutLabel} onChange={(e) => {
+                      setExportOutLabel(e.target.value)
+                      setExportInLabel(e.target.value === 'Credit' ? 'Debit' : 'Credit')
+                    }}>
+                      <option value="Debit">Debit</option>
+                      <option value="Credit">Credit</option>
+                    </select>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#999', margin: '4px 0 8px' }}>
+                    Preview: IN → {exportInLabel} | OUT → {exportOutLabel}
+                  </div>
+                  <div className="modalActions">
+                    <button className="btn" type="button" onClick={() => setShowExportModal(false)}>Cancel</button>
+                    <button className="btn primary" type="button" onClick={exportToCSV}>Download CSV</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 6 }}>
             {entries.length > 0 && (
               <button
                 className="miniBtn"
                 type="button"
                 style={{ fontSize: 11 }}
-                onClick={exportToCSV}
+                onClick={() => setShowExportModal(true)}
               >
                 Export
               </button>

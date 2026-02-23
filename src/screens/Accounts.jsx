@@ -59,6 +59,7 @@ export default function Accounts({
   const [newGroupType, setNewGroupType] = useState('debit');
   const [showOverview, setShowOverview] = useState(true);
   const [showImportantNumbers, setShowImportantNumbers] = useState(true);
+  const [infoModal, setInfoModal] = useState(null); // { title: '', description: '' }
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
@@ -177,6 +178,7 @@ export default function Accounts({
         assets += val;
         loanBook += val;
         capitalDeployed += val;
+        invested += val;
       } else if (type === "asset") {
         assets += val;
         const info = calculateAssetMetrics(a, accountTxns, 'asset');
@@ -720,8 +722,18 @@ export default function Accounts({
                   <div className="intelSectionTitle">2. Decision Numbers</div>
                   <div className="intelMetricRow">
                     <div className="intelMetricCard">
-                      <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626' }}>
+                      <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                         {totals.roc.toFixed(1)}%
+                        <span
+                          className="infoIcon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoModal({
+                              title: 'ROC (Return on Capital)',
+                              description: 'Measures how much profit your productive assets generate. It is calculated as your annualized YTD profit divided by your average productive capital. \n\nFormula: (Annualized Profit) ÷ (Assets + Loans)'
+                            });
+                          }}
+                        >ⓘ</span>
                       </div>
                       <div className="intelMetricLabel">ROC (YTD)</div>
                       <div className="intelMetricTarget">Target: ≥ 24%</div>
@@ -730,8 +742,18 @@ export default function Accounts({
 
                     {totals.totalDebt > 0 ? (
                       <div className="intelMetricCard">
-                        <div className="intelMetricValue" style={{ color: totals.robc >= 2 ? '#16A34A' : totals.robc >= 1.2 ? '#F59E0B' : '#DC2626' }}>
+                        <div className="intelMetricValue" style={{ color: totals.robc >= 2 ? '#16A34A' : totals.robc >= 1.2 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           {totals.robc.toFixed(1)}×
+                          <span
+                            className="infoIcon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInfoModal({
+                                title: 'ROBC (Return on Borrowed Capital)',
+                                description: 'Measures how effectively you are using leverage (debt). It is your ROC divided by your Cost of Debt. \n\nA ratio > 1 means your investments are earning more than the interest you pay on debt. A ratio < 1 means debt is destroying wealth.'
+                              });
+                            }}
+                          >ⓘ</span>
                         </div>
                         <div className="intelMetricLabel">ROBC Ratio</div>
                         <div className="intelMetricTarget">Target: ≥ 2.0×</div>
@@ -742,8 +764,18 @@ export default function Accounts({
                       </div>
                     ) : (
                       <div className="intelMetricCard">
-                        <div className="intelMetricValue" style={{ color: totals.capitalTurns >= 1 ? '#16A34A' : '#F59E0B' }}>
+                        <div className="intelMetricValue" style={{ color: totals.capitalTurns >= 1 ? '#16A34A' : '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           {totals.capitalTurns.toFixed(1)}×
+                          <span
+                            className="infoIcon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInfoModal({
+                                title: 'Capital Turns',
+                                description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
+                              });
+                            }}
+                          >ⓘ</span>
                         </div>
                         <div className="intelMetricLabel">Capital Turns</div>
                         <div className="intelMetricTarget">Velocity of capital</div>
@@ -752,8 +784,18 @@ export default function Accounts({
                     )}
 
                     <div className="intelMetricCard">
-                      <div className="intelMetricValue" style={{ color: '#6366F1' }}>
+                      <div className="intelMetricValue" style={{ color: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                         {totals.capitalTurns.toFixed(1)}×
+                        <span
+                          className="infoIcon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoModal({
+                              title: 'Capital Turns',
+                              description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
+                            });
+                          }}
+                        >ⓘ</span>
                       </div>
                       <div className="intelMetricLabel">Capital Turns</div>
                       <div className="intelMetricTarget">YTD velocity</div>
@@ -762,44 +804,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 3. Capital Allocation Bar */}
+                {/* 3. Risk & Leakage */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">3. Where Your Capital Sits</div>
-                  <div className="allocationBarWrap">
-                    <div className="allocationBar">
-                      {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
-                      {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
-                      {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
-                      {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
-                    </div>
-                    <div className="allocationLegend">
-                      <div className="allocLegendItem">
-                        <span className="allocDot" style={{ background: '#16A34A' }} />
-                        <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
-                      </div>
-                      <div className="allocLegendItem">
-                        <span className="allocDot" style={{ background: '#6366F1' }} />
-                        <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
-                      </div>
-                      <div className="allocLegendItem">
-                        <span className="allocDot" style={{ background: '#F59E0B' }} />
-                        <span>Deployable Assets {deployablePct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
-                      </div>
-                      <div className="allocLegendItem" style={{ color: '#DC2626' }}>
-                        <span className="allocDot" style={{ background: '#DC2626' }} />
-                        <span>At-Risk / Emotional {atRiskPct.toFixed(0)}%</span>
-                        <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Risk & Leakage */}
-                <div className="intelSection">
-                  <div className="intelSectionTitle">4. Risk & Leakage</div>
+                  <div className="intelSectionTitle">3. Risk & Leakage</div>
                   <div className="riskGrid">
                     <div className={`riskCard ${totals.friendLoanExposure > 5 ? 'danger' : 'safe'}`}>
                       <div className="riskIcon">{totals.friendLoanExposure > 5 ? '⚠' : '✓'}</div>
@@ -841,9 +848,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 5. Engine Cards */}
+                {/* 4. Engine Cards */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">5. Performance Engines</div>
+                  <div className="intelSectionTitle">4. Performance Engines</div>
                   <div className="engineGrid">
                     <div className="engineCard">
                       <div className="engineHeader">
@@ -900,9 +907,9 @@ export default function Accounts({
                   </div>
                 </div>
 
-                {/* 6. Next Best Action */}
+                {/* 5. Next Best Action */}
                 <div className="intelSection">
-                  <div className="intelSectionTitle">6. 🧠 Next Best Action</div>
+                  <div className="intelSectionTitle">5. 🧠 Next Best Action</div>
                   <div className="nextActionCard">
                     {actions.map((a, i) => (
                       <div className="nextActionLine" key={i}>{a}</div>
@@ -978,55 +985,67 @@ export default function Accounts({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
-                <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
-              </div>
-              <div className="allocationGrid">
-                {groups.filter(g => g.type === 'asset' || g.type === 'debit').map(g => {
-                  const groupAccounts = visibleAccounts.filter(a => a.groupId === g.id);
-                  if (groupAccounts.length === 0) return null;
+              {/* Capital Allocation Bar */}
 
-                  let displayValue = 0;
-                  if (g.type === 'asset') {
-                    // For Capital Allocation, user wants Book Value (Cost Basis)
-                    displayValue = groupAccounts.reduce((sum, a) => {
-                      const info = calculateAssetMetrics(a, accountTxns, g.type);
-                      return sum + (info.costBasis || 0);
-                    }, 0);
-                  } else {
-                    // For Debit (Cash), value is the balance
-                    displayValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
-                  }
+              <div className="intelSection" style={{ marginBottom: 12 }} >
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
+                </div>
+                <div className="allocationBarWrap">
+                  <div className="allocationBar">
+                    {(() => {
+                      const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
+                      const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
+                      const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
+                      const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
+                      const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
 
-                  // Denominator is Total Invested Capital (Cash + Asset Cost Basis)
-                  const allocation = totals.invested > 0 ? (displayValue / totals.invested) * 100 : 0;
+                      return (
+                        <>
+                          {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
+                          {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
+                          {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
+                          {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className="allocationLegend">
+                    {(() => {
+                      const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
+                      const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
+                      const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
+                      const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
+                      const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
 
-                  // Performance is still Market Value vs Cost Basis
-                  const currentMarketValue = groupAccounts.reduce((sum, a) => sum + getAccountBalance(a), 0);
-                  const costBasis = (g.type === 'asset') ? displayValue : currentMarketValue;
-                  const profit = currentMarketValue - costBasis;
-                  const perf = costBasis > 0 ? (profit / costBasis) * 100 : 0;
-
-                  return (
-                    <div className="allocationRow" key={g.id}>
-                      <div className="allocLeft">
-                        <div className="allocName">{g.name}</div>
-                        <div className="allocPerf" style={{ color: perf >= 0 ? '#16A34A' : '#DC2626' }}>
-                          {g.type === 'asset' && costBasis > 0 ? (
-                            <>{perf > 0 ? '+' : ''}{perf.toFixed(1)}%</>
-                          ) : (
-                            <span style={{ color: '#9ca3af' }}>-</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="allocRight">
-                        <div className="allocValue">{fmtTZS(displayValue)}</div>
-                        <div className="allocSub">{allocation.toFixed(1)}% of Invested</div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      return (
+                        <>
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#16A34A' }} />
+                            <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
+                          </div>
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#6366F1' }} />
+                            <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
+                          </div>
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#F59E0B' }} />
+                            <span>Deployable Assets {deployablePct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
+                          </div>
+                          <div className="allocLegendItem" style={{ color: '#DC2626' }}>
+                            <span className="allocDot" style={{ background: '#DC2626' }} />
+                            <span>At-Risk / Emotional {atRiskPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -3203,6 +3222,25 @@ function AccountDetail({
                     Save
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        infoModal && (
+          <div className="modalBackdrop" onClick={() => setInfoModal(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 300 }}>
+              <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span>{infoModal.title}</span>
+                <button className="iconBtn" type="button" onClick={() => setInfoModal(null)} style={{ fontSize: 18 }}>✕</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                {infoModal.description}
+              </div>
+              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn primary" onClick={() => setInfoModal(null)}>Got it</button>
               </div>
             </div>
           </div>

@@ -1033,12 +1033,12 @@ export default function Accounts({
                           </div>
                           <div className="allocLegendItem">
                             <span className="allocDot" style={{ background: '#F59E0B' }} />
-                            <span>Deployable Assets {deployablePct.toFixed(0)}%</span>
+                            <span>Cash / Idle Asset {deployablePct.toFixed(0)}%</span>
                             <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
                           </div>
                           <div className="allocLegendItem" style={{ color: '#DC2626' }}>
                             <span className="allocDot" style={{ background: '#DC2626' }} />
-                            <span>At-Risk / Emotional {atRiskPct.toFixed(0)}%</span>
+                            <span>At-Risk / Loans {atRiskPct.toFixed(0)}%</span>
                             <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
                           </div>
                         </>

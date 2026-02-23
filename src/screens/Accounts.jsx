@@ -130,9 +130,20 @@ export default function Accounts({
     if (groupType === "asset") {
       // If account has subaccounts, trust the base sum (which filters subs by ledger)
       if (subs.length > 0) return base;
+
+      // Fix ledger corruption: Dynamically calculate raw base from valid cash-flow transactions
+      let cleanBase = 0;
+      const txns = accountTxns.filter(t => t.accountId === account.id);
+      for (const t of txns) {
+        if (t.kind === 'valuation') continue;
+        const amt = Number(t.amount || 0);
+        if (t.direction === 'in') cleanBase += amt;
+        if (t.direction === 'out') cleanBase -= amt;
+      }
+
       const info = calculateAssetMetrics(account, accountTxns, groupType);
       if (info.hasData) {
-        const uninvestedCash = base - (info.costBasis || 0) + (info.realizedGain || 0);
+        const uninvestedCash = cleanBase - (info.costBasis || 0) + (info.realizedGain || 0);
         return (info.value || 0) + uninvestedCash;
       }
     }
@@ -1738,7 +1749,7 @@ function AccountDetail({
 
     await onAddAccountTxn({
       accountId: account.id,
-      amount: price,
+      amount: 0,
       direction: "in",
       note: "Manual valuation",
       kind: "valuation",
@@ -1810,7 +1821,7 @@ function AccountDetail({
       },
       {
         accountId: account.id,
-        amount: unitPrice,
+        amount: 0,
         direction: "in",
         note: "Unit price update (sale)",
         kind: "valuation",

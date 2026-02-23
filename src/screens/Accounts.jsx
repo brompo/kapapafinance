@@ -1195,6 +1195,24 @@ export default function Accounts({
           )}
         </>
       )}
+      {
+        infoModal && (
+          <div className="modalBackdrop" onClick={() => setInfoModal(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 300 }}>
+              <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span>{infoModal.title}</span>
+                <button className="iconBtn" type="button" onClick={() => setInfoModal(null)} style={{ fontSize: 18 }}>✕</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                {infoModal.description}
+              </div>
+              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn primary" onClick={() => setInfoModal(null)}>Got it</button>
+              </div>
+            </div>
+          </div>
+        )
+      }
     </div>
   );
 }
@@ -3222,25 +3240,6 @@ function AccountDetail({
                     Save
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {
-        infoModal && (
-          <div className="modalBackdrop" onClick={() => setInfoModal(null)}>
-            <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 300 }}>
-              <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span>{infoModal.title}</span>
-                <button className="iconBtn" type="button" onClick={() => setInfoModal(null)} style={{ fontSize: 18 }}>✕</button>
-              </div>
-              <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
-                {infoModal.description}
-              </div>
-              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn primary" onClick={() => setInfoModal(null)}>Got it</button>
               </div>
             </div>
           </div>

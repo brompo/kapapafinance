@@ -3092,7 +3092,7 @@ export default function App() {
         const amt = Number(t.amount || 0)
         if (t.type === 'income') {
           if (!t.reimbursementOf) entry.inc += amt
-        } else if (t.type === 'expense') {
+        } else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
           const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
           entry.exp += amt - reimbursed
         }
@@ -3144,6 +3144,8 @@ export default function App() {
           accounts={accounts}
           expenseCats={expenseCats}
           incomeCats={incomeCats}
+          cosCats={activeLedger.categories?.cos || []}
+          oppsCats={activeLedger.categories?.opps || []}
           onSave={(next) => updateTxn(selectedTxn.raw, next)}
           onClose={() => setSelectedTxn(null)}
         />
@@ -3409,8 +3411,12 @@ export default function App() {
       return parts.length > 1 ? parts.slice(1).join(' • ') : ''
     })
 
-    const labelType = type === 'income' ? 'Income' : 'Expense'
-    const categoryOptions = type === 'income' ? incomeCats : expenseCats
+    const labelType = type === 'income' ? 'Income' :
+      type === 'cos' ? 'Cost of Sales' :
+        type === 'opps' ? 'Operating Expenses' : 'Expense'
+    const categoryOptions = type === 'income' ? incomeCats :
+      type === 'cos' ? cosCats :
+        type === 'opps' ? oppsCats : expenseCats
 
     function handleSave() {
       if (!isEditable) return
@@ -3472,9 +3478,14 @@ export default function App() {
           <div className="txnDetailRow">
             <div className="txnDetailLabel">Type</div>
             {isEditable ? (
-              <select className="txnDetailSelect" value={type} onChange={e => setType(e.target.value)}>
+              <select className="txnDetailSelect" value={type} onChange={e => {
+                setType(e.target.value)
+                setCategory('')
+              }}>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
+                {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
+                {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>

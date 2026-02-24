@@ -35,6 +35,28 @@ const DEFAULT_INCOME_CATEGORIES = [
   'Refunds',
   'Gifts'
 ]
+const DEFAULT_BUSINESS_INCOME_CATEGORIES = [
+  'Sales',
+  'Services',
+  'Investments',
+  'Other Income'
+]
+const DEFAULT_COS_CATEGORIES = [
+  'Direct Labor',
+  'Transport & Accommodation',
+  'Administration'
+]
+const DEFAULT_OPPS_CATEGORIES = [
+  'Rent',
+  'Utilities',
+  'Payroll',
+  'Marketing',
+  'Software',
+  'Office Supplies',
+  'Financing',
+  'Taxes & Licenses',
+  'Misc'
+]
 const CATEGORY_SUBS = {
   Transportation: [
     'Cleaning',
@@ -81,13 +103,27 @@ const ALL_LEDGERS_ID = 'all'
 const ALL_LEDGERS_TEMPLATE = {
   id: ALL_LEDGERS_ID,
   name: 'All Ledgers',
+  type: 'personal',
   groups: [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
     { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
     { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', collapsed: false },
     { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
     { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
-  ]
+  ],
+  categories: {
+    expense: [...DEFAULT_EXPENSE_CATEGORIES],
+    income: [...DEFAULT_INCOME_CATEGORIES],
+    cos: [...DEFAULT_COS_CATEGORIES],
+    opps: [...DEFAULT_OPPS_CATEGORIES],
+  },
+  categoryMeta: {
+    expense: {},
+    income: {},
+    cos: {},
+    opps: {}
+  },
+  txns: []
 }
 
 function uid() {
@@ -133,6 +169,7 @@ function normalizeAccountsWithGroups(inputAccounts, groups) {
 function createLedger({
   id = uid(),
   name = 'Personal',
+  type = 'personal', // 'personal' | 'business'
   txns = [],
   categories,
   categoryMeta,
@@ -165,26 +202,31 @@ function createLedger({
     })
     : fallbackGroups
 
+  const defaultExpenseKey = type === 'business' ? 'cos' : 'expense'
+  const expenseDefaults = type === 'business' ? [] : [...DEFAULT_EXPENSE_CATEGORIES]
+  const incomeDefaults = type === 'business' ? [...DEFAULT_BUSINESS_INCOME_CATEGORIES] : [...DEFAULT_INCOME_CATEGORIES]
+
+  const resolvedCategories = {
+    expense: Array.isArray(categories?.expense) ? categories.expense : expenseDefaults,
+    income: Array.isArray(categories?.income) ? categories.income : incomeDefaults,
+    cos: Array.isArray(categories?.cos) ? categories.cos : (type === 'business' ? [...DEFAULT_COS_CATEGORIES] : []),
+    opps: Array.isArray(categories?.opps) ? categories.opps : (type === 'business' ? [...DEFAULT_OPPS_CATEGORIES] : [])
+  }
+
+  const resolvedMeta = {
+    expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object' ? categoryMeta.expense : (type === 'business' ? {} : Object.fromEntries(Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }]))),
+    income: categoryMeta?.income && typeof categoryMeta.income === 'object' ? categoryMeta.income : {},
+    cos: categoryMeta?.cos && typeof categoryMeta.cos === 'object' ? categoryMeta.cos : {},
+    opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {}
+  }
+
   return {
     id,
     name,
+    type,
     txns: Array.isArray(txns) ? txns : [],
-    categories: {
-      expense: Array.isArray(categories?.expense)
-        ? categories.expense
-        : [...DEFAULT_EXPENSE_CATEGORIES],
-      income: Array.isArray(categories?.income)
-        ? categories.income
-        : [...DEFAULT_INCOME_CATEGORIES]
-    },
-    categoryMeta: {
-      expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object'
-        ? categoryMeta.expense
-        : {},
-      income: categoryMeta?.income && typeof categoryMeta.income === 'object'
-        ? categoryMeta.income
-        : {}
-    },
+    categories: resolvedCategories,
+    categoryMeta: resolvedMeta,
     groups: normalizedGroups
   }
 }
@@ -194,9 +236,11 @@ function normalizeLedger(data) {
   return createLedger({
     id: data.id || uid(),
     name: data.name || 'Personal',
+    type: data.type || 'personal',
     txns: data.txns,
     categories: data.categories,
-    categoryMeta: data.categoryMeta
+    categoryMeta: data.categoryMeta,
+    groups: data.groups
   })
 }
 
@@ -387,7 +431,7 @@ export default function App() {
   const ledgers = vault.ledgers || []
   const activeLedgerId = vault.activeLedgerId || ledgers[0]?.id || ''
   const activeLedger = activeLedgerId === ALL_LEDGERS_ID
-    ? ALL_LEDGERS_TEMPLATE
+    ? { ...ALL_LEDGERS_TEMPLATE, txns: ledgers.flatMap(l => l.txns || []) }
     : (ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger())
   const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
 
@@ -806,18 +850,59 @@ export default function App() {
     })
   }
 
-  function handleAddLedger() {
-    const name = prompt('Ledger name?')
+  function handleAddPersonalLedger() {
+    const name = prompt('Personal Ledger name?')
     if (!name) return
     const trimmed = name.trim()
     if (!trimmed) return
-    const nextLedger = createLedger({ name: trimmed })
+    const nextLedger = createLedger({ name: trimmed, type: 'personal' })
     persist({
       ...vault,
       ledgers: [...ledgers, nextLedger],
       activeLedgerId: nextLedger.id
     })
     setShowLedgerPicker(false)
+  }
+
+  function handleAddBusinessLedger() {
+    const name = prompt('Business Ledger name?')
+    if (!name) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const nextLedger = createLedger({ name: trimmed, type: 'business' })
+    persist({
+      ...vault,
+      ledgers: [...ledgers, nextLedger],
+      activeLedgerId: nextLedger.id
+    })
+    setShowLedgerPicker(false)
+  }
+
+  function handleDeleteLedger(ledgerId) {
+    if (ledgers.length <= 1) {
+      show('Cannot delete the only ledger.')
+      return
+    }
+    const ledger = ledgers.find(l => l.id === ledgerId)
+    if (!ledger) return
+    if (!confirm(`Are you sure you want to delete the ledger "${ledger.name}"? This will delete all transactions and accounts within it.`)) return
+
+    const nextLedgers = ledgers.filter(l => l.id !== ledgerId)
+    const nextActiveLedgerId = activeLedgerId === ledgerId ? nextLedgers[0].id : activeLedgerId
+
+    // Also remove associated accounts and their transactions
+    const accountsToRemove = new Set(allAccounts.filter(a => a.ledgerId === ledgerId).map(a => a.id))
+    const nextAccounts = allAccounts.filter(a => a.ledgerId !== ledgerId)
+    const nextAccountTxns = allAccountTxns.filter(t => !accountsToRemove.has(t.accountId) && !accountsToRemove.has(t.relatedAccountId))
+
+    persist({
+      ...vault,
+      ledgers: nextLedgers,
+      activeLedgerId: nextActiveLedgerId,
+      accounts: nextAccounts,
+      accountTxns: nextAccountTxns
+    })
+    if (activeLedgerId === ledgerId) setShowLedgerPicker(false)
   }
 
   function handleSelectLedger(id) {
@@ -870,7 +955,7 @@ export default function App() {
       const amt = Number(t.amount || 0)
       if (t.type === 'income') {
         if (!t.reimbursementOf) inc += amt
-      } else {
+      } else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
         const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
         exp += amt - reimbursed
       }
@@ -1756,6 +1841,16 @@ export default function App() {
     const [collapseIncome, setCollapseIncome] = useState(() => {
       try { return localStorage.getItem('collapse_income') === 'true' } catch { return false }
     })
+    const [collapseCos, setCollapseCos] = useState(() => {
+      try { return localStorage.getItem('collapse_cos') === 'true' } catch { return false }
+    })
+    const [collapseOpps, setCollapseOpps] = useState(() => {
+      try { return localStorage.getItem('collapse_opps') === 'true' } catch { return false }
+    })
+
+    const cosCats = categories.cos || []
+    const oppsCats = categories.opps || []
+
     const expenseTotals = useMemo(() => {
       const map = new Map()
       for (const c of expenseCats) map.set(c, 0)
@@ -1767,6 +1862,30 @@ export default function App() {
       }
       return map
     }, [filteredTxns, expenseCats])
+
+    const cosTotals = useMemo(() => {
+      const map = new Map()
+      for (const c of cosCats) map.set(c, 0)
+      for (const t of filteredTxns) {
+        if (t.type !== 'cos') continue
+        const key = t.category || 'Other'
+        const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+        map.set(key, (map.get(key) || 0) + Number(t.amount || 0) - reimbursed)
+      }
+      return map
+    }, [filteredTxns, cosCats])
+
+    const oppsTotals = useMemo(() => {
+      const map = new Map()
+      for (const c of oppsCats) map.set(c, 0)
+      for (const t of filteredTxns) {
+        if (t.type !== 'opps') continue
+        const key = t.category || 'Other'
+        const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+        map.set(key, (map.get(key) || 0) + Number(t.amount || 0) - reimbursed)
+      }
+      return map
+    }, [filteredTxns, oppsCats])
 
     const incomeTotals = useMemo(() => {
       const map = new Map()
@@ -1800,6 +1919,15 @@ export default function App() {
     useEffect(() => {
       try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch { }
     }, [collapseIncome])
+    useEffect(() => {
+      try { localStorage.setItem('collapse_expense', String(collapseExpense)) } catch { }
+    }, [collapseExpense])
+    useEffect(() => {
+      try { localStorage.setItem('collapse_cos', String(collapseCos)) } catch { }
+    }, [collapseCos])
+    useEffect(() => {
+      try { localStorage.setItem('collapse_opps', String(collapseOpps)) } catch { }
+    }, [collapseOpps])
 
     const [draggingCat, setDraggingCat] = useState(null) // { type, name }
     const [dragOverCat, setDragOverCat] = useState(null) // name (string)
@@ -1818,7 +1946,12 @@ export default function App() {
     function handleDrop(type, targetName) {
       if (!draggingCat || draggingCat.type !== type) return
 
-      const list = type === 'expense' ? expenseCats : incomeCats
+      let list
+      if (type === 'expense') list = expenseCats
+      else if (type === 'income') list = incomeCats
+      else if (type === 'cos') list = cosCats
+      else if (type === 'opps') list = oppsCats
+
       const fromIndex = list.indexOf(draggingCat.name)
       const toIndex = list.indexOf(targetName)
 
@@ -1842,11 +1975,21 @@ export default function App() {
     }
 
     function addCategory(type) {
-      const name = prompt(`New ${type} category name?`)
+      let displayName = type
+      if (type === 'cos') displayName = 'cost of sales'
+      else if (type === 'opps') displayName = 'operating expenses'
+
+      const name = prompt(`New ${displayName} category name?`)
       if (!name) return
       const trimmed = name.trim()
       if (!trimmed) return
-      const list = type === 'expense' ? expenseCats : incomeCats
+
+      let list
+      if (type === 'expense') list = expenseCats
+      else if (type === 'income') list = incomeCats
+      else if (type === 'cos') list = cosCats
+      else if (type === 'opps') list = oppsCats
+
       if (list.some(c => c.toLowerCase() === trimmed.toLowerCase())) return
       const next = [...list, trimmed]
       const nextCategories = {
@@ -1864,9 +2007,14 @@ export default function App() {
     }
 
     function editCategory(type) {
-      const list = type === 'expense' ? expenseCats : incomeCats
+      let list, displayName
+      if (type === 'expense') { list = expenseCats; displayName = 'expense'; }
+      else if (type === 'income') { list = incomeCats; displayName = 'income'; }
+      else if (type === 'cos') { list = cosCats; displayName = 'cost of sales'; }
+      else if (type === 'opps') { list = oppsCats; displayName = 'operating expenses'; }
+
       if (!list.length) return
-      const from = prompt(`Rename which ${type} category?\n${list.join(', ')}`)
+      const from = prompt(`Rename which ${displayName} category?\n${list.join(', ')}`)
       if (!from) return
       const oldName = from.trim()
       if (!oldName || !list.includes(oldName)) return
@@ -1920,10 +2068,16 @@ export default function App() {
               subAccountId
             })
           }
-          total={selectedCategory.type === 'expense'
-            ? (expenseTotals.get(selectedCategory.name) || 0)
-            : (incomeTotals.get(selectedCategory.name) || 0)
+          total={
+            selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
+              selectedCategory.type === 'income' ? (incomeTotals.get(selectedCategory.name) || 0) :
+                selectedCategory.type === 'cos' ? (cosTotals.get(selectedCategory.name) || 0) :
+                  (oppsTotals.get(selectedCategory.name) || 0)
           }
+          cosCats={cosCats}
+          oppsCats={oppsCats}
+          expenseCats={expenseCats}
+          incomeCats={incomeCats}
           meta={categoryMeta[selectedCategory.type]?.[selectedCategory.name]}
           onUpdateMeta={(next) => {
             const nextMeta = {
@@ -1994,6 +2148,18 @@ export default function App() {
                       >
                         Edit
                       </button>
+                      <button
+                        className="miniBtn danger"
+                        type="button"
+                        style={{ padding: '2px 8px', color: '#e24b4b', borderColor: '#e4e4e9', fontSize: '1.2em', lineHeight: '1' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteLedger(l.id)
+                        }}
+                        title="Delete Ledger"
+                      >
+                        ×
+                      </button>
                       <span className="ledgerPickerCheck">
                         {l.id === activeLedger.id ? '✓' : ''}
                       </span>
@@ -2001,9 +2167,14 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
-                + Add Ledger
-              </button>
+              <div style={{ display: 'flex', gap: '8px', padding: '16px' }}>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddPersonalLedger} style={{ flex: 1 }}>
+                  + Personal
+                </button>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddBusinessLedger} style={{ flex: 1 }}>
+                  + Business
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2056,71 +2227,206 @@ export default function App() {
           )}
         </div>
 
-        <div className="ledgerSection">
-          <div className="ledgerSectionHead">
-            <div className="ledgerSectionTitle">
-              Expenses <span className="ledgerSectionTotal">{fmtTZS(kpis.exp)}</span>
+        {activeLedger.type !== 'business' && (
+          <div className="ledgerSection">
+            <div className="ledgerSectionHead">
+              <div className="ledgerSectionTitle">
+                Expenses <span className="ledgerSectionTotal">{fmtTZS(kpis.exp)}</span>
+              </div>
+              <div className="ledgerSectionActions">
+                <button className="ledgerAddBtn" onClick={() => addCategory('expense')} type="button">
+                  + Add
+                </button>
+                <button
+                  className="ledgerCollapseBtn"
+                  type="button"
+                  onClick={() => setCollapseExpense(v => !v)}
+                >
+                  {collapseExpense ? '▸' : '▾'}
+                </button>
+              </div>
             </div>
-            <div className="ledgerSectionActions">
-              <button className="ledgerAddBtn" onClick={() => addCategory('expense')} type="button">
-                + Add
-              </button>
-              <button
-                className="ledgerCollapseBtn"
-                type="button"
-                onClick={() => setCollapseExpense(v => !v)}
-              >
-                {collapseExpense ? '▸' : '▾'}
-              </button>
-            </div>
+            {!collapseExpense && (
+              <div className="ledgerGrid">
+                {expenseCats.map((c, i) => {
+                  const meta = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
+                  const spent = expenseTotals.get(c) || 0
+                  const ratio = meta.budget > 0 ? spent / meta.budget : 0
+                  const progress = Math.min(ratio * 100, 100)
+                  const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
+                  return (
+                    <div
+                      className={`ledgerCard theme-${(i % 9) + 1} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
+                      key={c}
+                      draggable
+                      onDragStart={() => handleDragStart('expense', c)}
+                      onDragOver={(e) => handleDragOver(e, 'expense', c)}
+                      onDrop={() => handleDrop('expense', c)}
+                      onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
+                      style={{
+                        '--progress': `${progress}%`,
+                        '--progress-color': progressColor,
+                        ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
+                      }}
+                      onClick={() => setSelectedCategory({ type: 'expense', name: c })}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          setSelectedCategory({ type: 'expense', name: c })
+                        }
+                      }}
+                    >
+                      <div className="ledgerCardTitle">{c}</div>
+                      <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
+                      <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          {!collapseExpense && (
-            <div className="ledgerGrid">
-              {expenseCats.map((c, i) => {
-                const meta = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
-                const spent = expenseTotals.get(c) || 0
-                const ratio = meta.budget > 0 ? spent / meta.budget : 0
-                const progress = Math.min(ratio * 100, 100)
-                const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
-                return (
-                  <div
-                    className={`ledgerCard theme-${(i % 9) + 1} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
-                    key={c}
-                    draggable
-                    onDragStart={() => handleDragStart('expense', c)}
-                    onDragOver={(e) => handleDragOver(e, 'expense', c)}
-                    onDrop={() => handleDrop('expense', c)}
-                    onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
-                    style={{
-                      '--progress': `${progress}%`,
-                      '--progress-color': progressColor,
-                      ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
-                    }}
-                    onClick={() => setSelectedCategory({ type: 'expense', name: c })}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        setSelectedCategory({ type: 'expense', name: c })
-                      }
-                    }}
+        )}
+
+        {activeLedger.type === 'business' && (
+          <>
+            <div className="ledgerSection">
+              <div className="ledgerSectionHead">
+                <div className="ledgerSectionTitle">
+                  Cost of Sales <span className="ledgerSectionTotal">{fmtTZS(Array.from(cosTotals.values()).reduce((a, b) => a + b, 0))}</span>
+                </div>
+                <div className="ledgerSectionActions">
+                  <button className="ledgerAddBtn" onClick={() => addCategory('cos')} type="button">
+                    + Add
+                  </button>
+                  <button
+                    className="ledgerCollapseBtn"
+                    type="button"
+                    onClick={() => setCollapseCos(v => !v)}
                   >
-                    <div className="ledgerCardTitle">{c}</div>
-                    <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
-                    <div className="ledgerCardValue">{fmtTZS(expenseTotals.get(c) || 0)}</div>
-                  </div>
-                )
-              })}
+                    {collapseCos ? '▸' : '▾'}
+                  </button>
+                </div>
+              </div>
+              {!collapseCos && (
+                <div className="ledgerGrid">
+                  {cosCats.map((c, i) => {
+                    const meta = categoryMeta.cos?.[c] || { budget: 0, subs: [] }
+                    const spent = cosTotals.get(c) || 0
+                    const ratio = meta.budget > 0 ? spent / meta.budget : 0
+                    const progress = Math.min(ratio * 100, 100)
+                    const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
+                    return (
+                      <div
+                        className={`ledgerCard theme-${(i % 9) + 1} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
+                        key={c}
+                        draggable
+                        onDragStart={() => handleDragStart('cos', c)}
+                        onDragOver={(e) => handleDragOver(e, 'cos', c)}
+                        onDrop={() => handleDrop('cos', c)}
+                        onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
+                        style={{
+                          '--progress': `${progress}%`,
+                          '--progress-color': progressColor,
+                          ...(categoryMeta.cos?.[c]?.color ? { background: categoryMeta.cos[c].color } : {})
+                        }}
+                        onClick={() => setSelectedCategory({ type: 'cos', name: c })}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setSelectedCategory({ type: 'cos', name: c })
+                          }
+                        }}
+                      >
+                        <div className="ledgerCardTitle">{c}</div>
+                        <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
+                        <div className="ledgerCardValue">{fmtTZS(cosTotals.get(c) || 0)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+
+            <div className="ledgerSection">
+              <div className="ledgerSectionHead">
+                <div className="ledgerSectionTitle">
+                  Operating Expenses <span className="ledgerSectionTotal">{fmtTZS(Array.from(oppsTotals.values()).reduce((a, b) => a + b, 0))}</span>
+                </div>
+                <div className="ledgerSectionActions">
+                  <button className="ledgerAddBtn" onClick={() => addCategory('opps')} type="button">
+                    + Add
+                  </button>
+                  <button
+                    className="ledgerCollapseBtn"
+                    type="button"
+                    onClick={() => setCollapseOpps(v => !v)}
+                  >
+                    {collapseOpps ? '▸' : '▾'}
+                  </button>
+                </div>
+              </div>
+              {!collapseOpps && (
+                <div className="ledgerGrid">
+                  {oppsCats.map((c, i) => {
+                    const meta = categoryMeta.opps?.[c] || { budget: 0, subs: [] }
+                    const spent = oppsTotals.get(c) || 0
+                    const ratio = meta.budget > 0 ? spent / meta.budget : 0
+                    const progress = Math.min(ratio * 100, 100)
+                    const progressColor = ratio >= 1 ? '#e24b4b' : '#2fbf71'
+                    return (
+                      <div
+                        className={`ledgerCard theme-${(i % 9) + 1} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
+                        key={c}
+                        draggable
+                        onDragStart={() => handleDragStart('opps', c)}
+                        onDragOver={(e) => handleDragOver(e, 'opps', c)}
+                        onDrop={() => handleDrop('opps', c)}
+                        onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
+                        style={{
+                          '--progress': `${progress}%`,
+                          '--progress-color': progressColor,
+                          ...(categoryMeta.opps?.[c]?.color ? { background: categoryMeta.opps[c].color } : {})
+                        }}
+                        onClick={() => setSelectedCategory({ type: 'opps', name: c })}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setSelectedCategory({ type: 'opps', name: c })
+                          }
+                        }}
+                      >
+                        <div className="ledgerCardTitle">{c}</div>
+                        <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
+                        <div className="ledgerCardValue">{fmtTZS(oppsTotals.get(c) || 0)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {toast && <div className="toast">{toast}</div>}
       </div>
     )
   }
 
-  function CategoryDetail({ category, onClose, onAdd, total, meta, onUpdateMeta }) {
+  function CategoryDetail({
+    category,
+    onClose,
+    onAdd,
+    total,
+    meta,
+    onUpdateMeta,
+    expenseCats = [],
+    incomeCats = [],
+    cosCats = [],
+    oppsCats = []
+  }) {
     const [amount, setAmount] = useState('')
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
@@ -2274,7 +2580,11 @@ export default function App() {
     function saveCategoryEdit() {
       const trimmed = editName.trim()
       if (!trimmed) return
-      const list = category.type === 'expense' ? expenseCats : incomeCats
+      let list
+      if (category.type === 'expense') list = expenseCats
+      else if (category.type === 'income') list = incomeCats
+      else if (category.type === 'cos') list = cosCats
+      else if (category.type === 'opps') list = oppsCats
       if (
         trimmed !== category.name &&
         list.some(c => c.toLowerCase() === trimmed.toLowerCase())
@@ -2319,7 +2629,11 @@ export default function App() {
 
     function deleteCategory() {
       if (!confirm(`Delete "${category.name}"?`)) return
-      const list = category.type === 'expense' ? expenseCats : incomeCats
+      let list
+      if (category.type === 'expense') list = expenseCats
+      else if (category.type === 'income') list = incomeCats
+      else if (category.type === 'cos') list = cosCats
+      else if (category.type === 'opps') list = oppsCats
       const nextList = list.filter(c => c !== category.name)
       const nextCategories = {
         ...categories,
@@ -2360,6 +2674,8 @@ export default function App() {
           accounts={accounts}
           expenseCats={expenseCats}
           incomeCats={incomeCats}
+          cosCats={cosCats}
+          oppsCats={oppsCats}
           onSave={(next) => updateTxn(selectedTxn.raw, next)}
           onClose={() => setSelectedTxn(null)}
           onDelete={() => {
@@ -2884,13 +3200,48 @@ export default function App() {
                     onClick={() => handleSelectLedger(l.id)}
                   >
                     <span className="ledgerPickerName">{l.name}</span>
-                    {l.id === activeLedger.id && <span className="ledgerPickerCheck">✓</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        className="miniBtn"
+                        type="button"
+                        style={{ padding: '2px 8px' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newName = prompt("Rename ledger:", l.name)
+                          if (newName && newName.trim() && newName.trim() !== l.name) {
+                            handleUpdateLedger(l.id, { name: newName.trim() })
+                          }
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="miniBtn danger"
+                        type="button"
+                        style={{ padding: '2px 8px', color: '#e24b4b', borderColor: '#e4e4e9', fontSize: '1.2em', lineHeight: '1' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteLedger(l.id)
+                        }}
+                        title="Delete Ledger"
+                      >
+                        ×
+                      </button>
+                      <span className="ledgerPickerCheck">
+                        {l.id === activeLedger.id ? '✓' : ''}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
-              <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
-                + Add Ledger
-              </button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddPersonalLedger} style={{ flex: 1 }}>
+                  + Personal
+                </button>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddBusinessLedger} style={{ flex: 1, backgroundColor: '#334155', color: '#fff' }}>
+                  + Business
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -3563,49 +3914,76 @@ export default function App() {
 
       {tab === 'accounts' && (
         <div className="ledgerScreen">
-          {showAccountsHeader && (
-            <>
-              <div className="ledgerHeader">
-                <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
-                  {activeLedger.name || 'Personal'} ▾
-                </button>
-              </div>
-
-              {showLedgerPicker && (
-                <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
-                  <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
-                    <div className="ledgerPickerTitle">Ledgers</div>
-                    <div className="ledgerPickerList">
-                      <button
-                        className={`ledgerPickerItem ${activeLedgerId === ALL_LEDGERS_ID ? 'active' : ''}`}
-                        type="button"
-                        onClick={() => handleSelectLedger(ALL_LEDGERS_ID)}
-                      >
-                        <span className="ledgerPickerName">All Ledgers</span>
-                        {activeLedgerId === ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
-                      </button>
-                      {ledgers.map(l => (
+          {showAccountsHeader && showLedgerPicker && (
+            <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+              <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+                <div className="ledgerPickerTitle">Ledgers</div>
+                <div className="ledgerPickerList">
+                  <button
+                    className={`ledgerPickerItem ${activeLedgerId === ALL_LEDGERS_ID ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => handleSelectLedger(ALL_LEDGERS_ID)}
+                  >
+                    <span className="ledgerPickerName">All Ledgers</span>
+                    {activeLedgerId === ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
+                  </button>
+                  {ledgers.map(l => (
+                    <button
+                      key={l.id}
+                      className={`ledgerPickerItem ${l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => handleSelectLedger(l.id)}
+                    >
+                      <span className="ledgerPickerName">{l.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button
-                          key={l.id}
-                          className={`ledgerPickerItem ${l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID ? 'active' : ''}`}
+                          className="miniBtn"
                           type="button"
-                          onClick={() => handleSelectLedger(l.id)}
+                          style={{ padding: '2px 8px' }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const newName = prompt("Rename ledger:", l.name)
+                            if (newName && newName.trim() && newName.trim() !== l.name) {
+                              handleUpdateLedger(l.id, { name: newName.trim() })
+                            }
+                          }}
                         >
-                          <span className="ledgerPickerName">{l.name}</span>
-                          {l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
+                          Edit
                         </button>
-                      ))}
-                    </div>
-                    <button className="ledgerPickerAdd" type="button" onClick={handleAddLedger}>
-                      + Add Ledger
+                        <button
+                          className="miniBtn danger"
+                          type="button"
+                          style={{ padding: '2px 8px', color: '#e24b4b', borderColor: '#e4e4e9', fontSize: '1.2em', lineHeight: '1' }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteLedger(l.id)
+                          }}
+                          title="Delete Ledger"
+                        >
+                          ×
+                        </button>
+                        <span className="ledgerPickerCheck">
+                          {l.id === activeLedgerId && activeLedgerId !== ALL_LEDGERS_ID ? '✓' : ''}
+                        </span>
+                      </div>
                     </button>
-                  </div>
+                  ))}
                 </div>
-              )}
-            </>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="ledgerPickerAdd" type="button" onClick={handleAddPersonalLedger} style={{ flex: 1 }}>
+                    + Personal
+                  </button>
+                  <button className="ledgerPickerAdd" type="button" onClick={handleAddBusinessLedger} style={{ flex: 1, backgroundColor: '#334155', color: '#fff' }}>
+                    + Business
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           <AccountsScreen
+            activeLedgerName={activeLedgerId === ALL_LEDGERS_ID ? 'All Ledgers' : (activeLedger.name || 'Personal')}
+            onOpenLedgerPicker={() => setShowLedgerPicker(true)}
             accounts={accounts}
             accountTxns={allAccountTxns}
             txns={activeLedger.txns || []}

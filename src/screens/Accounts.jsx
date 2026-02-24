@@ -43,7 +43,9 @@ export default function Accounts({
   settings = {},
   onUpdateSettings,
   categories = {}, // { income: [], expense: [] }
-  txns = [] // Ledger transactions for return calc
+  txns = [], // Ledger transactions for return calc
+  activeLedgerName = "",
+  onOpenLedgerPicker
 }) {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [editTargetValue, setEditTargetValue] = useState("");
@@ -63,6 +65,8 @@ export default function Accounts({
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [addingToGroup, setAddingToGroup] = useState(null);
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [editGroupName, setEditGroupName] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountBalance, setNewAccountBalance] = useState("");
 
@@ -383,6 +387,20 @@ export default function Accounts({
     setAddingToGroup(null);
   }
 
+  function handleSaveEditGroup() {
+    const trimmed = editGroupName.trim();
+    if (!trimmed || !editingGroup) return;
+    const next = groups.map((g) => (g.id === editingGroup.id ? { ...g, name: trimmed } : g));
+    onUpdateGroups?.(next);
+    setEditingGroup(null);
+  }
+
+  function handleDeleteGroup(groupId) {
+    if (!confirm(`Delete group "${editingGroup.name}"?`)) return;
+    onUpdateGroups?.(groups.filter(g => g.id !== groupId));
+    setEditingGroup(null);
+  }
+
   function handleGroupDragStart(id) {
     setDraggingGroupId(id);
   }
@@ -591,11 +609,79 @@ export default function Accounts({
         </div>
       )}
 
+      {editingGroup && (
+        <div className="modalBackdrop" onClick={() => setEditingGroup(null)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Edit Account Group</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Group Name</label>
+                <input
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                  placeholder="e.g. Savings"
+                  autoFocus
+                />
+              </div>
+              <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
+                <button
+                  className="btn danger"
+                  type="button"
+                  onClick={() => handleDeleteGroup(editingGroup.id)}
+                  disabled={visibleAccounts.some(a => a.groupId === editingGroup.id)}
+                  title={visibleAccounts.some(a => a.groupId === editingGroup.id) ? "Cannot delete group with accounts inside" : "Delete group"}
+                >
+                  Delete Group
+                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setEditingGroup(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={handleSaveEditGroup}
+                    disabled={!editGroupName.trim()}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="overviewTitle"
-        onClick={() => setShowOverview(!showOverview)}
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-        <span>Financial Overview</span>
-        <span style={{ fontSize: '1.2rem', opacity: 0.6 }}>{showOverview ? '▾' : '▸'}</span>
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+
+        {/* Left: Ledger Picker */}
+        <div style={{ justifyContent: 'flex-start' }}>
+          <button
+            className="ledgerGhost"
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenLedgerPicker?.(); }}
+            style={{ padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: 4, opacity: 0.9 }}
+          >
+            {activeLedgerName || 'Personal'} <span style={{ fontSize: '0.8em' }}>▾</span>
+          </button>
+        </div>
+
+        {/* Center: Financial Overview */}
+        <div
+          onClick={() => setShowOverview(!showOverview)}
+          style={{ justifyContent: 'center', cursor: 'pointer', fontWeight: 600 }}
+        >
+          <span>Financial Overview</span>
+        </div>
+
+        {/* Right: Expand/collapse chevron */}
+        <div
+          onClick={() => setShowOverview(!showOverview)}
+          style={{ justifyContent: 'flex-end', cursor: 'pointer' }}
+        >
+          <span style={{ fontSize: '1.2rem', opacity: 0.6 }}>{showOverview ? '▾' : '▸'}</span>
+        </div>
       </div>
 
       {showOverview && (
@@ -1108,13 +1194,9 @@ export default function Accounts({
         const items = visibleAccounts.filter((a) => a.groupId === group.id);
         const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
         const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
-        const handleRenameGroup = () => {
-          const name = prompt("Rename group?", group.name);
-          if (!name) return;
-          const trimmed = name.trim();
-          if (!trimmed) return;
-          const next = groups.map((g) => (g.id === group.id ? { ...g, name: trimmed } : g));
-          onUpdateGroups?.(next);
+        const handleEditGroup = () => {
+          setEditingGroup(group);
+          setEditGroupName(group.name);
         };
         return (
           <Section
@@ -1127,12 +1209,7 @@ export default function Accounts({
             onDeleteAccount={onDeleteAccount}
             onSelectAccount={(id) => setSelectedId(id)}
             onToggleCollapse={() => toggleGroupCollapse(group)}
-            onRenameGroup={handleRenameGroup}
-            onDeleteGroup={() => {
-              if (items.length > 0) return;
-              if (!confirm(`Delete group "${group.name}"?`)) return;
-              onUpdateGroups?.(groups.filter(g => g.id !== group.id));
-            }}
+            onEditGroup={handleEditGroup}
             onAddAccount={() => handleAddAccount(group)}
             onMoveGroupUp={() => handleMoveGroupUp(group.id)}
             onMoveGroupDown={() => handleMoveGroupDown(group.id)}
@@ -1237,9 +1314,8 @@ function Section({
   onDeleteAccount,
   onSelectAccount,
   onToggleCollapse,
-  onRenameGroup,
+  onEditGroup,
   onAddAccount,
-  onDeleteGroup,
   onMoveGroupUp,
   onMoveGroupDown,
   isDragging,
@@ -1267,14 +1343,20 @@ function Section({
     >
       <div className="sectionHead">
         <div className="sectionTitle">
-          <button className="sectionAddBtn" type="button" onClick={onAddAccount}>
-            +
-          </button>
-          <button className="sectionTitleBtn" type="button" onClick={onRenameGroup} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span>{group.name}</span>
-            <span style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px', lineHeight: 1 }}>
-              {group.type}
-            </span>
+          <button className="sectionTitleBtn" type="button" onClick={onEditGroup} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 0 }}>
+
+            {/* <div className={`stdIcon ${(group.type) === 'loan' && total > 0 ? 'loan' : ''}`}>
+              {group.name.slice(0, 1).toUpperCase()}
+            </div> */}
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)' }}>{group.name}</span>
+              </div>
+              <span style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px', lineHeight: 1 }}>
+                {group.type}
+              </span>
+            </div>
           </button>
         </div>
         <div className="sectionRightWrap" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1285,11 +1367,9 @@ function Section({
           <button className="sectionAddBtn" type="button" onClick={onMoveGroupDown} style={{ fontSize: 13, background: 'none' }} title="Move group down">
             ↓
           </button>
-          {items.length === 0 && (
-            <button className="sectionAddBtn" type="button" onClick={onDeleteGroup} style={{ color: '#DC2626', fontSize: 13 }} title="Delete empty group">
-              ✕
-            </button>
-          )}
+          <button className="sectionAddBtn" type="button" onClick={onAddAccount} style={{ marginLeft: 4 }} title="Add Account">
+            +
+          </button>
           <button className="sectionCollapse" type="button" onClick={onToggleCollapse}>
             {group.collapsed ? "▸" : "▾"}
           </button>

@@ -2498,6 +2498,7 @@ export default function App() {
     oppsCats = []
   }) {
     const [amount, setAmount] = useState('')
+    const [amountError, setAmountError] = useState(false)
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
@@ -2825,10 +2826,15 @@ export default function App() {
             <input
               inputMode="decimal"
               value={amount}
-              onChange={e => setAmount(e.target.value)}
+              onChange={e => {
+                setAmount(e.target.value)
+                if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+              }}
               placeholder="e.g. 10000"
+              style={amountError ? { borderColor: '#f8a5a5' } : {}}
               autoFocus
             />
+            {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
           </div>
           <div className="field">
             <label>Date</label>
@@ -2923,6 +2929,12 @@ export default function App() {
               className="btn addTxnBtn"
               type="button"
               onClick={async () => {
+                const amtVal = Number(amount || 0)
+                if (!amtVal || amtVal <= 0) {
+                  setAmountError(true)
+                  show('Enter a valid amount.')
+                  return
+                }
                 if (settings.requireAccountForTxns && !accountId) {
                   setAccountError(true)
                   show('Please select an account.')
@@ -3568,6 +3580,7 @@ export default function App() {
     const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
+    const [amountError, setAmountError] = useState(false)
     const [category, setCategory] = useState(txn.category || '')
     const [accountId, setAccountId] = useState(txn.accountId || '')
     const [accountError, setAccountError] = useState(false)
@@ -3594,7 +3607,11 @@ export default function App() {
     function handleSave() {
       if (!isEditable) return
       const amt = Number(amount || 0)
-      if (!amt || amt <= 0) return show('Enter a valid amount.')
+      if (!amt || amt <= 0) {
+        setAmountError(true)
+        show('Enter a valid amount.')
+        return
+      }
       if (settings.requireAccountForTxns && !accountId) {
         setAccountError(true)
         show('Please select an account.')
@@ -3638,16 +3655,23 @@ export default function App() {
 
         <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
           {isEditable ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span>{type === 'income' ? '+' : '-'}</span>
-              <input
-                className="txnAmountInput"
-                inputMode="decimal"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="0"
-                autoFocus
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                <span>{type === 'income' ? '+' : '-'}</span>
+                <input
+                  className="txnAmountInput"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={e => {
+                    setAmount(e.target.value)
+                    if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+                  }}
+                  placeholder="0"
+                  style={amountError ? { borderColor: '#f8a5a5', borderBottomWidth: '2px', borderBottomStyle: 'solid' } : {}}
+                  autoFocus
+                />
+              </div>
+              {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
             </div>
           ) : (
             <>{type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}</>

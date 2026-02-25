@@ -19,6 +19,9 @@
 
 #TODO - Ability to Delete a Group -- 
 
+## Accounts Detail Page 
+- In the Individual Transactions, one should be able to click and edit them, and even change what account the transaction is associated with 
+
 ## Transaction Tab
 
 

@@ -47,10 +47,13 @@ export function fmtCompact(amount) {
  * @param {Object} group - The group object (to check if type is 'asset')
  * @returns {Object} { hasData, qty, unitPrice, costBasis, marketValue, value, realizedGain, realizedGains: [] }
  */
-export function calculateAssetMetrics(account, accountTxns, groupType) {
+export function calculateAssetMetrics(account, accountTxns, groupType, dateLimit = null) {
   if (groupType !== "asset") return { hasData: false };
 
-  const txns = accountTxns.filter((t) => t.accountId === account.id);
+  let txns = accountTxns.filter((t) => t.accountId === account.id);
+  if (dateLimit) {
+    txns = txns.filter(t => t.date <= dateLimit);
+  }
   const purchases = txns.filter((t) => t.kind === "purchase");
   const sales = txns.filter((t) => t.kind === "sale");
   const valuations = txns

@@ -346,7 +346,7 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false }
+      settings: { pinLockEnabled: false, requireAccountForTxns: false }
     }
   }
 
@@ -356,7 +356,7 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false }
+      settings: { pinLockEnabled: false, requireAccountForTxns: false }
     }
   }
 
@@ -368,7 +368,7 @@ function normalizeVault(data) {
       activeLedgerId,
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled }
+      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns }
     }
   }
 
@@ -383,8 +383,28 @@ function normalizeVault(data) {
     activeLedgerId: legacyLedger.id,
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled }
+    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns }
   }
+}
+
+let globalShow = () => { }
+export function show(msg) {
+  globalShow(msg)
+}
+
+function GlobalToast() {
+  const [toast, setToast] = useState('')
+  useEffect(() => {
+    let timeoutId;
+    globalShow = (msg) => {
+      setToast(msg)
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => setToast(''), 3800)
+    }
+    return () => { globalShow = () => { } }
+  }, [])
+  if (!toast) return null
+  return <div className="toast">{toast}</div>
 }
 
 export default function App() {
@@ -394,7 +414,6 @@ export default function App() {
 
   const [pin, setPin] = useState('')
   const [pin2, setPin2] = useState('')
-  const [toast, setToast] = useState('')
   const [showLedgerPicker, setShowLedgerPicker] = useState(false)
   const [focusAccountId, setFocusAccountId] = useState(null)
   const [showAccountsHeader, setShowAccountsHeader] = useState(true)
@@ -589,10 +608,7 @@ export default function App() {
     sessionStorage.removeItem('gdrive_pending_token')
   }, [stage, settings, vault])
 
-  function show(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3800)
-  }
+
 
   async function startGoogleAuth() {
     const verifier = randomString(64)
@@ -1130,6 +1146,7 @@ export default function App() {
     e.preventDefault()
     const amt = Number(form.amount)
     if (!amt || amt <= 0) return show('Enter a valid amount.')
+    if (settings.requireAccountForTxns && !form.accountId) return show('Please select an account.')
 
     const t = {
       id: uid(),
@@ -1184,65 +1201,117 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, recurring }) {
     const amt = Number(amount || 0)
-    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
+    if (settings.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
 
-    const t = {
-      id: uid(),
-      type,
-      amount: amt,
-      category,
-      note: note ? note.trim() : '',
-      date: date || todayISO(),
-      accountId: accountId || '',
-      subAccountId: subAccountId || ''
+    const isRecurring = recurring && recurring.count > 1;
+    const count = isRecurring ? recurring.count : 1;
+    const freq = isRecurring ? recurring.freq : 'none';
+
+    const newTxns = [];
+    const newAcctTxns = [];
+    const baseDate = new Date(date || todayISO());
+    let totalDelta = 0;
+
+    for (let i = 0; i < count; i++) {
+      const iterId = uid();
+      let iterDate = new Date(baseDate.getTime());
+
+      if (i > 0) {
+        if (freq === 'daily') iterDate.setDate(iterDate.getDate() + i);
+        else if (freq === 'weekly') iterDate.setDate(iterDate.getDate() + (i * 7));
+        else if (freq === 'monthly') iterDate.setMonth(iterDate.getMonth() + i);
+        else if (freq === 'yearly') iterDate.setFullYear(iterDate.getFullYear() + i);
+      }
+
+      const iterDateStr = iterDate.toISOString().slice(0, 10);
+      const iterNote = isRecurring
+        ? `${note ? note.trim() + ' ' : ''}(${i + 1} of ${count})`
+        : (note ? note.trim() : '');
+
+      const t = {
+        id: iterId,
+        type,
+        amount: amt,
+        category,
+        note: iterNote,
+        date: iterDateStr,
+        accountId: accountId || '',
+        subAccountId: subAccountId || ''
+      };
+
+      newTxns.push(t);
+      totalDelta += (t.type === 'income' ? amt : -amt);
+
+      if (t.accountId) {
+        const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId);
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
+          const targetSubId = subs.length
+            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            : null;
+
+          const entry = {
+            id: `txn-${t.id}`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
+            amount: amt,
+            direction: t.type === 'income' ? 'in' : 'out',
+            kind: 'txn',
+            relatedAccountId: null,
+            note: t.note || t.category,
+            date: t.date
+          };
+          newAcctTxns.push(entry);
+        }
+      }
     }
 
     let nextAccounts = allAccounts
     let nextAccountTxns = allAccountTxns
-    if (t.accountId) {
-      const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId)
+
+    if (newAcctTxns.length > 0) {
+      // We assume all recurring txns go to the same account based on current features
+      const sampleT = newTxns[0];
+      const acct = allAccounts.find(a => a.id === sampleT.accountId || a.name === sampleT.accountId);
+
       if (acct) {
-        const targetId = acct.id
-        const delta = t.type === 'income' ? amt : -amt
-        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-        // Use provided subAccountId if valid, else default to first sub if subs exist
+        const targetId = acct.id;
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
         const targetSubId = subs.length
           ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
-          : null
+          : null;
 
         nextAccounts = allAccounts.map(a => {
           if (a.id !== targetId) return a
-          if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
+          if (!subs.length) return { ...a, balance: Number(a.balance || 0) + totalDelta }
           const nextSubs = subs.map(s => (
-            s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+            s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + totalDelta } : s
           ))
           return { ...a, subAccounts: nextSubs }
-        })
-        const entry = {
-          id: `txn-${t.id}`,
-          accountId: targetId,
-          subAccountId: targetSubId,
-          amount: amt,
-          direction: t.type === 'income' ? 'in' : 'out',
-          kind: 'txn',
-          relatedAccountId: null,
-          note: t.note || t.category,
-          date: t.date
-        }
-        nextAccountTxns = [entry, ...allAccountTxns]
+        });
+
+        // Reverse newAcctTxns to maintain chronological insert order before spreading old txns
+        nextAccountTxns = [...newAcctTxns.reverse(), ...allAccountTxns];
       } else {
-        show('Account not found for this transaction.')
+        show('Account not found for this transaction.');
       }
     }
 
     persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: [t, ...txns] },
+      nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns] },
       nextAccounts,
       nextAccountTxns
     })
-    show('Saved.')
+
+    if (isRecurring) {
+      show(`Saved ${count} recurring transactions.`);
+    } else {
+      show('Saved.');
+    }
+    return true;
   }
 
   async function addReimbursement({ originalTxnId, amount, accountId, subAccountId, date }) {
@@ -2057,7 +2126,7 @@ export default function App() {
         <CategoryDetail
           category={selectedCategory}
           onClose={() => setSelectedCategory(null)}
-          onAdd={(amount, note, accountId, date, subAccountId) =>
+          onAdd={(amount, note, accountId, date, subAccountId, recurring) =>
             addQuickTxn({
               type: selectedCategory.type,
               amount,
@@ -2065,7 +2134,8 @@ export default function App() {
               note,
               accountId,
               date,
-              subAccountId
+              subAccountId,
+              recurring
             })
           }
           total={
@@ -2410,7 +2480,7 @@ export default function App() {
           </>
         )}
 
-        {toast && <div className="toast">{toast}</div>}
+        <GlobalToast />
       </div>
     )
   }
@@ -2431,8 +2501,12 @@ export default function App() {
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
+    const [accountError, setAccountError] = useState(false)
     const [selectedSub, setSelectedSub] = useState('')
     const [subAccountId, setSubAccountId] = useState('')
+    const [isRecurring, setIsRecurring] = useState(false)
+    const [recurringFreq, setRecurringFreq] = useState('monthly')
+    const [recurringCount, setRecurringCount] = useState(12)
     const [showReimburseModal, setShowReimburseModal] = useState(false)
     const [reimburseTxn, setReimburseTxn] = useState(null)
     const [reimburseAmount, setReimburseAmount] = useState('')
@@ -2753,27 +2827,71 @@ export default function App() {
               value={amount}
               onChange={e => setAmount(e.target.value)}
               placeholder="e.g. 10000"
+              autoFocus
             />
           </div>
           <div className="field">
             <label>Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="date"
+                style={{ flex: 1 }}
+                value={date}
+                onChange={e => setDate(e.target.value)}
+              />
+              <button
+                type="button"
+                className={`RciconBtn ${isRecurring ? 'active' : ''}`}
+                style={isRecurring ? { background: '#a5eba5', color: '#000', borderRadius: 12, padding: '0 8px', fontSize: 13, border: '1px solid #a5eba5' } : { borderRadius: 12, padding: '0 8px', fontSize: 13, border: '1px solid var(--border)' }}
+                onClick={() => setIsRecurring(!isRecurring)}
+                title="Repeat/Inst."
+              >
+                ⟳ Rep/Inst.
+              </button>
+            </div>
           </div>
 
-
+          {isRecurring && (
+            <div className="field" style={{ display: 'flex', gap: 8, background: 'var(--bg-2)', padding: 8, borderRadius: 6 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, marginBottom: 4 }}>Frequency</label>
+                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)}>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, marginBottom: 4 }}>Occurrences</label>
+                <input
+                  type="number"
+                  min="2"
+                  max="60"
+                  value={recurringCount}
+                  onChange={e => setRecurringCount(e.target.value)}
+                  onBlur={e => setRecurringCount(Math.min(60, Math.max(2, parseInt(e.target.value) || 2)))}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="field">
-            <label>Account</label>
-            <select value={accountId} onChange={e => setAccountId(e.target.value)}>
+            <label>Account {settings.requireAccountForTxns ? '*' : ''}</label>
+            <select
+              value={accountId}
+              onChange={e => {
+                setAccountId(e.target.value)
+                if (e.target.value) setAccountError(false)
+              }}
+              style={accountError ? { borderColor: '#f8a5a5' } : {}}
+            >
               <option value="">Select account</option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+            {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
           </div>
 
           {showSubAccountSelect && (
@@ -2804,16 +2922,25 @@ export default function App() {
             <button
               className="btn addTxnBtn"
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                if (settings.requireAccountForTxns && !accountId) {
+                  setAccountError(true)
+                  show('Please select an account.')
+                  return
+                }
                 const combinedNote = selectedSub
                   ? `${selectedSub}${note ? ` • ${note}` : ''}`
                   : note
-                onAdd(amount, combinedNote, accountId, date, subAccountId) // Added subAccountId
-                setAmount('')
-                setNote('')
-                setDate(todayISO())
-                setAccountId('')
-                setSubAccountId('')
+                const finalCount = Math.min(60, Math.max(2, parseInt(recurringCount) || 2))
+                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, isRecurring ? { freq: recurringFreq, count: finalCount } : null) // Added recurring options
+                if (success) {
+                  setAmount('')
+                  setNote('')
+                  setDate(todayISO())
+                  setAccountId('')
+                  setSubAccountId('')
+                  setIsRecurring(false)
+                }
               }}
             >
               Add {category.type === 'expense' ? 'Expense' : 'Income'}
@@ -3019,6 +3146,7 @@ export default function App() {
 
   function TransactionsScreen() {
     const [txTab, setTxTab] = useState('monthly') // daily, monthly, stats
+    const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [statYear, setStatYear] = useState(() => new Date().getFullYear())
     const periodLabel = useMemo(() => formatMonthLabel(month), [month])
     const [selectedTxn, setSelectedTxn] = useState(null)
@@ -3086,15 +3214,21 @@ export default function App() {
         const y = Number(date.slice(0, 4))
         if (y !== statYear) return
         const key = date.slice(0, 7)
-        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0 })
+        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0 })
         const entry = stats.get(key)
 
         const amt = Number(t.amount || 0)
+        const isActual = date <= todayISO()
         if (t.type === 'income') {
-          if (!t.reimbursementOf) entry.inc += amt
+          if (!t.reimbursementOf) {
+            entry.inc += amt
+            if (isActual) entry.actualInc += amt
+          }
         } else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
           const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
-          entry.exp += amt - reimbursed
+          const netExp = amt - reimbursed
+          entry.exp += netExp
+          if (isActual) entry.actualExp += netExp
         }
       })
 
@@ -3112,10 +3246,12 @@ export default function App() {
           const y = Number(date.slice(0, 4));
           if (y !== statYear) continue;
 
+          const isActual = date <= todayISO();
           const key = date.slice(0, 7);
-          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0 });
+          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0 });
           const entry = stats.get(key);
           entry.inc += g.amount;
+          if (isActual) entry.actualInc += g.amount;
         }
       }
 
@@ -3126,12 +3262,13 @@ export default function App() {
         const key = `${statYear}-${mm}`
         const dateObj = new Date(statYear, m - 1, 1)
         const monthName = dateObj.toLocaleString('default', { month: 'long' })
-        const data = stats.get(key) || { inc: 0, exp: 0 }
+        const data = stats.get(key) || { inc: 0, exp: 0, actualInc: 0, actualExp: 0 }
         result.push({
           key,
           label: monthName,
           ...data,
-          bal: data.inc - data.exp
+          bal: data.inc - data.exp,
+          actualBal: (data.actualInc || 0) - (data.actualExp || 0)
         })
       }
       return result.reverse() // Dec to Jan
@@ -3326,7 +3463,29 @@ export default function App() {
               })
             )
           ) : txTab === 'monthly' ? (
-            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card" style={{ padding: 0, overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
+              {(() => {
+                const hasFuture = monthlyStats.some(m => m.inc !== m.actualInc || m.exp !== m.actualExp || m.bal !== m.actualBal);
+                if (!hasFuture) return null;
+                return (
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 6, background: 'var(--bg-2)' }}>
+                    <button
+                      className={`pillBtn ${monthlyViewMode === 'actual' ? 'primary' : ''}`}
+                      style={monthlyViewMode === 'actual' ? { fontSize: 12, padding: '4px 12px' } : { fontSize: 12, padding: '4px 12px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}
+                      onClick={() => setMonthlyViewMode('actual')}
+                    >
+                      Actual
+                    </button>
+                    <button
+                      className={`pillBtn ${monthlyViewMode === 'projected' ? 'primary' : ''}`}
+                      style={monthlyViewMode === 'projected' ? { fontSize: 12, padding: '4px 12px' } : { fontSize: 12, padding: '4px 12px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}
+                      onClick={() => setMonthlyViewMode('projected')}
+                    >
+                      Projected
+                    </button>
+                  </div>
+                )
+              })()}
               <table className="table" style={{ minWidth: 320, fontSize: 13 }}>
                 <thead>
                   <tr>
@@ -3341,40 +3500,53 @@ export default function App() {
                     const totals = monthlyStats.reduce((acc, m) => ({
                       inc: acc.inc + m.inc,
                       exp: acc.exp + m.exp,
-                      bal: acc.bal + m.bal
-                    }), { inc: 0, exp: 0, bal: 0 })
+                      bal: acc.bal + m.bal,
+                      actualInc: acc.actualInc + (m.actualInc || 0),
+                      actualExp: acc.actualExp + (m.actualExp || 0),
+                      actualBal: acc.actualBal + (m.actualBal || 0)
+                    }), { inc: 0, exp: 0, bal: 0, actualInc: 0, actualExp: 0, actualBal: 0 })
+
+                    const displayTotals = monthlyViewMode === 'actual'
+                      ? { inc: totals.actualInc, exp: totals.actualExp, bal: totals.actualBal }
+                      : { inc: totals.inc, exp: totals.exp, bal: totals.bal }
 
                     return (
                       <tr style={{ fontWeight: 800, backgroundColor: 'var(--bg-2)', borderBottom: '2px solid var(--border)' }}>
                         <td style={{ padding: '12px 8px' }}>TOTAL</td>
-                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--income)' }}>{fmtCompact(totals.inc)}</td>
-                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(totals.exp)}</td>
-                        <td style={{ textAlign: 'right', padding: '12px 8px' }}>{fmtCompact(totals.bal)}</td>
+                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--income)' }}>{fmtCompact(displayTotals.inc)}</td>
+                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
+                        <td style={{ textAlign: 'right', padding: '12px 8px' }}>{fmtCompact(displayTotals.bal)}</td>
                       </tr>
                     )
                   })()}
-                  {monthlyStats.map(m => (
-                    <tr key={m.key}>
-                      <td style={{ padding: '10px 8px', fontWeight: 600, color: '#555' }}>
-                        {m.label.slice(0, 3).toUpperCase()}
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)' }}>
-                        {m.inc > 0 ? fmtTZS(m.inc) : '-'}
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)' }}>
-                        {m.exp > 0 ? fmtTZS(m.exp) : '-'}
-                      </td>
-                      <td style={{
-                        textAlign: 'right',
-                        padding: '10px 8px',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap',
-                        color: m.bal < 0 ? 'var(--danger)' : 'var(--text)'
-                      }}>
-                        {fmtTZS(m.bal)}
-                      </td>
-                    </tr>
-                  ))}
+                  {monthlyStats.map(m => {
+                    const displayInc = monthlyViewMode === 'actual' ? (m.actualInc || 0) : m.inc;
+                    const displayExp = monthlyViewMode === 'actual' ? (m.actualExp || 0) : m.exp;
+                    const displayBal = monthlyViewMode === 'actual' ? (m.actualBal || 0) : m.bal;
+
+                    return (
+                      <tr key={m.key}>
+                        <td style={{ padding: '10px 8px', fontWeight: 600, color: '#555' }}>
+                          {m.label.slice(0, 3).toUpperCase()}
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)' }}>
+                          {displayInc > 0 ? fmtTZS(displayInc) : '-'}
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)' }}>
+                          {displayExp > 0 ? fmtTZS(displayExp) : '-'}
+                        </td>
+                        <td style={{
+                          textAlign: 'right',
+                          padding: '10px 8px',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                          color: displayBal < 0 ? 'var(--danger)' : 'var(--text)'
+                        }}>
+                          {fmtTZS(displayBal)}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -3392,12 +3564,13 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats, incomeCats, onSave, onClose, onDelete, onReimburse }) {
+  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse }) {
     const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
     const [category, setCategory] = useState(txn.category || '')
     const [accountId, setAccountId] = useState(txn.accountId || '')
+    const [accountError, setAccountError] = useState(false)
     const [date, setDate] = useState(txn.date || todayISO())
 
     const [subCategory, setSubCategory] = useState(() => {
@@ -3422,6 +3595,12 @@ export default function App() {
       if (!isEditable) return
       const amt = Number(amount || 0)
       if (!amt || amt <= 0) return show('Enter a valid amount.')
+      if (settings.requireAccountForTxns && !accountId) {
+        setAccountError(true)
+        show('Please select an account.')
+        return
+      }
+      setAccountError(false)
       const combinedNote = subCategory
         ? `${subCategory}${note ? ` • ${note}` : ''}`
         : note
@@ -3467,6 +3646,7 @@ export default function App() {
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0"
+                autoFocus
               />
             </div>
           ) : (
@@ -3520,12 +3700,23 @@ export default function App() {
             <div className="txnDetailValue">None</div>
           </div>
           <div className="txnDetailRow">
-            <div className="txnDetailLabel">Account</div>
+            <div className="txnDetailLabel">Account {settings.requireAccountForTxns ? '*' : ''}</div>
             {isEditable ? (
-              <select className="txnDetailSelect" value={accountId} onChange={e => setAccountId(e.target.value)}>
-                <option value="">None</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <select
+                  className="txnDetailSelect"
+                  value={accountId}
+                  onChange={e => {
+                    setAccountId(e.target.value)
+                    if (e.target.value) setAccountError(false)
+                  }}
+                  style={accountError ? { borderColor: '#f8a5a5' } : {}}
+                >
+                  <option value="">None</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
+              </div>
             ) : (
               <div className="txnDetailValue">{accountName || 'None'}</div>
             )}
@@ -3712,14 +3903,40 @@ export default function App() {
           </label>
         </div>
 
+        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>Require Account</div>
+            <div className="small">Force selecting an account when adding transactions.</div>
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={!!settings.requireAccountForTxns}
+              onChange={e => {
+                const ns = { ...settings, requireAccountForTxns: e.target.checked }
+                updateSettings(ns)
+                show(e.target.checked ? 'Account required.' : 'Account optional.')
+              }}
+            />
+            <span className="toggleTrack" />
+          </label>
+        </div>
+
         <div className="hr" />
 
         <div className="row">
-          <button className="btn" onClick={handleLoadDemo}>Load Demo Data</button>
+          <button
+            className="btn"
+            onClick={handleLoadDemo}
+            disabled={txns.length > 0 || accounts.length > 0}
+            style={txns.length > 0 || accounts.length > 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+          >
+            {txns.length > 0 || accounts.length > 0 ? 'Load Demo Data (Ledger not empty)' : 'Load Demo Data'}
+          </button>
         </div>
 
         <div className="small" style={{ marginTop: 10 }}>
-          Demo data will overwrite your current accounts and account transactions.
+          Demo data will overwrite your current accounts and account transactions. Only available on empty ledgers.
         </div>
 
         <div className="hr" />
@@ -3745,7 +3962,7 @@ export default function App() {
           </button>
         </div>
 
-        {toast && <div className="toast">{toast}</div>}
+        <GlobalToast />
 
         {showRestoreModal && (
           <div className="modalBackdrop" onClick={() => setShowRestoreModal(false)}>
@@ -3879,7 +4096,7 @@ export default function App() {
 
           <button className="btn primary" onClick={handleSetPin}>Create Vault</button>
 
-          {toast && <div className="toast">{toast}</div>}
+          <GlobalToast />
           <div className="small" style={{ marginTop: 10 }}>
             Tip: Use iPhone Face ID/Passcode + a PIN you can remember.
           </div>
@@ -3908,7 +4125,7 @@ export default function App() {
             <button className="btn primary" onClick={handleUnlock}>Unlock</button>
             <button className="btn danger" onClick={handleReset}>Reset</button>
           </div>
-          {toast && <div className="toast">{toast}</div>}
+          <GlobalToast />
           <div className="small" style={{ marginTop: 10 }}>
             Export/import is available after unlock (recommended).
           </div>

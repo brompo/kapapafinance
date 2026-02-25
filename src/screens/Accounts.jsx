@@ -89,11 +89,12 @@ export default function Accounts({
 
 
 
-  function computeAccruedForAccount(account) {
+  function computeAccruedForAccount(account, balanceType = 'current') {
     const creditEntries = accountTxns.filter((t) => t.accountId === account.id && t.kind === "credit");
     const today = new Date().toISOString().slice(0, 10);
     let accrued = 0;
     creditEntries.forEach((t) => {
+      if (balanceType === 'current' && t.date > today) return;
       const rate = Number(t.creditRate || 0) / 100;
       if (!rate || !t.interestStartDate) return;
       const start = t.interestStartDate;
@@ -116,20 +117,35 @@ export default function Accounts({
 
 
 
-  function getAccountBalance(account) {
+  function getAccountBalance(account, balanceType = 'current') {
+    const today = new Date().toISOString().slice(0, 10);
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+
+    const getBaseBalance = (acc) => {
+      let b = Number(acc.balance || 0);
+      if (balanceType === 'current') {
+        const futureTxns = accountTxns.filter(t => t.accountId === acc.id && t.date > today);
+        futureTxns.forEach(t => {
+          const amt = Number(t.amount || 0);
+          if (t.direction === 'out') b += amt;
+          else if (t.direction === 'in') b -= amt;
+        });
+      }
+      return b;
+    };
+
     // Show only the total of sub-accounts associated with the active ledger
     const base = subs.length > 0
       ? subs.reduce((s, sub) => {
         if (activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
-          return s + Number(sub.balance || 0)
+          return s + getBaseBalance(sub);
         }
-        return s
+        return s;
       }, 0)
-      : Number(account.balance || 0);
+      : getBaseBalance(account);
 
     const groupType = account.accountType || groupById.get(account.groupId)?.type;
-    if (groupType === "credit") return base + computeAccruedForAccount(account);
+    if (groupType === "credit") return base + computeAccruedForAccount(account, balanceType);
 
     if (groupType === "asset") {
       // If account has subaccounts, trust the base sum (which filters subs by ledger)
@@ -140,12 +156,13 @@ export default function Accounts({
       const txns = accountTxns.filter(t => t.accountId === account.id);
       for (const t of txns) {
         if (t.kind === 'valuation') continue;
+        if (balanceType === 'current' && t.date > today) continue;
         const amt = Number(t.amount || 0);
         if (t.direction === 'in') cleanBase += amt;
         if (t.direction === 'out') cleanBase -= amt;
       }
 
-      const info = calculateAssetMetrics(account, accountTxns, groupType);
+      const info = calculateAssetMetrics(account, accountTxns, groupType, balanceType === 'current' ? today : null);
       if (info.hasData) {
         const uninvestedCash = cleanBase - (info.costBasis || 0) + (info.realizedGain || 0);
         return (info.value || 0) + uninvestedCash;
@@ -2291,11 +2308,14 @@ function AccountDetail({
                 : currentGroup?.name}
             </span>
           </div>
-          <div style={{ marginLeft: "auto", fontSize: "1.5rem", fontWeight: "700" }}>
-            {fmtTZS(
-              Array.isArray(account.subAccounts) && account.subAccounts.length > 0
-                ? account.subAccounts.reduce((s, sub) => s + Number(sub.balance || 0), 0)
-                : getAccountBalance(account)
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={{ fontSize: "1.5rem", fontWeight: "700" }}>
+              {fmtTZS(getAccountBalance(account, 'current'))}
+            </div>
+            {getAccountBalance(account, 'current') !== getAccountBalance(account, 'projected') && (
+              <div style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 2 }}>
+                Projected: {fmtTZS(getAccountBalance(account, 'projected'))}
+              </div>
             )}
           </div>
         </div>
@@ -3451,6 +3471,7 @@ function AccountDetail({
                     const title = t.note || (t.kind ? `${t.kind[0].toUpperCase()}${t.kind.slice(1)}` : "Balance update");
                     const kindLabel = t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "";
                     const meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
+                    const isFuture = t.date > new Date().toISOString().slice(0, 10);
                     return (
                       <div
                         className="accHistoryRow"
@@ -3466,15 +3487,18 @@ function AccountDetail({
                           {(title || "A").slice(0, 1).toUpperCase()}
                         </div>
                         <div className="accHistoryInfo">
-                          <div className="accHistoryTitleRow">{title}</div>
-                          <div className="accHistoryMeta">{meta}</div>
+                          <div className="accHistoryTitleRow">
+                            <span style={isFuture ? { fontStyle: 'italic', opacity: 0.7 } : {}}>{title}</span>
+                            {isFuture && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7, padding: '2px 6px', background: 'rgba(0,0,0,0.1)', borderRadius: 4, fontStyle: 'normal' }}>Pending</span>}
+                          </div>
+                          <div className="accHistoryMeta" style={isFuture ? { fontStyle: 'italic', opacity: 0.7 } : {}}>{meta}</div>
                           {t.paidBack && t.paidBack.length > 0 && (
                             <div className="reimbursedBadge">
                               ✓ Paid back {fmtTZS(t.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
                             </div>
                           )}
                         </div>
-                        <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`}>
+                        <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`} style={isFuture ? { fontStyle: 'italic', opacity: 0.7 } : {}}>
                           {t.direction === "in" ? "+" : "-"}
                           {fmtTZS(t.amount)}
                         </div>

@@ -951,6 +951,17 @@ label {
   color: #23264a
 }
 
+.RciconBtn {
+  height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  cursor: pointer;
+  color: #8b90b2;
+  font-size: 14px;
+}
+
 .iconBtn {
   width: 32px;
   height: 32px;

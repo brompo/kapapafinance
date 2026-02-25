@@ -2852,7 +2852,7 @@ export default function App() {
           </div>
 
           {isRecurring && (
-            <div className="field" style={{ display: 'flex', gap: 8, background: 'var(--bg-2)', padding: 8, borderRadius: 6 }}>
+            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 12 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 11, marginBottom: 4 }}>Frequency</label>
                 <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)}>

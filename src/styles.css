@@ -1102,6 +1102,15 @@ label {
   gap: 4px;
 }
 
+.recurringSunkenBox {
+  background: #f8f9fc;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+  box-shadow: inset 0 2px 5px rgba(27, 33, 62, 0.04);
+  border: 1px solid #eef0f6;
+}
+
 .segmented button {
   border: none;
   background: transparent;

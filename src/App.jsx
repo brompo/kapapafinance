@@ -848,28 +848,32 @@ export default function App() {
   const expenseCats = categories.expense || [...DEFAULT_EXPENSE_CATEGORIES]
   const incomeCats = categories.income || [...DEFAULT_INCOME_CATEGORIES]
 
-  function persistActiveLedger(nextLedger) {
+  function persistActiveLedger(nextLedger, nextClients) {
     const hasActive = ledgers.some(l => l.id === activeLedger.id)
     const nextLedgers = hasActive
       ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
       : [...ledgers, nextLedger]
     const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
-    persist({ ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId })
+    const vaultUpdate = { ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId }
+    if (nextClients) vaultUpdate.clients = nextClients
+    persist(vaultUpdate)
   }
 
-  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns }) {
+  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns, nextClients }) {
     const hasActive = ledgers.some(l => l.id === activeLedger.id)
     const nextLedgers = hasActive
       ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
       : [...ledgers, nextLedger]
     const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
-    persist({
+    const vaultUpdate = {
       ...vault,
       ledgers: nextLedgers,
       activeLedgerId: nextActiveId,
       accounts: nextAccounts ?? allAccounts,
       accountTxns: nextAccountTxns ?? allAccountTxns
-    })
+    }
+    if (nextClients) vaultUpdate.clients = nextClients
+    persist(vaultUpdate)
   }
 
   function handleAddPersonalLedger() {
@@ -1207,7 +1211,7 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring, pendingClient }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (settings.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -1307,10 +1311,13 @@ export default function App() {
       }
     }
 
+    const nextClients = pendingClient ? [...(vault.clients || []), pendingClient] : undefined;
+
     persistLedgerAndAccounts({
       nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns] },
       nextAccounts,
-      nextAccountTxns
+      nextAccountTxns,
+      nextClients
     })
 
     if (isRecurring) {
@@ -1391,7 +1398,7 @@ export default function App() {
     return allAccounts.find(a => a.id === idOrName || a.name === idOrName) || null
   }
 
-  async function updateTxn(original, next) {
+  async function updateTxn(original, next, pendingClient) {
     const nextTxns = txns.map(t => (t.id === original.id ? next : t))
 
     let nextAccounts = allAccounts
@@ -2133,7 +2140,7 @@ export default function App() {
         <CategoryDetail
           category={selectedCategory}
           onClose={() => setSelectedCategory(null)}
-          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring) =>
+          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) =>
             addQuickTxn({
               type: selectedCategory.type,
               amount,
@@ -2144,18 +2151,9 @@ export default function App() {
               subAccountId,
               clientId,
               recurring
-            })
+            }, pendingClient)
           }
           clients={clients}
-          onAddClient={(callback) => {
-            const name = prompt('New client name?');
-            if (!name) return;
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            const newClient = { id: uid(), name: trimmed };
-            persist({ ...vault, clients: [...clients, newClient] });
-            callback(newClient.id);
-          }}
           total={
             selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
               selectedCategory.type === 'income' ? (incomeTotals.get(selectedCategory.name) || 0) :
@@ -2514,8 +2512,7 @@ export default function App() {
     incomeCats = [],
     cosCats = [],
     oppsCats = [],
-    clients = [],
-    onAddClient
+    clients = []
   }) {
     const [amount, setAmount] = useState('')
     const [amountError, setAmountError] = useState(false)
@@ -2524,6 +2521,10 @@ export default function App() {
     const [accountId, setAccountId] = useState('')
     const [accountError, setAccountError] = useState(false)
     const [clientId, setClientId] = useState('')
+    const [pendingClient, setPendingClient] = useState(null)
+    const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
+      ? [...clients, pendingClient]
+      : clients;
     const [selectedSub, setSelectedSub] = useState('')
     const [subAccountId, setSubAccountId] = useState('')
     const [isRecurring, setIsRecurring] = useState(false)
@@ -2536,6 +2537,7 @@ export default function App() {
     const [reimburseSubAccountId, setReimburseSubAccountId] = useState('')
     const [reimburseDate, setReimburseDate] = useState(todayISO())
     const [reimburseError, setReimburseError] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
 
     const reimburseAccount = accounts.find(a => a.id === reimburseAccountId)
     const showReimburseSubSelect = reimburseAccount && Array.isArray(reimburseAccount.subAccounts) && reimburseAccount.subAccounts.length > 0
@@ -2772,18 +2774,9 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={cosCats}
           oppsCats={oppsCats}
-          onSave={(next) => updateTxn(selectedTxn.raw, next)}
+          onSave={(next, pendingClient) => updateTxn(selectedTxn.raw, next, pendingClient)}
           onClose={() => setSelectedTxn(null)}
           clients={clients}
-          onAddClient={(callback) => {
-            const name = prompt('New client name?');
-            if (!name) return;
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            const newClient = { id: uid(), name: trimmed };
-            persist({ ...vault, clients: [...clients, newClient] });
-            callback(newClient.id);
-          }}
           onDelete={() => {
             delTxn(selectedTxn.raw.id)
             setSelectedTxn(null)
@@ -2954,14 +2947,19 @@ export default function App() {
                 value={clientId}
                 onChange={e => {
                   if (e.target.value === 'new') {
-                    if (onAddClient) onAddClient(id => setClientId(id))
+                    const name = prompt('New client name?');
+                    if (name && name.trim()) {
+                      const newClient = { id: uid(), name: name.trim() };
+                      setPendingClient(newClient);
+                      setClientId(newClient.id);
+                    }
                   } else {
                     setClientId(e.target.value)
                   }
                 }}
               >
                 <option value="">Select client (optional)</option>
-                {clients.map(c => (
+                {activeClients.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
                 <option value="new">+ Add New Client</option>
@@ -2981,6 +2979,7 @@ export default function App() {
             <button
               className="btn addTxnBtn"
               type="button"
+              disabled={isSaving}
               onClick={async () => {
                 const amtVal = Number(amount || 0)
                 if (!amtVal || amtVal <= 0) {
@@ -2993,11 +2992,12 @@ export default function App() {
                   show('Please select an account.')
                   return
                 }
-                const combinedNote = selectedSub
-                  ? `${selectedSub}${note ? ` • ${note}` : ''}`
-                  : note
-                const finalCount = Math.min(60, Math.max(2, parseInt(recurringCount) || 2))
-                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null) // Added recurring options
+                setIsSaving(true)
+                const finalCount = parseInt(recurringCount, 10) || 12
+                const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note
+
+                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient)
+                setIsSaving(false)
                 if (success) {
                   setAmount('')
                   setNote('')
@@ -3008,7 +3008,7 @@ export default function App() {
                 }
               }}
             >
-              Add {category.type === 'expense' ? 'Expense' : 'Income'}
+              Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
             </button>
           </div>
         </div>
@@ -3907,7 +3907,7 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [], onAddClient }) {
+  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [] }) {
     const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
@@ -3916,6 +3916,10 @@ export default function App() {
     const [accountId, setAccountId] = useState(txn.accountId || '')
     const [accountError, setAccountError] = useState(false)
     const [clientId, setClientId] = useState(txn.raw?.clientId || '')
+    const [pendingClient, setPendingClient] = useState(null)
+    const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
+      ? [...clients, pendingClient]
+      : clients;
     const [date, setDate] = useState(txn.date || todayISO())
 
     const [subCategory, setSubCategory] = useState(() => {
@@ -3962,7 +3966,7 @@ export default function App() {
         accountId: accountId || '',
         clientId: clientId || '',
         date: date || todayISO()
-      })
+      }, pendingClient)
       onClose()
     }
 
@@ -4088,14 +4092,19 @@ export default function App() {
                     value={clientId}
                     onChange={e => {
                       if (e.target.value === 'new') {
-                        if (onAddClient) onAddClient(id => setClientId(id))
+                        const name = prompt('New client name?');
+                        if (name && name.trim()) {
+                          const newClient = { id: uid(), name: name.trim() };
+                          setPendingClient(newClient);
+                          setClientId(newClient.id);
+                        }
                       } else {
                         setClientId(e.target.value)
                       }
                     }}
                   >
                     <option value="">None</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     <option value="new">+ Add New Client</option>
                   </select>
                 </div>

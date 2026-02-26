@@ -346,7 +346,8 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false, requireAccountForTxns: false }
+      settings: { pinLockEnabled: false, requireAccountForTxns: false },
+      clients: []
     }
   }
 
@@ -356,7 +357,8 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false, requireAccountForTxns: false }
+      settings: { pinLockEnabled: false, requireAccountForTxns: false },
+      clients: []
     }
   }
 
@@ -368,7 +370,8 @@ function normalizeVault(data) {
       activeLedgerId,
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns }
+      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns },
+      clients: Array.isArray(data.clients) ? data.clients : []
     }
   }
 
@@ -383,7 +386,8 @@ function normalizeVault(data) {
     activeLedgerId: legacyLedger.id,
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns }
+    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns },
+    clients: Array.isArray(data.clients) ? data.clients : []
   }
 }
 
@@ -426,6 +430,7 @@ export default function App() {
   const [restoreFiles, setRestoreFiles] = useState([])
   const [restorePin, setRestorePin] = useState('')
   const [selectedRestoreId, setSelectedRestoreId] = useState('')
+  const [showClientsManager, setShowClientsManager] = useState(false)
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
@@ -453,6 +458,7 @@ export default function App() {
     ? { ...ALL_LEDGERS_TEMPLATE, txns: ledgers.flatMap(l => l.txns || []) }
     : (ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger())
   const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
+  const clients = Array.isArray(vault.clients) ? vault.clients : []
 
   // Helper to check if an account or its subaccounts belong to the active ledger
   function isAccountInLedger(account, ledgerId) {
@@ -1201,7 +1207,7 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, recurring }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (settings.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -1239,7 +1245,8 @@ export default function App() {
         note: iterNote,
         date: iterDateStr,
         accountId: accountId || '',
-        subAccountId: subAccountId || ''
+        subAccountId: subAccountId || '',
+        clientId: clientId || ''
       };
 
       newTxns.push(t);
@@ -2126,7 +2133,7 @@ export default function App() {
         <CategoryDetail
           category={selectedCategory}
           onClose={() => setSelectedCategory(null)}
-          onAdd={(amount, note, accountId, date, subAccountId, recurring) =>
+          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring) =>
             addQuickTxn({
               type: selectedCategory.type,
               amount,
@@ -2135,9 +2142,20 @@ export default function App() {
               accountId,
               date,
               subAccountId,
+              clientId,
               recurring
             })
           }
+          clients={clients}
+          onAddClient={(callback) => {
+            const name = prompt('New client name?');
+            if (!name) return;
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            const newClient = { id: uid(), name: trimmed };
+            persist({ ...vault, clients: [...clients, newClient] });
+            callback(newClient.id);
+          }}
           total={
             selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
               selectedCategory.type === 'income' ? (incomeTotals.get(selectedCategory.name) || 0) :
@@ -2495,7 +2513,9 @@ export default function App() {
     expenseCats = [],
     incomeCats = [],
     cosCats = [],
-    oppsCats = []
+    oppsCats = [],
+    clients = [],
+    onAddClient
   }) {
     const [amount, setAmount] = useState('')
     const [amountError, setAmountError] = useState(false)
@@ -2503,6 +2523,7 @@ export default function App() {
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
     const [accountError, setAccountError] = useState(false)
+    const [clientId, setClientId] = useState('')
     const [selectedSub, setSelectedSub] = useState('')
     const [subAccountId, setSubAccountId] = useState('')
     const [isRecurring, setIsRecurring] = useState(false)
@@ -2753,6 +2774,16 @@ export default function App() {
           oppsCats={oppsCats}
           onSave={(next) => updateTxn(selectedTxn.raw, next)}
           onClose={() => setSelectedTxn(null)}
+          clients={clients}
+          onAddClient={(callback) => {
+            const name = prompt('New client name?');
+            if (!name) return;
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            const newClient = { id: uid(), name: trimmed };
+            persist({ ...vault, clients: [...clients, newClient] });
+            callback(newClient.id);
+          }}
           onDelete={() => {
             delTxn(selectedTxn.raw.id)
             setSelectedTxn(null)
@@ -2916,6 +2947,28 @@ export default function App() {
             </div>
           )}
 
+          {category.type === 'income' && (
+            <div className="field">
+              <label>Client</label>
+              <select
+                value={clientId}
+                onChange={e => {
+                  if (e.target.value === 'new') {
+                    if (onAddClient) onAddClient(id => setClientId(id))
+                  } else {
+                    setClientId(e.target.value)
+                  }
+                }}
+              >
+                <option value="">Select client (optional)</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                <option value="new">+ Add New Client</option>
+              </select>
+            </div>
+          )}
+
           <div className="field">
             <label>Note (optional)</label>
             <input
@@ -2944,7 +2997,7 @@ export default function App() {
                   ? `${selectedSub}${note ? ` • ${note}` : ''}`
                   : note
                 const finalCount = Math.min(60, Math.max(2, parseInt(recurringCount) || 2))
-                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, isRecurring ? { freq: recurringFreq, count: finalCount } : null) // Added recurring options
+                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null) // Added recurring options
                 if (success) {
                   setAmount('')
                   setNote('')
@@ -3344,6 +3397,35 @@ export default function App() {
       return filtered.sort((a, b) => (a.date < b.date ? 1 : -1))
     }, [showMonthLog, combinedTxns, accounts, activeLedger.groups, accountTxns, monthlyViewMode])
 
+    const clientRevenue = useMemo(() => {
+      if (txTab !== 'stats') return []
+      const revenueMap = new Map()
+      const currentYear = statYear
+
+      const yearTxns = combinedTxns.filter(t =>
+        t.date.startsWith(String(currentYear)) &&
+        t.type === 'income' &&
+        t.raw?.clientId
+      )
+
+      for (const t of yearTxns) {
+        const amt = Number(t.amount || 0)
+        const current = revenueMap.get(t.raw.clientId) || 0
+        revenueMap.set(t.raw.clientId, current + amt)
+      }
+
+      return Array.from(revenueMap.entries())
+        .map(([clientId, total]) => {
+          const client = clients.find(c => c.id === clientId)
+          return {
+            clientId,
+            name: client ? client.name : 'Unknown Client',
+            total
+          }
+        })
+        .sort((a, b) => b.total - a.total)
+    }, [txTab, combinedTxns, statYear, clients])
+
     if (selectedTxn) {
       return (
         <TransactionDetail
@@ -3355,6 +3437,16 @@ export default function App() {
           oppsCats={activeLedger.categories?.opps || []}
           onSave={(next) => updateTxn(selectedTxn.raw, next)}
           onClose={() => setSelectedTxn(null)}
+          clients={clients}
+          onAddClient={(callback) => {
+            const name = prompt('New client name?');
+            if (!name) return;
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            const newClient = { id: uid(), name: trimmed };
+            persist({ ...vault, clients: [...clients, newClient] });
+            callback(newClient.id);
+          }}
         />
       )
     }
@@ -3634,7 +3726,21 @@ export default function App() {
               </table>
             </div>
           ) : (
-            <div className="emptyRow">Stats coming soon!</div>
+            <div className="card" style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 12 }}>Revenue by Client</div>
+              {clientRevenue.length === 0 ? (
+                <div className="emptyRow">No client revenue recorded in {statYear}.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {clientRevenue.map(c => (
+                    <div key={c.clientId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ fontWeight: 500 }}>{c.name}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtTZS(c.total)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -4055,6 +4161,9 @@ export default function App() {
           <button className="btn" onClick={() => setShowBudgetSettings(true)}>
             Monthly Budget
           </button>
+          <button className="btn" onClick={() => setShowClientsManager(true)}>
+            Manage Clients
+          </button>
         </div>
 
         <div className="hr" />
@@ -4306,6 +4415,54 @@ export default function App() {
     )
   }
 
+  function ClientsManager() {
+    function handleRename(client) {
+      const newName = prompt('New client name?', client.name)
+      if (!newName || newName.trim() === '' || newName === client.name) return
+      const nextClients = clients.map(c => c.id === client.id ? { ...c, name: newName.trim() } : c)
+      persist({ ...vault, clients: nextClients })
+    }
+
+    function handleDelete(client) {
+      const isAttached = activeLedger.txns.some(t => t.clientId === client.id) || rawAccounts.some(a => isAccountInLedger(a, activeLedger.id) && allAccountTxns.some(t => t.clientId === client.id))
+      if (isAttached) {
+        if (!window.confirm('This client is attached to existing transactions. Delete anyway?')) return
+      } else if (!window.confirm(`Delete client "${client.name}"?`)) {
+        return
+      }
+      const nextClients = clients.filter(c => c.id !== client.id)
+      persist({ ...vault, clients: nextClients })
+    }
+
+    return (
+      <div className="modalBackdrop" onClick={() => setShowClientsManager(false)}>
+        <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+          <div className="modalTitle">Manage Clients</div>
+          {clients.length === 0 ? (
+            <div className="emptyRow">No clients added yet.</div>
+          ) : (
+            <div className="row" style={{ flexDirection: 'column', gap: 0, maxHeight: 300, overflowY: 'auto' }}>
+              {clients.map(c => (
+                <div className="field budgetRow" key={`client-${c.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontWeight: 500 }}>{c.name}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="iconBtn" style={{ background: 'var(--bg-2)' }} onClick={() => handleRename(c)}>✎</button>
+                    <button className="iconBtn danger" style={{ background: '#fef2f2' }} onClick={() => handleDelete(c)}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn" type="button" onClick={() => setShowClientsManager(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ---------- Auth screens ----------
   if (stage === 'loading') return null
 
@@ -4490,6 +4647,7 @@ export default function App() {
 
       {tab === 'settings' && <SettingsScreen />}
       {showBudgetSettings && <BudgetSettings />}
+      {showClientsManager && <ClientsManager />}
 
       {/* Bottom tabs */}
       <BottomNav tab={tab} setTab={setTab} variant="light" />

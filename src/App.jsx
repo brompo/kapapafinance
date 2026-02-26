@@ -3640,14 +3640,77 @@ export default function App() {
 
         {showMonthLog && (
           <div style={{ zIndex: 98, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            <div className="txnDetailHeader" style={{ padding: '16px', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, borderBottom: '1px solid var(--border)' }}>
+            <div className="txnDetailHeader" style={{ padding: '16px', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <button className="iconBtn" onClick={() => setShowMonthLog(null)} type="button">✕</button>
-              <div className="txnDetailTitle" style={{ textTransform: 'capitalize' }}>
-                {showMonthLog.label} {showMonthLog.type === 'all' ? 'Transactions' : showMonthLog.type}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                background: 'var(--bg)',
+                borderRadius: 24,
+                padding: '4px 6px',
+                boxShadow: '0 4px 12px rgba(18, 22, 45, 0.05)',
+                border: '1px solid rgba(230, 232, 242, 0.5)'
+              }}>
+                <button
+                  className="iconBtn"
+                  style={{ background: 'var(--bg-2)', width: 32, height: 32, fontSize: 16 }}
+                  onClick={() => {
+                    const [y, m] = showMonthLog.key.split('-').map(Number)
+                    const prevM = m === 1 ? 12 : m - 1
+                    const prevY = m === 1 ? y - 1 : y
+                    const newKey = `${prevY}-${String(prevM).padStart(2, '0')}`
+                    setShowMonthLog({ ...showMonthLog, key: newKey, label: formatMonthLabel(newKey) })
+                  }}
+                >
+                  ‹
+                </button>
+                <div className="txnDetailTitle" style={{ textTransform: 'capitalize', margin: 0, fontSize: 16 }}>
+                  {showMonthLog.label} {showMonthLog.type === 'all' ? '' : showMonthLog.type}
+                </div>
+                <button
+                  className="iconBtn"
+                  style={{ background: 'var(--bg-2)', width: 32, height: 32, fontSize: 16 }}
+                  onClick={() => {
+                    const [y, m] = showMonthLog.key.split('-').map(Number)
+                    const nextM = m === 12 ? 1 : m + 1
+                    const nextY = m === 12 ? y + 1 : y
+                    const newKey = `${nextY}-${String(nextM).padStart(2, '0')}`
+                    setShowMonthLog({ ...showMonthLog, key: newKey, label: formatMonthLabel(newKey) })
+                  }}
+                >
+                  ›
+                </button>
               </div>
-              <div style={{ width: 44 }}></div>
+              <div style={{ width: 40 }} /> {/* spacer to balance close btn */}
             </div>
             <div className="txList" style={{ padding: '16px 20px 80px' }}>
+              {monthLogTxns.length > 0 && (
+                <div>
+                  <div style={{
+                    background: showMonthLog.type === 'income' ? '#f4fbf4' : showMonthLog.type === 'expense' ? '#fcf0f0' : 'var(--bg-2)',
+                    border: `1px solid ${showMonthLog.type === 'income' ? '#38d638' : showMonthLog.type === 'expense' ? '#dfb6b6' : 'var(--border)'}`,
+                    padding: '12px 24px',
+                    borderRadius: 15,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'baseline',
+                    gap: 12
+                  }}>
+                    <span style={{ color: '#888eb1', fontSize: 15, fontWeight: 500 }}>
+                      {showMonthLog.type === 'income' ? 'Income' : showMonthLog.type === 'expense' ? 'Expense' : 'Balance'}
+                    </span>
+                    <span style={{
+                      color: showMonthLog.type === 'income' ? '#272c4a' : showMonthLog.type === 'expense' ? '#272c4a' : 'var(--text)',
+                      fontSize: 16,
+                      fontWeight: 700
+                    }}>
+                      {showMonthLog.type === 'income' ? '' : showMonthLog.type === 'expense' ? '' : ''}
+                      {fmtTZS(Math.abs(monthLogTxns.reduce((sum, t) => sum + (showMonthLog.type === 'all' ? (t.direction === 'in' ? t.amount : -t.amount) : t.amount), 0)))}
+                    </span>
+                  </div>
+                </div>
+              )}
               {monthLogTxns.length === 0 ? (
                 <div className="emptyRow">No transactions found for {showMonthLog.label}.</div>
               ) : (

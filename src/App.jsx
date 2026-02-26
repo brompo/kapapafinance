@@ -3218,20 +3218,27 @@ export default function App() {
     const [showMonthLog, setShowMonthLog] = useState(null) // { key: 'YYYY-MM', label: 'MonthName', type: 'income' | 'expense' }
 
     const combinedTxns = useMemo(() => {
-      const baseTxns = txns.map(t => ({
-        id: `txn-${t.id}`,
-        date: t.date,
-        title: t.category || (t.type === 'income' ? 'Income' : 'Expense'),
-        sub: t.note || '',
-        amount: Number(t.amount || 0),
-        direction: t.type === 'income' ? 'in' : 'out',
-        type: t.type,
-        category: t.category || '',
-        accountId: t.accountId || '',
-        note: t.note || '',
-        kind: 'txn',
-        raw: t
-      }))
+      const baseTxns = txns.map(t => {
+        const clientName = t.clientId ? clients.find(c => c.id === t.clientId)?.name : null;
+        let finalSub = t.note || '';
+        if (clientName) {
+          finalSub = finalSub ? `${clientName} • ${finalSub}` : clientName;
+        }
+        return {
+          id: `txn-${t.id}`,
+          date: t.date,
+          title: t.category || (t.type === 'income' ? 'Income' : 'Expense'),
+          sub: finalSub,
+          amount: Number(t.amount || 0),
+          direction: t.type === 'income' ? 'in' : 'out',
+          type: t.type,
+          category: t.category || '',
+          accountId: t.accountId || '',
+          note: t.note || '',
+          kind: 'txn',
+          raw: t
+        }
+      })
 
       // Exclude account txns that mirror ledger txns (kind === 'txn') to avoid duplicates
       const acctTxns = accountTxns
@@ -3900,7 +3907,7 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse }) {
+  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [], onAddClient }) {
     const isEditable = !txn.kind || txn.kind === 'txn'
     const [type, setType] = useState(txn.type || 'expense')
     const [amount, setAmount] = useState(String(txn.amount || ''))
@@ -3908,6 +3915,7 @@ export default function App() {
     const [category, setCategory] = useState(txn.category || '')
     const [accountId, setAccountId] = useState(txn.accountId || '')
     const [accountError, setAccountError] = useState(false)
+    const [clientId, setClientId] = useState(txn.raw?.clientId || '')
     const [date, setDate] = useState(txn.date || todayISO())
 
     const [subCategory, setSubCategory] = useState(() => {
@@ -3952,6 +3960,7 @@ export default function App() {
         category: category || '',
         note: combinedNote || '',
         accountId: accountId || '',
+        clientId: clientId || '',
         date: date || todayISO()
       })
       onClose()
@@ -4069,6 +4078,32 @@ export default function App() {
               <div className="txnDetailValue">{accountName || 'None'}</div>
             )}
           </div>
+          {type === 'income' && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Client</div>
+              {isEditable ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <select
+                    className="txnDetailSelect"
+                    value={clientId}
+                    onChange={e => {
+                      if (e.target.value === 'new') {
+                        if (onAddClient) onAddClient(id => setClientId(id))
+                      } else {
+                        setClientId(e.target.value)
+                      }
+                    }}
+                  >
+                    <option value="">None</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="new">+ Add New Client</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="txnDetailValue">{clients.find(c => c.id === clientId)?.name || 'None'}</div>
+              )}
+            </div>
+          )}
           <div className="txnDetailRow">
             <div className="txnDetailLabel">Recorder</div>
             <div className="txnDetailValue">You</div>

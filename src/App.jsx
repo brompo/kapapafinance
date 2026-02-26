@@ -3034,6 +3034,12 @@ export default function App() {
                   <div className="catHistoryBody">
                     {items.map(t => {
                       const acct = t.accountId && accounts.find(a => a.id === t.accountId)
+                      const clientName = t.clientId ? clients.find(c => c.id === t.clientId)?.name : null;
+                      let displayTitle = t.note || category.name;
+                      if (category.type === 'income' && clientName) {
+                        displayTitle = t.note ? `${clientName} • ${t.note}` : clientName;
+                      }
+
                       return (
                         <div
                           className="catHistoryRow"
@@ -3047,7 +3053,7 @@ export default function App() {
                         >
                           <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
                           <div className="catHistoryInfo">
-                            <div className="catHistoryTitleRow">{t.note || category.name}</div>
+                            <div className="catHistoryTitleRow">{displayTitle}</div>
                             <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
                             {category.type === 'expense' && t.reimbursedBy && t.reimbursedBy.length > 0 && (
                               <div className="reimbursedBadge">

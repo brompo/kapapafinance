@@ -2150,8 +2150,9 @@ export default function App() {
               date,
               subAccountId,
               clientId,
-              recurring
-            }, pendingClient)
+              recurring,
+              pendingClient
+            })
           }
           clients={clients}
           total={
@@ -3442,18 +3443,9 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={activeLedger.categories?.cos || []}
           oppsCats={activeLedger.categories?.opps || []}
-          onSave={(next) => updateTxn(selectedTxn.raw, next)}
+          onSave={(next, pendingClient) => updateTxn(selectedTxn.raw, next, pendingClient)}
           onClose={() => setSelectedTxn(null)}
           clients={clients}
-          onAddClient={(callback) => {
-            const name = prompt('New client name?');
-            if (!name) return;
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            const newClient = { id: uid(), name: trimmed };
-            persist({ ...vault, clients: [...clients, newClient] });
-            callback(newClient.id);
-          }}
         />
       )
     }

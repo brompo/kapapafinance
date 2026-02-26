@@ -44,6 +44,7 @@ export default function Accounts({
   onUpdateSettings,
   categories = {}, // { income: [], expense: [] }
   txns = [], // Ledger transactions for return calc
+  clients = [], // Global list of clients
   activeLedgerName = "",
   onOpenLedgerPicker
 }) {
@@ -3470,7 +3471,15 @@ function AccountDetail({
                       account.subAccounts?.find((s) => s.id === t.subAccountId)?.name || "";
                     const title = t.note || (t.kind ? `${t.kind[0].toUpperCase()}${t.kind.slice(1)}` : "Balance update");
                     const kindLabel = t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "";
-                    const meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
+
+                    let meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
+                    if (t.kind === 'txn' && t.clientId) {
+                      const clientName = clients.find(c => c.id === t.clientId)?.name;
+                      if (clientName) {
+                        meta = subName ? `${clientName} • ${subName}` : clientName;
+                      }
+                    }
+
                     const isFuture = t.date > new Date().toISOString().slice(0, 10);
                     return (
                       <div

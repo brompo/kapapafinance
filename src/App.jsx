@@ -1273,7 +1273,8 @@ export default function App() {
             kind: 'txn',
             relatedAccountId: null,
             note: t.note || t.category,
-            date: t.date
+            date: t.date,
+            clientId: t.clientId || t.raw?.clientId || ''
           };
           newAcctTxns.push(entry);
         }
@@ -1379,7 +1380,8 @@ export default function App() {
           kind: 'txn',
           relatedAccountId: null,
           note: reimbTxn.note,
-          date: reimbTxn.date
+          date: reimbTxn.date,
+          clientId: reimbTxn.clientId || ''
         }
         nextAccountTxns = [entry, ...allAccountTxns]
       }
@@ -1453,7 +1455,8 @@ export default function App() {
           kind: 'txn',
           relatedAccountId: null,
           note: t.note || t.category,
-          date: t.date || todayISO()
+          date: t.date || todayISO(),
+          clientId: t.clientId || t.raw?.clientId || ''
         }
       })
       .filter(Boolean)
@@ -4656,6 +4659,7 @@ export default function App() {
             accounts={accounts}
             accountTxns={allAccountTxns}
             txns={activeLedger.txns || []}
+            clients={vault.clients || []}
             groups={activeLedger.groups || []}
             categories={activeLedger.categories}
             activeLedgerId={activeLedger.id}

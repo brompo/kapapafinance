@@ -3162,9 +3162,10 @@ export default function App() {
     const [statYear, setStatYear] = useState(() => new Date().getFullYear())
     const periodLabel = useMemo(() => formatMonthLabel(month), [month])
     const [selectedTxn, setSelectedTxn] = useState(null)
+    const [showMonthLog, setShowMonthLog] = useState(null) // { key: 'YYYY-MM', label: 'MonthName', type: 'income' | 'expense' }
 
     const combinedTxns = useMemo(() => {
-      const baseTxns = filteredTxns.map(t => ({
+      const baseTxns = txns.map(t => ({
         id: `txn-${t.id}`,
         date: t.date,
         title: t.category || (t.type === 'income' ? 'Income' : 'Expense'),
@@ -3180,7 +3181,7 @@ export default function App() {
       }))
 
       // Exclude account txns that mirror ledger txns (kind === 'txn') to avoid duplicates
-      const acctTxns = filteredAccountTxns
+      const acctTxns = accountTxns
         .filter(t => t.kind !== 'txn')
         .map(t => {
           const acct = accounts.find(a => a.id === t.accountId)
@@ -3205,7 +3206,7 @@ export default function App() {
         })
 
       return [...baseTxns, ...acctTxns].sort((a, b) => (a.date < b.date ? 1 : -1))
-    }, [filteredTxns, filteredAccountTxns, accounts])
+    }, [txns, accountTxns, accounts])
 
     const groupedTxns = useMemo(() => {
       const map = new Map()
@@ -3285,6 +3286,63 @@ export default function App() {
       }
       return result.reverse() // Dec to Jan
     }, [statYear, txns, accounts, activeLedger.groups, accountTxns])
+
+    const monthLogTxns = useMemo(() => {
+      if (!showMonthLog) return []
+      const { key, type } = showMonthLog
+
+      let filtered = combinedTxns.filter(t => t.date.startsWith(key))
+
+      if (type === 'income' || type === 'all') {
+        const isAll = type === 'all'
+        filtered = filtered.filter(t => {
+          if (isAll) {
+            if (t.type === 'income' && !t.raw?.reimbursementOf) return true
+            if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') return true
+            return false
+          }
+          return t.type === 'income' && !t.raw?.reimbursementOf
+        })
+
+        // Add Realized Gains
+        const assets = accounts.filter(a => {
+          const g = activeLedger.groups.find(g => g.id === a.groupId)
+          return g && g.type === 'asset'
+        })
+
+        for (const acc of assets) {
+          const info = calculateAssetMetrics(acc, accountTxns, 'asset')
+          for (const g of info.realizedGains) {
+            const date = g.date || todayISO()
+            if (date.startsWith(key)) {
+              filtered.push({
+                id: `gain-${g.id || date}-${Math.random()}`,
+                date,
+                title: 'Realized Gain',
+                sub: acc.name,
+                amount: g.amount,
+                direction: 'in',
+                type: 'income',
+                category: 'Gain',
+                accountId: acc.id,
+                note: '',
+                kind: 'gain',
+                raw: null // Not directly editable as a base txn
+              })
+            }
+          }
+        }
+      } else if (type === 'expense') {
+        filtered = filtered.filter(t => t.type === 'expense' || t.type === 'cos' || t.type === 'opps')
+      }
+
+      if (monthlyViewMode === 'actual') {
+        const today = todayISO()
+        filtered = filtered.filter(t => t.date <= today)
+      }
+
+      return filtered.sort((a, b) => (a.date < b.date ? 1 : -1))
+    }, [showMonthLog, combinedTxns, accounts, activeLedger.groups, accountTxns, monthlyViewMode])
 
     if (selectedTxn) {
       return (
@@ -3538,13 +3596,26 @@ export default function App() {
 
                     return (
                       <tr key={m.key}>
-                        <td style={{ padding: '10px 8px', fontWeight: 600, color: '#555' }}>
+                        <td
+                          style={{ padding: '10px 8px', fontWeight: 600, color: '#555', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, label: m.label, type: 'all' })}
+                        >
                           {m.label.slice(0, 3).toUpperCase()}
                         </td>
-                        <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)' }}>
+                        <td
+                          style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)', cursor: displayInc > 0 ? 'pointer' : 'default' }}
+                          onClick={() => {
+                            if (displayInc > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'income' })
+                          }}
+                        >
                           {displayInc > 0 ? fmtTZS(displayInc) : '-'}
                         </td>
-                        <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)' }}>
+                        <td
+                          style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
+                          onClick={() => {
+                            if (displayExp > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'expense' })
+                          }}
+                        >
                           {displayExp > 0 ? fmtTZS(displayExp) : '-'}
                         </td>
                         <td style={{
@@ -3566,6 +3637,90 @@ export default function App() {
             <div className="emptyRow">Stats coming soon!</div>
           )}
         </div>
+
+        {showMonthLog && (
+          <div style={{ zIndex: 98, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div className="txnDetailHeader" style={{ padding: '16px', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, borderBottom: '1px solid var(--border)' }}>
+              <button className="iconBtn" onClick={() => setShowMonthLog(null)} type="button">✕</button>
+              <div className="txnDetailTitle" style={{ textTransform: 'capitalize' }}>
+                {showMonthLog.label} {showMonthLog.type === 'all' ? 'Transactions' : showMonthLog.type}
+              </div>
+              <div style={{ width: 44 }}></div>
+            </div>
+            <div className="txList" style={{ padding: '16px 20px 80px' }}>
+              {monthLogTxns.length === 0 ? (
+                <div className="emptyRow">No transactions found for {showMonthLog.label}.</div>
+              ) : (
+                (() => {
+                  const groupedTxns = Array.from(monthLogTxns.reduce((map, t) => {
+                    if (!map.has(t.date)) map.set(t.date, [])
+                    map.get(t.date).push(t)
+                    return map
+                  }, new Map()).entries())
+
+                  return groupedTxns.map(([date, items]) => {
+                    const totals = items.reduce((s, t) => {
+                      if (t.direction === 'in') s.in += t.amount
+                      else s.out += t.amount
+                      return s
+                    }, { in: 0, out: 0 })
+
+                    return (
+                      <div className="txDayCard" key={date}>
+                        <div className="txDayHead">
+                          <div className="txDayDate">
+                            <div className="dateYear">{new Date(date).getFullYear()}</div>
+                            <div className="dateTop">
+                              {new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            </div>
+                          </div>
+                          <div className="txDayTotals">
+                            {totals.out > 0 && (
+                              <div className="totalGroup">
+                                <div className="totalLabel out">OUT</div>
+                                <div className="totalValue out">{fmtTZS(totals.out)}</div>
+                              </div>
+                            )}
+                            {totals.in > 0 && (
+                              <div className="totalGroup">
+                                <div className="totalLabel in">IN</div>
+                                <div className="totalValue in">{fmtTZS(totals.in)}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="txDayBody">
+                          {items.map(t => (
+                            <div className="txRow" key={t.id} onClick={() => {
+                              if (t.kind === 'gain') return
+                              setSelectedTxn(t)
+                            }} role="button" tabIndex={0}
+                              style={{ cursor: t.kind === 'gain' ? 'default' : 'pointer' }}
+                              onKeyDown={(e) => {
+                                if ((e.key === 'Enter' || e.key === ' ') && t.kind !== 'gain') setSelectedTxn(t)
+                              }}
+                            >
+                              <div className="txRowIcon">
+                                {(t.title || 'T').slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="txRowMain">
+                                <div className="txRowTitle">{t.title}</div>
+                                {t.sub && <div className="txRowSub">{t.sub}</div>}
+                              </div>
+                              <div className={'txRowAmount ' + (t.direction === 'in' ? 'pos' : 'neg')}>
+                                {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })
+                })()
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="txBottomTabs">
           <button className={txTab === 'daily' ? 'active' : ''} type="button" onClick={() => setTxTab('daily')}>Daily</button>

@@ -3735,7 +3735,14 @@ export default function App() {
             </div>
           ) : (
             <div className="card" style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 12 }}>Revenue by Client</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Client</div>
+                {clientRevenue.length > 0 && (
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--success)' }}>
+                    {fmtTZS(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
+                  </div>
+                )}
+              </div>
               {clientRevenue.length === 0 ? (
                 <div className="emptyRow">No client revenue recorded in {statYear}.</div>
               ) : (

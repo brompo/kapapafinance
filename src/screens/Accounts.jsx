@@ -118,7 +118,7 @@ export default function Accounts({
 
 
 
-  function getAccountBalance(account, balanceType = 'current') {
+  function getAccountBalance(account, balanceType = 'current', ignoreLedgerFilter = false) {
     const today = new Date().toISOString().slice(0, 10);
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
 
@@ -138,7 +138,7 @@ export default function Accounts({
     // Show only the total of sub-accounts associated with the active ledger
     const base = subs.length > 0
       ? subs.reduce((s, sub) => {
-        if (activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
+        if (ignoreLedgerFilter || activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
           return s + getBaseBalance(sub);
         }
         return s;
@@ -2311,11 +2311,11 @@ function AccountDetail({
           </div>
           <div style={{ marginLeft: "auto", textAlign: "right" }}>
             <div style={{ fontSize: "1.5rem", fontWeight: "700" }}>
-              {fmtTZS(getAccountBalance(account, 'current'))}
+              {fmtTZS(getAccountBalance(account, 'current', true))}
             </div>
-            {getAccountBalance(account, 'current') !== getAccountBalance(account, 'projected') && (
+            {getAccountBalance(account, 'current', true) !== getAccountBalance(account, 'projected', true) && (
               <div style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 2 }}>
-                Projected: {fmtTZS(getAccountBalance(account, 'projected'))}
+                Projected: {fmtTZS(getAccountBalance(account, 'projected', true))}
               </div>
             )}
           </div>

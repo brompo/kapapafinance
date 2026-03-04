@@ -580,6 +580,7 @@ export default function Accounts({
         onUpdateAccountTxnMeta={onUpdateAccountTxnMeta}
         onDeleteAccountTxn={onDeleteAccountTxn}
         onToast={onToast}
+        clients={clients}
       />
     );
   }
@@ -1550,6 +1551,7 @@ function AccountDetail({
   onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
   getAccountBalance,
+  clients,
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
   const effectiveType = account.accountType || currentGroup?.type || 'debit';

@@ -3667,20 +3667,20 @@ export default function App() {
                   </div>
                 )
               })()}
-              <table className="table" style={{ minWidth: 320, fontSize: 13 }}>
+              <table className="table" style={{ minWidth: 280, fontSize: 12, width: '100%' }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: '10px 8px' }}>Month</th>
-                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Inc</th>
+                    <th style={{ paddingLeft: '8px', textAlign: 'left' }}>Month</th>
+                    <th style={{ textAlign: 'right', padding: '8px 2px' }}>Inc</th>
                     {activeLedger.type === 'business' ? (
                       <>
-                        <th style={{ textAlign: 'right', padding: '10px 4px' }}>Cos</th>
-                        <th style={{ textAlign: 'right', padding: '10px 4px' }}>Opps</th>
+                        <th style={{ textAlign: 'right', padding: '8px 2px' }}>Cos</th>
+                        <th style={{ textAlign: 'right', padding: '8px 2px' }}>Opps</th>
                       </>
                     ) : (
-                      <th style={{ textAlign: 'right', padding: '10px 4px' }}>Expr</th>
+                      <th style={{ textAlign: 'right', padding: '8px 4px' }}>Expr</th>
                     )}
-                    <th style={{ textAlign: 'right', padding: '10px 8px' }}>Bal</th>
+                    <th style={{ textAlign: 'right', padding: '8px 4px' }}>Bal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3704,17 +3704,17 @@ export default function App() {
 
                     return (
                       <tr style={{ fontWeight: 800, backgroundColor: 'var(--bg-2)', borderBottom: '2px solid var(--border)' }}>
-                        <td style={{ padding: '12px 8px' }}>TOTAL</td>
-                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--income)' }}>{fmtCompact(displayTotals.inc)}</td>
+                        <td style={{ paddingLeft: '8px' }}>TOTAL</td>
+                        <td style={{ textAlign: 'right', padding: '10px 2px', color: 'var(--income)' }}>{fmtCompact(displayTotals.inc)}</td>
                         {activeLedger.type === 'business' ? (
                           <>
-                            <td style={{ textAlign: 'right', padding: '12px 4px', color: '#f59e0b' }}>{fmtCompact(displayTotals.cos)}</td>
-                            <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.opps)}</td>
+                            <td style={{ textAlign: 'right', padding: '10px 2px', color: '#f59e0b' }}>{fmtCompact(displayTotals.cos)}</td>
+                            <td style={{ textAlign: 'right', padding: '10px 2px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.opps)}</td>
                           </>
                         ) : (
-                          <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
+                          <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
                         )}
-                        <td style={{ textAlign: 'right', padding: '12px 8px' }}>{fmtCompact(displayTotals.bal)}</td>
+                        <td style={{ textAlign: 'right', padding: '10px 4px' }}>{fmtCompact(displayTotals.bal)}</td>
                       </tr>
                     )
                   })()}
@@ -3728,13 +3728,13 @@ export default function App() {
                     return (
                       <tr key={m.key}>
                         <td
-                          style={{ padding: '10px 8px', fontWeight: 600, color: '#555', cursor: 'pointer' }}
+                          style={{ paddingLeft: '8px', fontWeight: 600, color: '#555', cursor: 'pointer' }}
                           onClick={() => setShowMonthLog({ key: m.key, label: m.label, type: 'all' })}
                         >
                           {m.label.slice(0, 3).toUpperCase()}
                         </td>
                         <td
-                          style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--ok)', cursor: displayInc > 0 ? 'pointer' : 'default' }}
+                          style={{ textAlign: 'right', padding: '8px 2px', color: 'var(--ok)', cursor: displayInc > 0 ? 'pointer' : 'default' }}
                           onClick={() => {
                             if (displayInc > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'income' })
                           }}
@@ -3744,7 +3744,7 @@ export default function App() {
                         {activeLedger.type === 'business' ? (
                           <>
                             <td
-                              style={{ textAlign: 'right', padding: '10px 4px', color: displayCos > 0 ? '#f59e0b' : 'var(--text)', cursor: displayCos > 0 ? 'pointer' : 'default' }}
+                              style={{ textAlign: 'right', padding: '8px 2px', color: displayCos > 0 ? '#f59e0b' : 'var(--text)', cursor: displayCos > 0 ? 'pointer' : 'default' }}
                               onClick={() => {
                                 if (displayCos > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'cos' })
                               }}
@@ -3752,7 +3752,7 @@ export default function App() {
                               {displayCos > 0 ? fmtTZS(displayCos) : '-'}
                             </td>
                             <td
-                              style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayOpps > 0 ? 'pointer' : 'default' }}
+                              style={{ textAlign: 'right', padding: '8px 2px', color: 'var(--danger)', cursor: displayOpps > 0 ? 'pointer' : 'default' }}
                               onClick={() => {
                                 if (displayOpps > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'opps' })
                               }}
@@ -3762,7 +3762,7 @@ export default function App() {
                           </>
                         ) : (
                           <td
-                            style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
+                            style={{ textAlign: 'right', padding: '8px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
                             onClick={() => {
                               if (displayExp > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'expense' })
                             }}
@@ -3772,7 +3772,7 @@ export default function App() {
                         )}
                         <td style={{
                           textAlign: 'right',
-                          padding: '10px 8px',
+                          padding: '8px 4px',
                           fontWeight: 700,
                           whiteSpace: 'nowrap',
                           color: displayBal < 0 ? 'var(--danger)' : 'var(--text)'

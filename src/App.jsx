@@ -431,6 +431,8 @@ export default function App() {
   const [restorePin, setRestorePin] = useState('')
   const [selectedRestoreId, setSelectedRestoreId] = useState('')
   const [showClientsManager, setShowClientsManager] = useState(false)
+  const [showAddLedgerModal, setShowAddLedgerModal] = useState(null)
+  const [addLedgerName, setAddLedgerName] = useState('')
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
@@ -877,31 +879,32 @@ export default function App() {
   }
 
   function handleAddPersonalLedger() {
-    const name = prompt('Personal Ledger name?')
-    if (!name) return
-    const trimmed = name.trim()
-    if (!trimmed) return
-    const nextLedger = createLedger({ name: trimmed, type: 'personal' })
-    persist({
-      ...vault,
-      ledgers: [...ledgers, nextLedger],
-      activeLedgerId: nextLedger.id
-    })
+    setAddLedgerName('')
+    setShowAddLedgerModal('personal')
     setShowLedgerPicker(false)
   }
 
   function handleAddBusinessLedger() {
-    const name = prompt('Business Ledger name?')
-    if (!name) return
-    const trimmed = name.trim()
-    if (!trimmed) return
-    const nextLedger = createLedger({ name: trimmed, type: 'business' })
+    setAddLedgerName('')
+    setShowAddLedgerModal('business')
+    setShowLedgerPicker(false)
+  }
+
+  function handleSaveNewLedger() {
+    const trimmed = addLedgerName.trim()
+    if (!trimmed) {
+      show('Please enter a ledger name.')
+      return
+    }
+    const type = showAddLedgerModal
+    const nextLedger = createLedger({ name: trimmed, type })
     persist({
       ...vault,
       ledgers: [...ledgers, nextLedger],
       activeLedgerId: nextLedger.id
     })
-    setShowLedgerPicker(false)
+    setShowAddLedgerModal(null)
+    setAddLedgerName('')
   }
 
   function handleDeleteLedger(ledgerId) {
@@ -3297,7 +3300,7 @@ export default function App() {
         const y = Number(date.slice(0, 4))
         if (y !== statYear) return
         const key = date.slice(0, 7)
-        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0 })
+        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 })
         const entry = stats.get(key)
 
         const amt = Number(t.amount || 0)
@@ -3312,6 +3315,14 @@ export default function App() {
           const netExp = amt - reimbursed
           entry.exp += netExp
           if (isActual) entry.actualExp += netExp
+
+          if (t.type === 'cos') {
+            entry.cos += netExp;
+            if (isActual) entry.actualCos += netExp;
+          } else if (t.type === 'opps') {
+            entry.opps += netExp;
+            if (isActual) entry.actualOpps += netExp;
+          }
         }
       })
 
@@ -3331,7 +3342,7 @@ export default function App() {
 
           const isActual = date <= todayISO();
           const key = date.slice(0, 7);
-          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0 });
+          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 });
           const entry = stats.get(key);
           entry.inc += g.amount;
           if (isActual) entry.actualInc += g.amount;
@@ -3345,7 +3356,7 @@ export default function App() {
         const key = `${statYear}-${mm}`
         const dateObj = new Date(statYear, m - 1, 1)
         const monthName = dateObj.toLocaleString('default', { month: 'long' })
-        const data = stats.get(key) || { inc: 0, exp: 0, actualInc: 0, actualExp: 0 }
+        const data = stats.get(key) || { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 }
         result.push({
           key,
           label: monthName,
@@ -3660,8 +3671,15 @@ export default function App() {
                 <thead>
                   <tr>
                     <th style={{ padding: '10px 8px' }}>Month</th>
-                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Income</th>
-                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Expr</th>
+                    <th style={{ textAlign: 'right', padding: '10px 4px' }}>Inc</th>
+                    {activeLedger.type === 'business' ? (
+                      <>
+                        <th style={{ textAlign: 'right', padding: '10px 4px' }}>Cos</th>
+                        <th style={{ textAlign: 'right', padding: '10px 4px' }}>Opps</th>
+                      </>
+                    ) : (
+                      <th style={{ textAlign: 'right', padding: '10px 4px' }}>Expr</th>
+                    )}
                     <th style={{ textAlign: 'right', padding: '10px 8px' }}>Bal</th>
                   </tr>
                 </thead>
@@ -3670,21 +3688,32 @@ export default function App() {
                     const totals = monthlyStats.reduce((acc, m) => ({
                       inc: acc.inc + m.inc,
                       exp: acc.exp + m.exp,
+                      cos: acc.cos + (m.cos || 0),
+                      opps: acc.opps + (m.opps || 0),
                       bal: acc.bal + m.bal,
                       actualInc: acc.actualInc + (m.actualInc || 0),
                       actualExp: acc.actualExp + (m.actualExp || 0),
+                      actualCos: acc.actualCos + (m.actualCos || 0),
+                      actualOpps: acc.actualOpps + (m.actualOpps || 0),
                       actualBal: acc.actualBal + (m.actualBal || 0)
-                    }), { inc: 0, exp: 0, bal: 0, actualInc: 0, actualExp: 0, actualBal: 0 })
+                    }), { inc: 0, exp: 0, cos: 0, opps: 0, bal: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0, actualBal: 0 })
 
                     const displayTotals = monthlyViewMode === 'actual'
-                      ? { inc: totals.actualInc, exp: totals.actualExp, bal: totals.actualBal }
-                      : { inc: totals.inc, exp: totals.exp, bal: totals.bal }
+                      ? { inc: totals.actualInc, exp: totals.actualExp, cos: totals.actualCos, opps: totals.actualOpps, bal: totals.actualBal }
+                      : { inc: totals.inc, exp: totals.exp, cos: totals.cos, opps: totals.opps, bal: totals.bal }
 
                     return (
                       <tr style={{ fontWeight: 800, backgroundColor: 'var(--bg-2)', borderBottom: '2px solid var(--border)' }}>
                         <td style={{ padding: '12px 8px' }}>TOTAL</td>
                         <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--income)' }}>{fmtCompact(displayTotals.inc)}</td>
-                        <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
+                        {activeLedger.type === 'business' ? (
+                          <>
+                            <td style={{ textAlign: 'right', padding: '12px 4px', color: '#f59e0b' }}>{fmtCompact(displayTotals.cos)}</td>
+                            <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.opps)}</td>
+                          </>
+                        ) : (
+                          <td style={{ textAlign: 'right', padding: '12px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
+                        )}
                         <td style={{ textAlign: 'right', padding: '12px 8px' }}>{fmtCompact(displayTotals.bal)}</td>
                       </tr>
                     )
@@ -3692,6 +3721,8 @@ export default function App() {
                   {monthlyStats.map(m => {
                     const displayInc = monthlyViewMode === 'actual' ? (m.actualInc || 0) : m.inc;
                     const displayExp = monthlyViewMode === 'actual' ? (m.actualExp || 0) : m.exp;
+                    const displayCos = monthlyViewMode === 'actual' ? (m.actualCos || 0) : (m.cos || 0);
+                    const displayOpps = monthlyViewMode === 'actual' ? (m.actualOpps || 0) : (m.opps || 0);
                     const displayBal = monthlyViewMode === 'actual' ? (m.actualBal || 0) : m.bal;
 
                     return (
@@ -3710,14 +3741,35 @@ export default function App() {
                         >
                           {displayInc > 0 ? fmtTZS(displayInc) : '-'}
                         </td>
-                        <td
-                          style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
-                          onClick={() => {
-                            if (displayExp > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'expense' })
-                          }}
-                        >
-                          {displayExp > 0 ? fmtTZS(displayExp) : '-'}
-                        </td>
+                        {activeLedger.type === 'business' ? (
+                          <>
+                            <td
+                              style={{ textAlign: 'right', padding: '10px 4px', color: displayCos > 0 ? '#f59e0b' : 'var(--text)', cursor: displayCos > 0 ? 'pointer' : 'default' }}
+                              onClick={() => {
+                                if (displayCos > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'cos' })
+                              }}
+                            >
+                              {displayCos > 0 ? fmtTZS(displayCos) : '-'}
+                            </td>
+                            <td
+                              style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayOpps > 0 ? 'pointer' : 'default' }}
+                              onClick={() => {
+                                if (displayOpps > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'opps' })
+                              }}
+                            >
+                              {displayOpps > 0 ? fmtTZS(displayOpps) : '-'}
+                            </td>
+                          </>
+                        ) : (
+                          <td
+                            style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
+                            onClick={() => {
+                              if (displayExp > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'expense' })
+                            }}
+                          >
+                            {displayExp > 0 ? fmtTZS(displayExp) : '-'}
+                          </td>
+                        )}
                         <td style={{
                           textAlign: 'right',
                           padding: '10px 8px',
@@ -4701,6 +4753,33 @@ export default function App() {
       {tab === 'settings' && <SettingsScreen />}
       {showBudgetSettings && <BudgetSettings />}
       {showClientsManager && <ClientsManager />}
+
+      {showAddLedgerModal && (
+        <div className="modalBackdrop" onClick={() => setShowAddLedgerModal(null)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">
+              Create {showAddLedgerModal === 'personal' ? 'Personal' : 'Business'} Ledger
+            </div>
+            <div className="field">
+              <label>Ledger Name</label>
+              <input
+                type="text"
+                autoFocus
+                value={addLedgerName}
+                onChange={e => setAddLedgerName(e.target.value)}
+                placeholder="e.g. My Ledger"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSaveNewLedger()
+                }}
+              />
+            </div>
+            <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn" onClick={() => setShowAddLedgerModal(null)}>Cancel</button>
+              <button className="btn primary" onClick={handleSaveNewLedger}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom tabs */}
       <BottomNav tab={tab} setTab={setTab} variant="light" />

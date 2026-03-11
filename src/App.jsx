@@ -413,7 +413,7 @@ function GlobalToast() {
 
 export default function App() {
   const [stage, setStage] = useState('loading') // loading | setpin | unlock | app
-  const [tab, setTab] = useState('accounts') // home | accounts | tx | settings
+  const [tab, setTab] = useState('insights') // home | accounts | tx | settings
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
 
   const [pin, setPin] = useState('')
@@ -3222,13 +3222,11 @@ export default function App() {
     )
   }
 
-  function TransactionsScreen() {
-    const [txTab, setTxTab] = useState('monthly') // daily, monthly, stats
-    const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
+  function FinanceInsightsScreen() {
     const [statYear, setStatYear] = useState(() => new Date().getFullYear())
-    const periodLabel = useMemo(() => formatMonthLabel(month), [month])
+    const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
-    const [showMonthLog, setShowMonthLog] = useState(null) // { key: 'YYYY-MM', label: 'MonthName', type: 'income' | 'expense' }
+    const [showMonthLog, setShowMonthLog] = useState(null)
 
     const combinedTxns = useMemo(() => {
       const baseTxns = txns.map(t => {
@@ -3413,20 +3411,18 @@ export default function App() {
             }
           }
         }
-      } else if (type === 'expense') {
+      } else if (type === 'expense' || type === 'all') {
         filtered = filtered.filter(t => t.type === 'expense' || t.type === 'cos' || t.type === 'opps')
-      }
-
-      if (monthlyViewMode === 'actual') {
-        const today = todayISO()
-        filtered = filtered.filter(t => t.date <= today)
+      } else if (type === 'cos') {
+        filtered = filtered.filter(t => t.type === 'cos')
+      } else if (type === 'opps') {
+        filtered = filtered.filter(t => t.type === 'opps')
       }
 
       return filtered.sort((a, b) => (a.date < b.date ? 1 : -1))
     }, [showMonthLog, combinedTxns, accounts, activeLedger.groups, accountTxns, monthlyViewMode])
 
     const clientRevenue = useMemo(() => {
-      if (txTab !== 'stats') return []
       const revenueMap = new Map()
       const currentYear = statYear
 
@@ -3447,12 +3443,258 @@ export default function App() {
           const client = clients.find(c => c.id === clientId)
           return {
             clientId,
-            name: client ? client.name : 'Unknown Client',
+            name: client ? client.name : 'Unknown Customer',
             total
           }
         })
         .sort((a, b) => b.total - a.total)
-    }, [txTab, combinedTxns, statYear, clients])
+    }, [combinedTxns, statYear, clients])
+
+    const CashflowChart = () => {
+      const data = [...monthlyStats].reverse(); // Jan to Dec
+      const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp)), 1);
+
+      const width = 300;
+      const height = 120;
+      const padding = 20;
+
+      const getX = (i) => (i * (width - padding * 2)) / 11 + padding;
+      const getY = (v) => height - (v / maxVal) * (height - padding * 2) - padding;
+
+      const incomePath = data.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
+      const expensePath = data.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
+
+      const totalInc = data.reduce((s, m) => s + m.inc, 0);
+      const totalExp = data.reduce((s, m) => s + m.exp, 0);
+      const totalCos = data.reduce((s, m) => s + (m.cos || 0), 0);
+      const totalOpps = data.reduce((s, m) => s + (m.opps || 0), 0);
+
+      const avgInc = totalInc / 12;
+      const lastMonth = new Date().getMonth();
+      const currentInc = data[lastMonth]?.inc || 0;
+      const incDiff = avgInc > 0 ? ((currentInc - avgInc) / avgInc) * 100 : 0;
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <div className="card" style={{ padding: '20px 16px', marginBottom: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>Money Cashflow</div>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)', background: 'var(--bg-2)', padding: '4px 8px', borderRadius: 8 }}>{statYear}</div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 20, marginBottom: 25, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 120px' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Total Income</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{fmtCompact(totalInc)}</span>
+                  <span style={{ fontSize: 11, color: incDiff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                    {incDiff >= 0 ? '↑' : '↓'} {Math.abs(incDiff).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+              <div style={{ flex: '1 1 120px' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Total Expenses</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: '#ef4444' }}>{fmtCompact(totalExp)}</span>
+                  <span style={{ fontSize: 11, color: totalInc > 0 ? '#ef4444' : 'var(--text-sec)', fontWeight: 600 }}>
+                    {totalInc > 0 ? ((totalExp / totalInc) * 100).toFixed(1) : 0}% ↘
+                  </span>
+                </div>
+              </div>
+              {activeLedger.type === 'business' && (
+                <div style={{ flex: '1 1 100%', display: 'flex', gap: 20, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>Cost of Sales</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#f59e0b' }}>{fmtCompact(totalCos)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>Operating (Opps)</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#ef4444' }}>{fmtCompact(totalOpps)}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ position: 'relative', height: height, width: '100%', marginBottom: 10 }}>
+              <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                {/* Grid Lines */}
+                {[0, 0.5, 1].map(p => (
+                  <line key={p} x1={padding} y1={getY(maxVal * p)} x2={width - padding} y2={getY(maxVal * p)} stroke="var(--border)" strokeDasharray="4 4" strokeWidth="0.5" />
+                ))}
+
+                {/* Expense Line */}
+                <path d={expensePath} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+                {data.map((m, i) => (
+                  <circle key={`e-${i}`} cx={getX(i)} cy={getY(m.exp)} r="2" fill="#fff" stroke="#ef4444" strokeWidth="1.5" />
+                ))}
+
+                {/* Income Line */}
+                <path d={incomePath} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                {data.map((m, i) => (
+                  <circle key={`i-${i}`} cx={getX(i)} cy={getY(m.inc)} r="2" fill="#fff" stroke="#22c55e" strokeWidth="1.5" />
+                ))}
+              </svg>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 5px' }}>
+              {['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Dec'].map(m => (
+                <span key={m} style={{ fontSize: 10, color: 'var(--text-sec)' }}>{m}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 15, margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-sec)' }}>Monthly Performance Breakdown</div>
+              <div className="modeSegmented" style={{ marginBottom: 0 }}>
+                <button
+                  className={`modeSegBtn ${monthlyViewMode === 'actual' ? 'active' : ''}`}
+                  style={{ fontSize: 10, padding: '4px 10px', minWidth: 70 }}
+                  onClick={() => setMonthlyViewMode('actual')}
+                >
+                  Actual
+                </button>
+                <button
+                  className={`modeSegBtn ${monthlyViewMode === 'projected' ? 'active' : ''}`}
+                  style={{ fontSize: 10, padding: '4px 10px', minWidth: 70 }}
+                  onClick={() => setMonthlyViewMode('projected')}
+                >
+                  Projected
+                </button>
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ color: 'var(--text-sec)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 4px' }}>Month</th>
+                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>Income</th>
+                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>CoS</th>
+                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>Opps</th>
+                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.filter(m => {
+                    const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
+                    const exp = monthlyViewMode === 'actual' ? m.actualExp : m.exp;
+                    return inc > 0 || exp > 0;
+                  }).map(m => {
+                    const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
+                    const cos = monthlyViewMode === 'actual' ? (m.actualCos || 0) : (m.cos || 0);
+                    const opps = monthlyViewMode === 'actual' ? (m.actualOpps || 0) : (m.opps || 0);
+                    const net = inc - cos - opps;
+                    return (
+                      <tr
+                        key={m.key}
+                        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      >
+                        <td
+                          style={{ padding: '8px 4px', fontWeight: 600, cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'all', label: `${m.label} All` })}
+                        >
+                          {m.label.slice(0, 3)}
+                        </td>
+                        <td
+                          style={{ textAlign: 'right', padding: '8px 4px', color: '#22c55e', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'income', label: `${m.label} Income` })}
+                        >
+                          {fmtCompact(inc || 0)}
+                        </td>
+                        <td
+                          style={{ textAlign: 'right', padding: '8px 4px', color: '#f59e0b', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'cos', label: `${m.label} CoS` })}
+                        >
+                          {fmtCompact(cos || 0)}
+                        </td>
+                        <td
+                          style={{ textAlign: 'right', padding: '8px 4px', color: '#ef4444', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'opps', label: `${m.label} Opps` })}
+                        >
+                          {fmtCompact(opps || 0)}
+                        </td>
+                        <td
+                          style={{ textAlign: 'right', padding: '8px 4px', fontWeight: 600, color: net >= 0 ? 'var(--ok)' : 'var(--danger)', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'all', label: `${m.label} Net` })}
+                        >
+                          {fmtCompact(net)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {showMonthLog && (
+            <div className="modalBackdrop" onClick={() => setShowMonthLog(null)}>
+              <div className="modalCard" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-1)' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{showMonthLog.label} Breakdown</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{statYear} • {monthlyViewMode === 'actual' ? 'Actuals' : 'Projected'}</div>
+                  </div>
+                  <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => setShowMonthLog(null)}>Close</button>
+                </div>
+
+                <div style={{ overflowY: 'auto', flex: 1, padding: '0 10px 20px 10px', background: '#f8fafc' }}>
+                  {monthLogTxns.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-sec)' }}>
+                      No transactions found for this period.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {monthLogTxns.map((t, i) => (
+                        <div
+                          key={t.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '10px 12px',
+                            background: '#fff',
+                            borderRadius: i === 0 ? '12px 12px 0 0' : (i === monthLogTxns.length - 1 ? '0 0 12px 12px' : '0'),
+                            marginTop: i === 0 ? 10 : 0,
+                            borderBottom: i === monthLogTxns.length - 1 ? 'none' : '1px solid #f1f5f9'
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{t.title}</div>
+                            <div style={{ fontSize: 11, color: '#64748b', display: 'flex', gap: 6, alignItems: 'center', marginTop: 1 }}>
+                              <span style={{
+                                padding: '1px 5px',
+                                background: t.type === 'cos' ? '#fef3c7' : (t.type === 'opps' ? '#fee2e2' : '#dcfce7'),
+                                color: t.type === 'cos' ? '#92400e' : (t.type === 'opps' ? '#b91c1c' : '#15803d'),
+                                borderRadius: 4,
+                                fontSize: 9,
+                                fontWeight: 800,
+                                textTransform: 'uppercase'
+                              }}>
+                                {t.type}
+                              </span>
+                              <span>{t.date.split('-').reverse().join('/')}</span>
+                              {t.sub && <span style={{ opacity: 0.6 }}>• {t.sub.length > 25 ? t.sub.slice(0, 25) + '...' : t.sub}</span>}
+                            </div>
+                          </div>
+                          <div style={{
+                            fontWeight: 800,
+                            fontSize: 14,
+                            color: t.direction === 'in' ? '#22c55e' : '#ef4444'
+                          }}>
+                            {t.direction === 'in' ? '+' : '-'}{fmtCompact(t.amount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     if (selectedTxn) {
       return (
@@ -3473,325 +3715,29 @@ export default function App() {
     return (
       <div className="txScreen">
         <div className="txHeader">
-          <div className="txLeft">
-            <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
-              {activeLedger.name || 'Personal'} ▾
-            </button>
+          <div className="txLeft" style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 18, paddingLeft: 8 }}>
+              Financial Insights
+            </div>
           </div>
 
-          <div className="txPeriod">
-            {txTab === 'monthly' ? (
-              <>
-                <button className="txNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
-                <div className="txPeriodLabel">{statYear}</div>
-                <button className="txNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
-              </>
-            ) : txTab === 'daily' ? (
-              <>
-                <button className="txNavBtn" onClick={() => shiftMonth(-1)} type="button">‹</button>
-                <div className="txPeriodLabel">{periodLabel}</div>
-                <button className="txNavBtn" onClick={() => shiftMonth(1)} type="button">›</button>
-              </>
-            ) : (
-              <div className="txPeriodLabel">Statistics</div>
-            )}
-          </div>
-
-          <div className="txActions">
-            {txTab === 'daily' && (
-              <>
-                <button className="txIconBtn" type="button" title="Pick date">📅</button>
-                <button className="txIconBtn" type="button" title="Filters">⏳</button>
-              </>
-            )}
+          <div className="txPeriod" style={{ flex: '0 1 auto' }}>
+            <button className="txNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
+            <div className="txPeriodLabel">{statYear}</div>
+            <button className="txNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
           </div>
         </div>
 
-        {showLedgerPicker && (
-          <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
-            <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
-              <div className="ledgerPickerTitle">Ledgers</div>
-              <div className="ledgerPickerList">
-                {ledgers.map(l => (
-                  <button
-                    key={l.id}
-                    className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
-                    type="button"
-                    onClick={() => handleSelectLedger(l.id)}
-                  >
-                    <span className="ledgerPickerName">{l.name}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button
-                        className="miniBtn"
-                        type="button"
-                        style={{ padding: '2px 8px' }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const newName = prompt("Rename ledger:", l.name)
-                          if (newName && newName.trim() && newName.trim() !== l.name) {
-                            handleUpdateLedger(l.id, { name: newName.trim() })
-                          }
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="miniBtn danger"
-                        type="button"
-                        style={{ padding: '2px 8px', color: '#e24b4b', borderColor: '#e4e4e9', fontSize: '1.2em', lineHeight: '1' }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteLedger(l.id)
-                        }}
-                        title="Delete Ledger"
-                      >
-                        ×
-                      </button>
-                      <span className="ledgerPickerCheck">
-                        {l.id === activeLedger.id ? '✓' : ''}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button className="ledgerPickerAdd" type="button" onClick={handleAddPersonalLedger} style={{ flex: 1 }}>
-                  + Personal
-                </button>
-                <button className="ledgerPickerAdd" type="button" onClick={handleAddBusinessLedger} style={{ flex: 1, backgroundColor: '#334155', color: '#fff' }}>
-                  + Business
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {txTab === 'daily' && (
-          <div className="txKpiBar">
-            <div className="txKpiItem">
-              <div className="txKpiLabel">Income</div>
-              <div className="txKpiValue income">{fmtTZS(kpis.inc)}</div>
-            </div>
-            <div className="txKpiItem">
-              <div className="txKpiLabel">Expense</div>
-              <div className="txKpiValue expense">{fmtTZS(kpis.exp)}</div>
-            </div>
-            <div className="txKpiItem">
-              <div className="txKpiLabel">Balance</div>
-              <div className="txKpiValue">{fmtTZS(kpis.bal)}</div>
-            </div>
-          </div>
-        )}
 
         <div className="txList">
-          {txTab === 'daily' ? (
-            groupedTxns.length === 0 ? (
-              <div className="emptyRow">No transactions yet for {periodLabel}.</div>
-            ) : (
-              groupedTxns.map(([date, items]) => {
-                const totals = items.reduce((s, t) => {
-                  if (t.direction === 'in') s.in += t.amount
-                  else s.out += t.amount
-                  return s
-                }, { in: 0, out: 0 })
-
-                return (
-                  <div className="txDayCard" key={date}>
-                    <div className="txDayHead">
-                      <div className="txDayDate">
-                        <div className="dateYear">{new Date(date).getFullYear()}</div>
-                        <div className="dateTop">
-                          {new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </div>
-                      </div>
-                      <div className="txDayTotals">
-                        {totals.out > 0 && (
-                          <div className="totalGroup">
-                            <div className="totalLabel out">OUT</div>
-                            <div className="totalValue out">{fmtTZS(totals.out)}</div>
-                          </div>
-                        )}
-                        {totals.in > 0 && (
-                          <div className="totalGroup">
-                            <div className="totalLabel in">IN</div>
-                            <div className="totalValue in">{fmtTZS(totals.in)}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="txDayBody">
-                      {items.map(t => (
-                        <div className="txRow" key={t.id} onClick={() => setSelectedTxn(t)} role="button" tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') setSelectedTxn(t)
-                          }}
-                        >
-                          <div className="txRowIcon">
-                            {(t.title || 'T').slice(0, 1).toUpperCase()}
-                          </div>
-                          <div className="txRowMain">
-                            <div className="txRowTitle">{t.title}</div>
-                            {t.sub && <div className="txRowSub">{t.sub}</div>}
-                          </div>
-                          <div className={'txRowAmount ' + (t.direction === 'in' ? 'pos' : 'neg')}>
-                            {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })
-            )
-          ) : txTab === 'monthly' ? (
-            <div className="card" style={{ padding: 0, overflowX: 'auto', display: 'flex', flexDirection: 'column' }}>
-              {(() => {
-                const hasFuture = monthlyStats.some(m => m.inc !== m.actualInc || m.exp !== m.actualExp || m.bal !== m.actualBal);
-                if (!hasFuture) return null;
-                return (
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 6, background: 'var(--bg-2)' }}>
-                    <button
-                      className={`pillBtn ${monthlyViewMode === 'actual' ? 'primary' : ''}`}
-                      style={monthlyViewMode === 'actual' ? { fontSize: 12, padding: '4px 12px' } : { fontSize: 12, padding: '4px 12px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}
-                      onClick={() => setMonthlyViewMode('actual')}
-                    >
-                      Actual
-                    </button>
-                    <button
-                      className={`pillBtn ${monthlyViewMode === 'projected' ? 'primary' : ''}`}
-                      style={monthlyViewMode === 'projected' ? { fontSize: 12, padding: '4px 12px' } : { fontSize: 12, padding: '4px 12px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}
-                      onClick={() => setMonthlyViewMode('projected')}
-                    >
-                      Projected
-                    </button>
-                  </div>
-                )
-              })()}
-              <table className="table" style={{ minWidth: 280, fontSize: 12, width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={{ paddingLeft: '8px', paddingRight: '0px', textAlign: 'left' }}>Month</th>
-                    <th style={{ textAlign: 'right', padding: '8px 2px' }}>Inc</th>
-                    {activeLedger.type === 'business' ? (
-                      <>
-                        <th style={{ textAlign: 'right', padding: '8px 2px' }}>Cos</th>
-                        <th style={{ textAlign: 'right', padding: '8px 2px' }}>Opps</th>
-                      </>
-                    ) : (
-                      <th style={{ textAlign: 'right', padding: '8px 4px' }}>Expr</th>
-                    )}
-                    <th style={{ textAlign: 'right', padding: '8px 4px' }}>Bal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const totals = monthlyStats.reduce((acc, m) => ({
-                      inc: acc.inc + m.inc,
-                      exp: acc.exp + m.exp,
-                      cos: acc.cos + (m.cos || 0),
-                      opps: acc.opps + (m.opps || 0),
-                      bal: acc.bal + m.bal,
-                      actualInc: acc.actualInc + (m.actualInc || 0),
-                      actualExp: acc.actualExp + (m.actualExp || 0),
-                      actualCos: acc.actualCos + (m.actualCos || 0),
-                      actualOpps: acc.actualOpps + (m.actualOpps || 0),
-                      actualBal: acc.actualBal + (m.actualBal || 0)
-                    }), { inc: 0, exp: 0, cos: 0, opps: 0, bal: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0, actualBal: 0 })
-
-                    const displayTotals = monthlyViewMode === 'actual'
-                      ? { inc: totals.actualInc, exp: totals.actualExp, cos: totals.actualCos, opps: totals.actualOpps, bal: totals.actualBal }
-                      : { inc: totals.inc, exp: totals.exp, cos: totals.cos, opps: totals.opps, bal: totals.bal }
-
-                    return (
-                      <tr style={{ fontWeight: 800, backgroundColor: 'var(--bg-2)', borderBottom: '2px solid var(--border)' }}>
-                        <td style={{ paddingLeft: '8px', paddingRight: '0px' }}>TOTAL</td>
-                        <td style={{ textAlign: 'right', padding: '10px 2px', color: 'var(--income)' }}>{fmtCompact(displayTotals.inc)}</td>
-                        {activeLedger.type === 'business' ? (
-                          <>
-                            <td style={{ textAlign: 'right', padding: '10px 2px', color: '#f59e0b' }}>{fmtCompact(displayTotals.cos)}</td>
-                            <td style={{ textAlign: 'right', padding: '10px 2px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.opps)}</td>
-                          </>
-                        ) : (
-                          <td style={{ textAlign: 'right', padding: '10px 4px', color: 'var(--expense)' }}>{fmtCompact(displayTotals.exp)}</td>
-                        )}
-                        <td style={{ textAlign: 'right', padding: '8px 8px 8px 2px' }}>{fmtCompact(displayTotals.bal)}</td>
-                      </tr>
-                    )
-                  })()}
-                  {monthlyStats.map(m => {
-                    const displayInc = monthlyViewMode === 'actual' ? (m.actualInc || 0) : m.inc;
-                    const displayExp = monthlyViewMode === 'actual' ? (m.actualExp || 0) : m.exp;
-                    const displayCos = monthlyViewMode === 'actual' ? (m.actualCos || 0) : (m.cos || 0);
-                    const displayOpps = monthlyViewMode === 'actual' ? (m.actualOpps || 0) : (m.opps || 0);
-                    const displayBal = monthlyViewMode === 'actual' ? (m.actualBal || 0) : m.bal;
-
-                    return (
-                      <tr key={m.key}>
-                        <td className="table-month"
-                          style={{ width: '50px', paddingLeft: '8px', paddingRight: '0px', fontWeight: 600, color: '#555', cursor: 'pointer' }}
-                          onClick={() => setShowMonthLog({ key: m.key, label: m.label, type: 'all' })}
-                        >
-                          {m.label.slice(0, 3).toUpperCase()}
-                        </td>
-                        <td
-                          style={{ textAlign: 'right', padding: '8px 2px', color: 'var(--ok)', cursor: displayInc > 0 ? 'pointer' : 'default' }}
-                          onClick={() => {
-                            if (displayInc > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'income' })
-                          }}
-                        >
-                          {displayInc > 0 ? fmtTZS(displayInc) : '-'}
-                        </td>
-                        {activeLedger.type === 'business' ? (
-                          <>
-                            <td
-                              style={{ textAlign: 'right', padding: '8px 2px', color: displayCos > 0 ? '#f59e0b' : 'var(--text)', cursor: displayCos > 0 ? 'pointer' : 'default' }}
-                              onClick={() => {
-                                if (displayCos > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'cos' })
-                              }}
-                            >
-                              {displayCos > 0 ? fmtTZS(displayCos) : '-'}
-                            </td>
-                            <td
-                              style={{ textAlign: 'right', padding: '8px 2px', color: 'var(--danger)', cursor: displayOpps > 0 ? 'pointer' : 'default' }}
-                              onClick={() => {
-                                if (displayOpps > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'opps' })
-                              }}
-                            >
-                              {displayOpps > 0 ? fmtTZS(displayOpps) : '-'}
-                            </td>
-                          </>
-                        ) : (
-                          <td
-                            style={{ textAlign: 'right', padding: '8px 4px', color: 'var(--danger)', cursor: displayExp > 0 ? 'pointer' : 'default' }}
-                            onClick={() => {
-                              if (displayExp > 0) setShowMonthLog({ key: m.key, label: m.label, type: 'expense' })
-                            }}
-                          >
-                            {displayExp > 0 ? fmtTZS(displayExp) : '-'}
-                          </td>
-                        )}
-                        <td style={{
-                          textAlign: 'right',
-                          padding: '8px 8px 8px 2px',
-                          fontWeight: 700,
-                          whiteSpace: 'nowrap',
-                          color: displayBal < 0 ? 'var(--danger)' : 'var(--text)'
-                        }}>
-                          {fmtTZS(displayBal)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="card" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <CashflowChart />
+            <div className="card" style={{ margin: 0, padding: 15 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Client</div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Customer</div>
                 {clientRevenue.length > 0 && (
                   <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--success)' }}>
-                    {fmtTZS(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
+                    {fmtCompact(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
                   </div>
                 )}
               </div>
@@ -3802,166 +3748,13 @@ export default function App() {
                   {clientRevenue.map(c => (
                     <div key={c.clientId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ fontWeight: 500 }}>{c.name}</div>
-                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtTZS(c.total)}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtCompact(c.total)}</div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {showMonthLog && (
-          <div style={{ zIndex: 98, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            <div className="txnDetailHeader" style={{ padding: '16px', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button className="iconBtn" onClick={() => setShowMonthLog(null)} type="button">✕</button>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                background: 'var(--bg)',
-                borderRadius: 24,
-                padding: '4px 6px',
-                boxShadow: '0 4px 12px rgba(18, 22, 45, 0.05)',
-                border: '1px solid rgba(230, 232, 242, 0.5)'
-              }}>
-                <button
-                  className="iconBtn"
-                  style={{ background: 'var(--bg-2)', width: 32, height: 32, fontSize: 16 }}
-                  onClick={() => {
-                    const [y, m] = showMonthLog.key.split('-').map(Number)
-                    const prevM = m === 1 ? 12 : m - 1
-                    const prevY = m === 1 ? y - 1 : y
-                    const newKey = `${prevY}-${String(prevM).padStart(2, '0')}`
-                    setShowMonthLog({ ...showMonthLog, key: newKey, label: formatMonthLabel(newKey) })
-                  }}
-                >
-                  ‹
-                </button>
-                <div className="txnDetailTitle" style={{ textTransform: 'capitalize', margin: 0, fontSize: 16 }}>
-                  {showMonthLog.label} {showMonthLog.type === 'all' ? '' : showMonthLog.type}
-                </div>
-                <button
-                  className="iconBtn"
-                  style={{ background: 'var(--bg-2)', width: 32, height: 32, fontSize: 16 }}
-                  onClick={() => {
-                    const [y, m] = showMonthLog.key.split('-').map(Number)
-                    const nextM = m === 12 ? 1 : m + 1
-                    const nextY = m === 12 ? y + 1 : y
-                    const newKey = `${nextY}-${String(nextM).padStart(2, '0')}`
-                    setShowMonthLog({ ...showMonthLog, key: newKey, label: formatMonthLabel(newKey) })
-                  }}
-                >
-                  ›
-                </button>
-              </div>
-              <div style={{ width: 40 }} /> {/* spacer to balance close btn */}
-            </div>
-            <div className="txList" style={{ padding: '16px 20px 80px' }}>
-              {monthLogTxns.length > 0 && (
-                <div>
-                  <div style={{
-                    background: showMonthLog.type === 'income' ? '#f4fbf4' : showMonthLog.type === 'expense' ? '#fcf0f0' : 'var(--bg-2)',
-                    border: `1px solid ${showMonthLog.type === 'income' ? '#38d638' : showMonthLog.type === 'expense' ? '#dfb6b6' : 'var(--border)'}`,
-                    padding: '12px 24px',
-                    borderRadius: 15,
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'baseline',
-                    gap: 12
-                  }}>
-                    <span style={{ color: '#888eb1', fontSize: 15, fontWeight: 500 }}>
-                      {showMonthLog.type === 'income' ? 'Income' : showMonthLog.type === 'expense' ? 'Expense' : 'Balance'}
-                    </span>
-                    <span style={{
-                      color: showMonthLog.type === 'income' ? '#272c4a' : showMonthLog.type === 'expense' ? '#272c4a' : 'var(--text)',
-                      fontSize: 16,
-                      fontWeight: 700
-                    }}>
-                      {showMonthLog.type === 'income' ? '' : showMonthLog.type === 'expense' ? '' : ''}
-                      {fmtTZS(Math.abs(monthLogTxns.reduce((sum, t) => sum + (showMonthLog.type === 'all' ? (t.direction === 'in' ? t.amount : -t.amount) : t.amount), 0)))}
-                    </span>
-                  </div>
-                </div>
-              )}
-              {monthLogTxns.length === 0 ? (
-                <div className="emptyRow">No transactions found for {showMonthLog.label}.</div>
-              ) : (
-                (() => {
-                  const groupedTxns = Array.from(monthLogTxns.reduce((map, t) => {
-                    if (!map.has(t.date)) map.set(t.date, [])
-                    map.get(t.date).push(t)
-                    return map
-                  }, new Map()).entries())
-
-                  return groupedTxns.map(([date, items]) => {
-                    const totals = items.reduce((s, t) => {
-                      if (t.direction === 'in') s.in += t.amount
-                      else s.out += t.amount
-                      return s
-                    }, { in: 0, out: 0 })
-
-                    return (
-                      <div className="txDayCard" key={date}>
-                        <div className="txDayHead">
-                          <div className="txDayDate">
-                            <div className="dateYear">{new Date(date).getFullYear()}</div>
-                            <div className="dateTop">
-                              {new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                            </div>
-                          </div>
-                          <div className="txDayTotals">
-                            {totals.out > 0 && (
-                              <div className="totalGroup">
-                                <div className="totalLabel out">OUT</div>
-                                <div className="totalValue out">{fmtTZS(totals.out)}</div>
-                              </div>
-                            )}
-                            {totals.in > 0 && (
-                              <div className="totalGroup">
-                                <div className="totalLabel in">IN</div>
-                                <div className="totalValue in">{fmtTZS(totals.in)}</div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="txDayBody">
-                          {items.map(t => (
-                            <div className="txRow" key={t.id} onClick={() => {
-                              if (t.kind === 'gain') return
-                              setSelectedTxn(t)
-                            }} role="button" tabIndex={0}
-                              style={{ cursor: t.kind === 'gain' ? 'default' : 'pointer' }}
-                              onKeyDown={(e) => {
-                                if ((e.key === 'Enter' || e.key === ' ') && t.kind !== 'gain') setSelectedTxn(t)
-                              }}
-                            >
-                              <div className="txRowIcon">
-                                {(t.title || 'T').slice(0, 1).toUpperCase()}
-                              </div>
-                              <div className="txRowMain">
-                                <div className="txRowTitle">{t.title}</div>
-                                {t.sub && <div className="txRowSub">{t.sub}</div>}
-                              </div>
-                              <div className={'txRowAmount ' + (t.direction === 'in' ? 'pos' : 'neg')}>
-                                {t.direction === 'in' ? '+' : '-'}{fmtTZS(t.amount)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })
-                })()
-              )}
-            </div>
           </div>
-        )}
-
-        <div className="txBottomTabs">
-          <button className={txTab === 'daily' ? 'active' : ''} type="button" onClick={() => setTxTab('daily')}>Daily</button>
-          <button className={txTab === 'monthly' ? 'active' : ''} type="button" onClick={() => setTxTab('monthly')}>Monthly</button>
-          <button className={txTab === 'stats' ? 'active' : ''} type="button" onClick={() => setTxTab('stats')}>Stats</button>
         </div>
       </div>
     )
@@ -4641,7 +4434,8 @@ export default function App() {
   return (
     <div className="container">
       {/* Main content */}
-      {tab === 'home' && <HomeScreen />}
+      {tab === 'tx' && <HomeScreen />}
+      {tab === 'insights' && <FinanceInsightsScreen />}
 
       {tab === 'accounts' && (
         <div className="ledgerScreen">
@@ -4744,11 +4538,7 @@ export default function App() {
         </div>
       )}
 
-      {tab === 'tx' && (
-        <div className="ledgerScreen">
-          <TransactionsScreen />
-        </div>
-      )}
+      
 
       {tab === 'settings' && <SettingsScreen />}
       {showBudgetSettings && <BudgetSettings />}

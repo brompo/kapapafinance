@@ -3490,3 +3490,242 @@ label {
   font-size: 0.75rem;
   color: #6b7280;
 }
+
+.settingsScreen {
+  padding: 12px 0px 40px;
+}
+
+/* Account Card */
+.stgAccountCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.stgAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #1e1b4b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+.stgAccountText {
+  flex: 1;
+  min-width: 0;
+}
+
+.stgAccountLabel {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.stgAccountName {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+
+/* Sections */
+.stgSection {
+  margin-top: 16px;
+}
+
+.stgSectionTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 0 4px 6px;
+}
+
+.stgGroup {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Rows */
+.stgRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.12s;
+}
+
+.stgRow:active {
+  background: #f3f4f6;
+}
+
+.stgRow+.stgRow {
+  border-top: 1px solid var(--border);
+}
+
+.stgRowIcon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.stgRowText {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.stgRowBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.stgRowSub {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+
+.stgChevron {
+  font-size: 1.3rem;
+  color: #c4c4c4;
+  font-weight: 300;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Footer */
+.stgFooter {
+  text-align: center;
+  margin-top: 28px;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  letter-spacing: 0.3px;
+}
+
+.settingsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 4px;
+}
+
+.versionBadge {
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.versionBadge:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Shared sub-page overlay (General Settings, Changelog, etc.) */
+.subPageOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: var(--bg);
+  overflow-y: auto;
+}
+
+.subPageHeader {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.subPageHeader .backBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 12px;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.subPageHeader .subPageTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.subPageBody {
+  padding: 16px 16px 100px 16px;
+}
+
+/* Settings row item inside sub-pages */
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+}
+
+.settingsRow+.settingsRow {
+  border-top: 1px solid var(--border);
+}
+
+.settingsRowLabel {
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+}
+
+.settingsRowTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.settingsRowSub {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-top: 2px;
+}

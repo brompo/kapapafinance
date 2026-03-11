@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { version as APP_VERSION } from '../package.json'
+import { CHANGELOG } from './changelog.js'
 import {
   hasPin,
   setNewPin,
@@ -415,6 +417,11 @@ export default function App() {
   const [stage, setStage] = useState('loading') // loading | setpin | unlock | app
   const [tab, setTab] = useState('insights') // home | accounts | tx | settings
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
+  const [showGeneralSettings, setShowGeneralSettings] = useState(false)
+  const [showFinanceSettings, setShowFinanceSettings] = useState(false)
+  const [showBackupSettings, setShowBackupSettings] = useState(false)
+  const [showChangelog, setShowChangelog] = useState(false)
+
 
   const [pin, setPin] = useState('')
   const [pin2, setPin2] = useState('')
@@ -461,6 +468,15 @@ export default function App() {
     : (ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger())
   const rawAccounts = Array.isArray(vault.accounts) ? vault.accounts : []
   const clients = Array.isArray(vault.clients) ? vault.clients : []
+
+  useEffect(() => {
+    if (localStorage.getItem('appUpdated') === 'true') {
+      localStorage.removeItem('appUpdated')
+      setTimeout(() => {
+        show('✅ App updated to v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'latest') + '!', 'update')
+      }, 500)
+    }
+  }, [])
 
   // Helper to check if an account or its subaccounts belong to the active ledger
   function isAccountInLedger(account, ledgerId) {
@@ -3227,6 +3243,12 @@ export default function App() {
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
+    const [isRendered, setIsRendered] = useState(false)
+
+    useEffect(() => {
+      const t = setTimeout(() => setIsRendered(true), 10)
+      return () => clearTimeout(t)
+    }, [])
 
     const combinedTxns = useMemo(() => {
       const baseTxns = txns.map(t => {
@@ -4025,225 +4047,555 @@ export default function App() {
     )
   }
 
+
+  function GeneralSettings() {
+    return (
+      <div className="subPageOverlay">
+        <div className="subPageHeader">
+          <button className="backBtn" onClick={() => setShowGeneralSettings(false)}>←</button>
+          <h1 className="subPageTitle">General</h1>
+        </div>
+        <div className="subPageBody">
+          <div className="card" style={{ margin: 0 }}>
+            <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>PIN lock</div>
+                <div className="small">Require PIN to unlock the app.</div>
+              </div>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.pinLockEnabled}
+                  onChange={e => handlePinToggle(e.target.checked)}
+                />
+                <span className="toggleTrack" />
+              </label>
+            </div>
+            
+            <div className="hr" />
+
+            <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>Require Account</div>
+                <div className="small">Force selecting an account when adding transactions.</div>
+              </div>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={!!settings.requireAccountForTxns}
+                  onChange={e => {
+                    const ns = { ...settings, requireAccountForTxns: e.target.checked }
+                    updateSettings(ns)
+                    show(e.target.checked ? 'Account required.' : 'Account optional.')
+                  }}
+                />
+                <span className="toggleTrack" />
+              </label>
+            </div>
+
+            <div className="hr" />
+
+            <div className="row">
+              <button
+                className="btn"
+                onClick={handleLoadDemo}
+                disabled={txns.length > 0 || accounts.length > 0}
+                style={txns.length > 0 || accounts.length > 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+              >
+                {txns.length > 0 || accounts.length > 0 ? 'Load Demo Data (Ledger not empty)' : 'Load Demo Data'}
+              </button>
+            </div>
+            <div className="small" style={{ marginTop: 10 }}>
+              Demo data will overwrite your current accounts and account transactions. Only available on empty ledgers.
+            </div>
+
+            <div className="hr" />
+
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn danger" onClick={handleReset}>Reset Empty</button>
+              <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function FinanceSettings() {
+    return (
+      <div className="subPageOverlay">
+        <div className="subPageHeader">
+          <button className="backBtn" onClick={() => setShowFinanceSettings(false)}>←</button>
+          <h1 className="subPageTitle">Finance Settings</h1>
+        </div>
+        <div className="subPageBody">
+          <div className="card" style={{ margin: 0 }}>
+            <div className="row">
+              <button className="btn" onClick={() => setShowBudgetSettings(true)}>
+                Monthly Budget
+              </button>
+              <button className="btn" onClick={() => setShowClientsManager(true)}>
+                Manage Clients
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function BackupSettingsScreen() {
+    return (
+      <div className="subPageOverlay">
+        <div className="subPageHeader">
+          <button className="backBtn" onClick={() => setShowBackupSettings(false)}>←</button>
+          <h1 className="subPageTitle">Backup & Restore</h1>
+        </div>
+        <div className="subPageBody">
+          <div className="card" style={{ margin: 0 }}>
+            <div className="row">
+              <button className="btn" onClick={handleExport}>Export JSON (Encrypted)</button>
+              <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Import JSON
+                <input
+                  type="file"
+                  accept="application/json"
+                  style={{ display: 'none' }}
+                  onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])}
+                />
+              </label>
+            </div>
+
+            <div className="hr" />
+
+            <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>Cloud Backup (Google Drive)</div>
+                <div className="small">Encrypted backup stored in your Google Drive app folder.</div>
+                {cloudLastBackup && (
+                  <div className="small">Last backup: {cloudLastBackup.toLocaleString()}</div>
+                )}
+                {cloudStale && (
+                  <div className="small" style={{ color: '#d27b00' }}>
+                    Backup hasn’t run in {cloudWarnDays} days.
+                  </div>
+                )}
+                {cloudError && <div className="small" style={{ color: '#d25b5b' }}>{cloudError}</div>}
+              </div>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={!!cloudBackup.enabled}
+                  onChange={e => {
+                    const enabled = e.target.checked
+                    if (enabled && !cloudGoogle.refreshToken) {
+                      startGoogleAuth()
+                      return
+                    }
+                    updateSettings({
+                      ...settings,
+                      cloudBackup: {
+                        ...cloudBackup,
+                        enabled
+                      }
+                    })
+                  }}
+                />
+                <span className="toggleTrack" />
+              </label>
+            </div>
+
+            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              {!cloudGoogle.refreshToken ? (
+                <button className="btn" onClick={startGoogleAuth} disabled={cloudBusy}>
+                  Connect Google Drive
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    updateSettings({
+                      ...settings,
+                      cloudBackup: {
+                        ...cloudBackup,
+                        enabled: false,
+                        google: { ...cloudGoogle, refreshToken: '', latestFileId: null }
+                      }
+                    })
+                    show('Disconnected from Google Drive.')
+                  }}
+                  disabled={cloudBusy}
+                >
+                  Disconnect
+                </button>
+              )}
+              <button className="btn" onClick={() => backupNow()} disabled={!cloudBackup.enabled || cloudBusy}>
+                {cloudBusy ? 'Backing up…' : 'Backup now'}
+              </button>
+              <button className="btn" onClick={openRestorePicker} disabled={cloudBusy || !cloudGoogle.refreshToken}>
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function ChangelogScreen() {
+    return (
+      <div className="subPageOverlay" style={{ zIndex: 110, bottom: 70 }}>
+        <div className="subPageHeader">
+          <button className="backBtn" onClick={() => setShowChangelog(false)}>←</button>
+          <h1 className="subPageTitle">What's New</h1>
+        </div>
+        <div className="subPageBody" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 20 }}>
+          {CHANGELOG.map((entry, i) => (
+            <div className="card" key={entry.version} style={{ margin: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>v{entry.version}</div>
+                  {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, background: '#1e1b4b', color: '#fff', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Latest</span>}
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>{entry.date}</div>
+              </div>
+              <ul style={{ paddingLeft: 16, lineHeight: 1.5, margin: 0, fontSize: 13, color: '#374151' }}>
+                {entry.changes.map((c, j) => (
+                  <li key={j} style={{ marginBottom: 2 }}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   function SettingsScreen() {
     return (
-      <div className="card">
-        <h2>Settings</h2>
-
-        <div className="row">
-          <button className="btn" onClick={handleExport}>Export (Encrypted)</button>
-
-          <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            Import
-            <input
-              type="file"
-              accept="application/json"
-              style={{ display: 'none' }}
-              onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])}
-            />
-          </label>
-
-          <button className="btn danger" onClick={handleReset}>Reset</button>
-          <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
-        </div>
-
-        <div className="small" style={{ marginTop: 10 }}>
-          Important: iPhone Safari storage can sometimes be cleared if space is low.
-          Export backups regularly.
-        </div>
-
-        <div className="hr" />
-
-        <div className="row">
-          <button className="btn" onClick={() => setShowBudgetSettings(true)}>
-            Monthly Budget
-          </button>
-          <button className="btn" onClick={() => setShowClientsManager(true)}>
-            Manage Clients
-          </button>
-        </div>
-
-        <div className="hr" />
-
-        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 600 }}>Cloud Backup (Google Drive)</div>
-            <div className="small">Encrypted backup stored in your Google Drive app folder.</div>
-            {cloudLastBackup && (
-              <div className="small">Last backup: {cloudLastBackup.toLocaleString()}</div>
-            )}
-            {cloudStale && (
-              <div className="small" style={{ color: '#d27b00' }}>
-                Backup hasn’t run in {cloudWarnDays} days.
+      <div className="settingsScreen">
+        <div className="stgSection" style={{ marginTop: 20 }}>
+          <div className="stgSectionTitle">APP SETTINGS</div>
+          <div className="stgGroup">
+            <button className="stgRow" onClick={() => setShowGeneralSettings(true)}>
+              <div className="stgRowIcon">⚙️</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">General</div>
+                <div className="stgRowSub">PIN lock, resets, demo data</div>
               </div>
-            )}
-            {cloudError && <div className="small" style={{ color: '#d25b5b' }}>{cloudError}</div>}
-          </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={!!cloudBackup.enabled}
-              onChange={e => {
-                const enabled = e.target.checked
-                if (enabled && !cloudGoogle.refreshToken) {
-                  startGoogleAuth()
-                  return
-                }
-                updateSettings({
-                  ...settings,
-                  cloudBackup: {
-                    ...cloudBackup,
-                    enabled
-                  }
-                })
-              }}
-            />
-            <span className="toggleTrack" />
-          </label>
-        </div>
-
-        <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          {!cloudGoogle.refreshToken ? (
-            <button className="btn" onClick={startGoogleAuth} disabled={cloudBusy}>
-              Connect Google Drive
+              <div className="stgChevron">›</div>
             </button>
-          ) : (
-            <button
-              className="btn"
-              onClick={() => {
-                updateSettings({
-                  ...settings,
-                  cloudBackup: {
-                    ...cloudBackup,
-                    enabled: false,
-                    google: { ...cloudGoogle, refreshToken: '', latestFileId: null }
-                  }
-                })
-                show('Disconnected from Google Drive.')
-              }}
-              disabled={cloudBusy}
-            >
-              Disconnect
-            </button>
-          )}
-          <button className="btn" onClick={() => backupNow()} disabled={!cloudBackup.enabled || cloudBusy}>
-            {cloudBusy ? 'Backing up…' : 'Backup now'}
-          </button>
-          <button className="btn" onClick={openRestorePicker} disabled={cloudBusy || !cloudGoogle.refreshToken}>
-            Restore
-          </button>
-        </div>
-
-        <div className="hr" />
-
-        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 600 }}>PIN lock</div>
-            <div className="small">Require PIN to unlock the app.</div>
-          </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={settings.pinLockEnabled}
-              onChange={e => handlePinToggle(e.target.checked)}
-            />
-            <span className="toggleTrack" />
-          </label>
-        </div>
-
-        <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 600 }}>Require Account</div>
-            <div className="small">Force selecting an account when adding transactions.</div>
-          </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={!!settings.requireAccountForTxns}
-              onChange={e => {
-                const ns = { ...settings, requireAccountForTxns: e.target.checked }
-                updateSettings(ns)
-                show(e.target.checked ? 'Account required.' : 'Account optional.')
-              }}
-            />
-            <span className="toggleTrack" />
-          </label>
-        </div>
-
-        <div className="hr" />
-
-        <div className="row">
-          <button
-            className="btn"
-            onClick={handleLoadDemo}
-            disabled={txns.length > 0 || accounts.length > 0}
-            style={txns.length > 0 || accounts.length > 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-          >
-            {txns.length > 0 || accounts.length > 0 ? 'Load Demo Data (Ledger not empty)' : 'Load Demo Data'}
-          </button>
-        </div>
-
-        <div className="small" style={{ marginTop: 10 }}>
-          Demo data will overwrite your current accounts and account transactions. Only available on empty ledgers.
-        </div>
-
-        <div className="hr" />
-
-        <div className="row">
-          <button
-            className="btn"
-            onClick={() => {
-              if (!settings.pinLockEnabled) {
-                show('PIN lock is disabled.')
-                return
-              }
-              setStage('unlock')
-              const fresh = normalizeVault(null)
-              setVaultState({
-                ...fresh,
-                settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
-              })
-              show('Locked.')
-            }}
-          >
-            Lock
-          </button>
-        </div>
-
-        <GlobalToast />
-
-        {showRestoreModal && (
-          <div className="modalBackdrop" onClick={() => setShowRestoreModal(false)}>
-            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <div className="modalTitle">Restore from Cloud</div>
-              <div className="field">
-                <label>Select backup</label>
-                <select value={selectedRestoreId} onChange={e => setSelectedRestoreId(e.target.value)}>
-                  {restoreFiles.map(f => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} • {new Date(f.modifiedTime).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
+            <button className="stgRow" onClick={() => setShowFinanceSettings(true)}>
+              <div className="stgRowIcon">💰</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">Finance</div>
+                <div className="stgRowSub">Monthly budgets, manage clients</div>
               </div>
-              <div className="field">
-                <label>PIN</label>
+              <div className="stgChevron">›</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="stgSection">
+          <div className="stgSectionTitle">DATA</div>
+          <div className="stgGroup">
+            <button className="stgRow" onClick={() => setShowBackupSettings(true)}>
+              <div className="stgRowIcon">💾</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">Backup & Restore</div>
+                <div className="stgRowSub">Cloud sync, export/import</div>
+              </div>
+              <div className="stgChevron">›</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="stgSection">
+          <div className="stgSectionTitle">ABOUT</div>
+          <div className="stgGroup">
+            <button className="stgRow" onClick={() => setShowChangelog(true)}>
+              <div className="stgRowIcon">📜</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">What's New</div>
+                <div className="stgRowSub">Version {APP_VERSION}</div>
+              </div>
+              <div className="stgChevron">›</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="stgFooter">
+          Kapapa Finance • v{APP_VERSION}
+        </div>
+
+        {showGeneralSettings && <GeneralSettings />}
+        {showFinanceSettings && <FinanceSettings />}
+        {showBackupSettings && <BackupSettingsScreen />}
+        {showChangelog && <ChangelogScreen />}
+      </div>
+    )
+  }
+
+
+  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [] }) {
+    const isEditable = !txn.kind || txn.kind === 'txn'
+    const [type, setType] = useState(txn.type || 'expense')
+    const [amount, setAmount] = useState(String(txn.amount || ''))
+    const [amountError, setAmountError] = useState(false)
+    const [category, setCategory] = useState(txn.category || '')
+    const [accountId, setAccountId] = useState(txn.accountId || '')
+    const [accountError, setAccountError] = useState(false)
+    const [clientId, setClientId] = useState(txn.raw?.clientId || '')
+    const [pendingClient, setPendingClient] = useState(null)
+    const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
+      ? [...clients, pendingClient]
+      : clients;
+    const [date, setDate] = useState(txn.date || todayISO())
+
+    const [subCategory, setSubCategory] = useState(() => {
+      if (!txn.note) return ''
+      const [head] = txn.note.split(' • ')
+      return head || ''
+    })
+    const [note, setNote] = useState(() => {
+      if (!txn.note) return ''
+      const parts = txn.note.split(' • ')
+      return parts.length > 1 ? parts.slice(1).join(' • ') : ''
+    })
+
+    const labelType = type === 'income' ? 'Income' :
+      type === 'cos' ? 'Cost of Sales' :
+        type === 'opps' ? 'Operating Expenses' : 'Expense'
+    const categoryOptions = type === 'income' ? incomeCats :
+      type === 'cos' ? cosCats :
+        type === 'opps' ? oppsCats : expenseCats
+
+    function handleSave() {
+      if (!isEditable) return
+      const amt = Number(amount || 0)
+      if (!amt || amt <= 0) {
+        setAmountError(true)
+        show('Enter a valid amount.')
+        return
+      }
+      if (settings.requireAccountForTxns && !accountId) {
+        setAccountError(true)
+        show('Please select an account.')
+        return
+      }
+      setAccountError(false)
+      const combinedNote = subCategory
+        ? `${subCategory}${note ? ` • ${note}` : ''}`
+        : note
+      onSave?.({
+        ...txn.raw,
+        type,
+        amount: amt,
+        category: category || '',
+        note: combinedNote || '',
+        accountId: accountId || '',
+        clientId: clientId || '',
+        date: date || todayISO()
+      }, pendingClient)
+      onClose()
+    }
+
+    const accountName = accounts.find(a => a.id === accountId)?.name || ''
+    return (
+      <div className="txnDetailScreen">
+        <div className="txnDetailHeader">
+          <button className="iconBtn" onClick={onClose} type="button">✕</button>
+          <div className="txnDetailTitle">Transactions</div>
+          <div className="row" style={{ gap: 8 }}>
+            {onDelete && isEditable && (
+              <button className="pillBtn danger" type="button" onClick={() => {
+                if (confirm('Delete this transaction?')) onDelete()
+              }}>
+                Delete
+              </button>
+            )}
+            <button className="pillBtn" type="button" disabled={!isEditable} onClick={handleSave}>
+              Save
+            </button>
+          </div>
+        </div>
+
+        <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
+          {isEditable ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                <span>{type === 'income' ? '+' : '-'}</span>
                 <input
-                  type="password"
-                  value={restorePin}
-                  onChange={e => setRestorePin(e.target.value)}
-                  placeholder="Enter your PIN"
+                  className="txnAmountInput"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={e => {
+                    setAmount(e.target.value)
+                    if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+                  }}
+                  placeholder="0"
+                  style={amountError ? { borderColor: '#f8a5a5', borderBottomWidth: '2px', borderBottomStyle: 'solid' } : {}}
+                  autoFocus
                 />
               </div>
-              <div className="modalActions">
-                <button className="btn" type="button" onClick={() => setShowRestoreModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn primary" type="button" onClick={restoreFromCloud} disabled={!selectedRestoreId || cloudBusy}>
-                  Restore
-                </button>
-              </div>
+              {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
             </div>
+          ) : (
+            <>{type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}</>
+          )}
+        </div>
+
+        <div className="txnDetailGrid">
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Type</div>
+            {isEditable ? (
+              <select className="txnDetailSelect" value={type} onChange={e => {
+                setType(e.target.value)
+                setCategory('')
+              }}>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
+                {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
+              </select>
+            ) : (
+              <div className="txnDetailValue">{labelType}</div>
+            )}
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Category</div>
+            {isEditable ? (
+              <select className="txnDetailSelect" value={category} onChange={e => setCategory(e.target.value)}>
+                <option value="">None</option>
+                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : (
+              <div className="txnDetailValue">{txn.category || 'None'}</div>
+            )}
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Subcategory</div>
+            {isEditable ? (
+              <input
+                className="txnDetailInput"
+                value={subCategory}
+                onChange={e => setSubCategory(e.target.value)}
+                placeholder="None"
+              />
+            ) : (
+              <div className="txnDetailValue">{txn.note ? txn.note.split(' • ')[0] : 'None'}</div>
+            )}
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Tag</div>
+            <div className="txnDetailValue">None</div>
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Account {settings.requireAccountForTxns ? '*' : ''}</div>
+            {isEditable ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <select
+                  className="txnDetailSelect"
+                  value={accountId}
+                  onChange={e => {
+                    setAccountId(e.target.value)
+                    if (e.target.value) setAccountError(false)
+                  }}
+                  style={accountError ? { borderColor: '#f8a5a5' } : {}}
+                >
+                  <option value="">None</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
+              </div>
+            ) : (
+              <div className="txnDetailValue">{accountName || 'None'}</div>
+            )}
+          </div>
+          {type === 'income' && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Client</div>
+              {isEditable ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <select
+                    className="txnDetailSelect"
+                    value={clientId}
+                    onChange={e => {
+                      if (e.target.value === 'new') {
+                        const name = prompt('New client name?');
+                        if (name && name.trim()) {
+                          const newClient = { id: uid(), name: name.trim() };
+                          setPendingClient(newClient);
+                          setClientId(newClient.id);
+                        }
+                      } else {
+                        setClientId(e.target.value)
+                      }
+                    }}
+                  >
+                    <option value="">None</option>
+                    {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="new">+ Add New Client</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="txnDetailValue">{clients.find(c => c.id === clientId)?.name || 'None'}</div>
+              )}
+            </div>
+          )}
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Recorder</div>
+            <div className="txnDetailValue">You</div>
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Time</div>
+            {isEditable ? (
+              <input
+                className="txnDetailInput"
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+              />
+            ) : (
+              <div className="txnDetailValue">{txn.date}</div>
+            )}
+          </div>
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Exclude</div>
+            <div className="txnDetailValue">None</div>
+          </div>
+        </div>
+
+        {isEditable ? (
+          <div className="txnDetailNote">
+            <textarea
+              className="txnDetailTextarea"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Add note"
+            />
+          </div>
+        ) : txn.note ? (
+          <div className="txnDetailNote">
+            {txn.note}
+          </div>
+        ) : null}
+
+        {onReimburse && (
+          <div style={{ padding: '12px 0' }}>
+            {txn.raw?.reimbursedBy && txn.raw.reimbursedBy.length > 0 && (
+              <div className="reimbursedBadge" style={{ marginBottom: 10, fontSize: 13, padding: '6px 12px' }}>
+                ✓ Reimbursed {fmtTZS(txn.raw.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+              </div>
+            )}
+            <button
+              className="btn primary"
+              type="button"
+              style={{ width: '100%' }}
+              onClick={onReimburse}
+            >
+              Reimburse This Expense
+            </button>
           </div>
         )}
       </div>
@@ -4538,7 +4890,7 @@ export default function App() {
         </div>
       )}
 
-      
+
 
       {tab === 'settings' && <SettingsScreen />}
       {showBudgetSettings && <BudgetSettings />}

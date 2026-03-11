@@ -3736,17 +3736,88 @@ export default function App() {
 
     return (
       <div className="txScreen">
-        <div className="txHeader">
-          <div className="txLeft" style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 18, paddingLeft: 8 }}>
-              Financial Insights
+        {showLedgerPicker && (
+          <div className="ledgerPickerBackdrop" onClick={() => setShowLedgerPicker(false)}>
+            <div className="ledgerPickerCard" onClick={(e) => e.stopPropagation()}>
+              <div className="ledgerPickerTitle">Ledgers</div>
+              <div className="ledgerPickerList">
+                <button
+                  className={`ledgerPickerItem ${activeLedgerId === ALL_LEDGERS_ID ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => handleSelectLedger(ALL_LEDGERS_ID)}
+                >
+                  <span className="ledgerPickerName">All Ledgers</span>
+                  {activeLedgerId === ALL_LEDGERS_ID && <span className="ledgerPickerCheck">✓</span>}
+                </button>
+                {ledgers.map(l => (
+                  <button
+                    key={l.id}
+                    className={`ledgerPickerItem ${l.id === activeLedger.id ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => handleSelectLedger(l.id)}
+                  >
+                    <span className="ledgerPickerName">{l.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        className="miniBtn"
+                        type="button"
+                        style={{ padding: '2px 8px' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newName = prompt("Rename ledger:", l.name)
+                          if (newName && newName.trim() && newName.trim() !== l.name) {
+                            handleUpdateLedger(l.id, { name: newName.trim() })
+                          }
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="miniBtn danger"
+                        type="button"
+                        style={{ padding: '2px 8px', color: '#e24b4b', borderColor: '#e4e4e9', fontSize: '1.2em', lineHeight: '1' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteLedger(l.id)
+                        }}
+                        title="Delete Ledger"
+                      >
+                        ×
+                      </button>
+                      <span className="ledgerPickerCheck">
+                        {l.id === activeLedger.id && activeLedgerId !== ALL_LEDGERS_ID ? '✓' : ''}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', padding: '16px' }}>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddPersonalLedger} style={{ flex: 1 }}>
+                  + Personal
+                </button>
+                <button className="ledgerPickerAdd" type="button" onClick={handleAddBusinessLedger} style={{ flex: 1, backgroundColor: '#334155', color: '#fff' }}>
+                  + Business
+                </button>
+              </div>
             </div>
           </div>
+        )}
+        <div className="ledgerHeader">
+          <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
+            {activeLedgerId === ALL_LEDGERS_ID ? 'All Ledgers' : (activeLedger.name || 'Personal')} ▾
+          </button>
 
-          <div className="txPeriod" style={{ flex: '0 1 auto' }}>
-            <button className="txNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
-            <div className="txPeriodLabel">{statYear}</div>
-            <button className="txNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
+          <div className="brand" style={{ position: 'absolute', left: '30%', transform: 'translateX(-50%)' }}>
+            <div className="title" style={{ fontWeight: 600, fontSize: 16 }}>Insights</div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="ledgerPeriod" style={{ margin: 0 }}>
+              <button className="ledgerNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
+              <div className="ledgerPeriodLabel">{statYear}</div>
+              <button className="ledgerNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
+            </div>
+            <button className="iconBtn" onClick={() => setShowSettings(true)}>⚙️</button>
           </div>
         </div>
 
@@ -4071,7 +4142,7 @@ export default function App() {
                 <span className="toggleTrack" />
               </label>
             </div>
-            
+
             <div className="hr" />
 
             <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>

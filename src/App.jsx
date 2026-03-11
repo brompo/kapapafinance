@@ -557,7 +557,7 @@ export default function App() {
       const plain = loadVaultPlain()
       setVaultState(normalizeVault(plain))
       setStage('app')
-      setTab('home')
+      setTab('insights')
       return
     }
     setStage(hasPin() ? 'unlock' : 'setpin')
@@ -791,7 +791,7 @@ export default function App() {
       setVaultState(nextVault)
       localStorage.setItem(PIN_FLOW_KEY, 'false')
       setStage('app')
-      setTab('home')
+      setTab('insights')
       show('PIN lock disabled.')
     } catch (e) {
       show('Could not disable PIN lock.')
@@ -814,7 +814,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab('accounts')
+      setTab('insights')
       show('PIN set. Vault created.')
     } catch (e) {
       show(e.message || 'Failed to set PIN.')
@@ -833,7 +833,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab('accounts')
+      setTab('insights')
       show('Unlocked.')
     } catch (e) {
       show('Wrong PIN or vault corrupted.')
@@ -3239,16 +3239,12 @@ export default function App() {
   }
 
   function FinanceInsightsScreen() {
+    console.log("FinanceInsightsScreen render triggered. Tab is:", tab);
     const [statYear, setStatYear] = useState(() => new Date().getFullYear())
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
-    const [isRendered, setIsRendered] = useState(false)
 
-    useEffect(() => {
-      const t = setTimeout(() => setIsRendered(true), 10)
-      return () => clearTimeout(t)
-    }, [])
 
     const combinedTxns = useMemo(() => {
       const baseTxns = txns.map(t => {
@@ -3568,17 +3564,17 @@ export default function App() {
           <div className="card" style={{ padding: 15, margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-sec)' }}>Monthly Performance Breakdown</div>
-              <div className="modeSegmented" style={{ marginBottom: 0 }}>
+              <div className="modeSegmented" style={{ marginBottom: 0, padding: 2, borderRadius: 24, display: 'flex' }}>
                 <button
                   className={`modeSegBtn ${monthlyViewMode === 'actual' ? 'active' : ''}`}
-                  style={{ fontSize: 10, padding: '4px 10px', minWidth: 70 }}
+                  style={{ fontSize: 13, fontWeight: 700, padding: '6px 16px', borderRadius: 20, minWidth: 90, color: monthlyViewMode === 'actual' ? '#fff' : 'var(--text-sec)', background: monthlyViewMode === 'actual' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent', border: 'none', boxShadow: monthlyViewMode === 'actual' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none' }}
                   onClick={() => setMonthlyViewMode('actual')}
                 >
                   Actual
                 </button>
                 <button
                   className={`modeSegBtn ${monthlyViewMode === 'projected' ? 'active' : ''}`}
-                  style={{ fontSize: 10, padding: '4px 10px', minWidth: 70 }}
+                  style={{ fontSize: 13, fontWeight: 700, padding: '6px 16px', borderRadius: 20, minWidth: 90, color: monthlyViewMode === 'projected' ? '#fff' : 'var(--text-sec)', background: monthlyViewMode === 'projected' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent', border: 'none', boxShadow: monthlyViewMode === 'projected' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none' }}
                   onClick={() => setMonthlyViewMode('projected')}
                 >
                   Projected
@@ -3591,8 +3587,14 @@ export default function App() {
                   <tr style={{ color: 'var(--text-sec)', borderBottom: '1px solid var(--border)' }}>
                     <th style={{ textAlign: 'left', padding: '6px 4px' }}>Month</th>
                     <th style={{ textAlign: 'right', padding: '6px 4px' }}>Income</th>
-                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>CoS</th>
-                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>Opps</th>
+                    {activeLedger.type === 'business' ? (
+                      <>
+                        <th style={{ textAlign: 'right', padding: '6px 4px' }}>CoS</th>
+                        <th style={{ textAlign: 'right', padding: '6px 4px' }}>Opps</th>
+                      </>
+                    ) : (
+                      <th style={{ textAlign: 'right', padding: '6px 4px' }}>Expenses</th>
+                    )}
                     <th style={{ textAlign: 'right', padding: '6px 4px' }}>Total</th>
                   </tr>
                 </thead>
@@ -3623,18 +3625,29 @@ export default function App() {
                         >
                           {fmtCompact(inc || 0)}
                         </td>
-                        <td
-                          style={{ textAlign: 'right', padding: '8px 4px', color: '#f59e0b', cursor: 'pointer' }}
-                          onClick={() => setShowMonthLog({ key: m.key, type: 'cos', label: `${m.label} CoS` })}
-                        >
-                          {fmtCompact(cos || 0)}
-                        </td>
-                        <td
-                          style={{ textAlign: 'right', padding: '8px 4px', color: '#ef4444', cursor: 'pointer' }}
-                          onClick={() => setShowMonthLog({ key: m.key, type: 'opps', label: `${m.label} Opps` })}
-                        >
-                          {fmtCompact(opps || 0)}
-                        </td>
+                        {activeLedger.type === 'business' ? (
+                          <>
+                            <td
+                              style={{ textAlign: 'right', padding: '8px 4px', color: '#f59e0b', cursor: 'pointer' }}
+                              onClick={() => setShowMonthLog({ key: m.key, type: 'cos', label: `${m.label} CoS` })}
+                            >
+                              {fmtCompact(cos || 0)}
+                            </td>
+                            <td
+                              style={{ textAlign: 'right', padding: '8px 4px', color: '#ef4444', cursor: 'pointer' }}
+                              onClick={() => setShowMonthLog({ key: m.key, type: 'opps', label: `${m.label} Opps` })}
+                            >
+                              {fmtCompact(opps || 0)}
+                            </td>
+                          </>
+                        ) : (
+                          <td
+                            style={{ textAlign: 'right', padding: '8px 4px', color: '#ef4444', cursor: 'pointer' }}
+                            onClick={() => setShowMonthLog({ key: m.key, type: 'expense', label: `${m.label} Expenses` })}
+                          >
+                            {fmtCompact((cos || 0) + (opps || 0))}
+                          </td>
+                        )}
                         <td
                           style={{ textAlign: 'right', padding: '8px 4px', fontWeight: 600, color: net >= 0 ? 'var(--ok)' : 'var(--danger)', cursor: 'pointer' }}
                           onClick={() => setShowMonthLog({ key: m.key, type: 'all', label: `${m.label} Net` })}

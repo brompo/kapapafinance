@@ -3849,8 +3849,8 @@ export default function App() {
                   <span style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{fmtCompact(actualInc)}</span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span>Proj: {fmtCompact(projInc)}</span>
-                  <span>Total: {fmtCompact(totalInc)}</span>
+                  <span>Proj: <span style={{ color: '#22c55e', opacity: 0.9 }}> {fmtCompact(projInc)}</span></span>
+                  <span>Total: <span style={{ color: '#22c55e', opacity: 0.9 }}> {fmtCompact(totalInc)}</span></span>
                 </div>
               </div>
               <div style={{ flex: '1' }}>
@@ -3859,8 +3859,8 @@ export default function App() {
                   <span style={{ fontSize: 20, fontWeight: 700, color: '#ef4444' }}>{fmtCompact(actualExp)}</span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span>Proj: {fmtCompact(projExp)}</span>
-                  <span>Total: {fmtCompact(totalExp)}</span>
+                  <span>Proj: <span style={{ color: '#ef4444', opacity: 0.8 }}> {fmtCompact(projExp)}</span></span>
+                  <span>Total: <span style={{ color: '#ef4444', opacity: 0.8 }}> {fmtCompact(totalExp)}</span></span>
                 </div>
               </div>
               <div style={{ flex: '1' }}>
@@ -3869,8 +3869,8 @@ export default function App() {
                   <span style={{ fontSize: 20, fontWeight: 700, color: actualBal >= 0 ? '#16A34A' : '#ef4444' }}>{fmtCompact(actualBal)}</span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span>Proj: {fmtCompact(projBal)}</span>
-                  <span>Total: {fmtCompact(totalBal)}</span>
+                  <span>Proj: <span style={{ color: projBal >= 0 ? '#16A34A' : '#ef4444', opacity: 0.9 }}>{fmtCompact(projBal)}</span></span>
+                  <span>Total: <span style={{ color: totalBal >= 0 ? '#16A34A' : '#ef4444', opacity: 0.9 }}>{fmtCompact(totalBal)}</span></span>
                 </div>
               </div>
               {activeLedger.type === 'business' && (

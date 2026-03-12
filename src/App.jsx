@@ -3605,9 +3605,10 @@ export default function App() {
                     return inc > 0 || exp > 0;
                   }).map(m => {
                     const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
+                    const exp = monthlyViewMode === 'actual' ? m.actualExp : m.exp;
                     const cos = monthlyViewMode === 'actual' ? (m.actualCos || 0) : (m.cos || 0);
                     const opps = monthlyViewMode === 'actual' ? (m.actualOpps || 0) : (m.opps || 0);
-                    const net = inc - cos - opps;
+                    const net = inc - exp;
                     return (
                       <tr
                         key={m.key}
@@ -3645,7 +3646,7 @@ export default function App() {
                             style={{ textAlign: 'right', padding: '8px 4px', color: '#ef4444', cursor: 'pointer' }}
                             onClick={() => setShowMonthLog({ key: m.key, type: 'expense', label: `${m.label} Expenses` })}
                           >
-                            {fmtCompact((cos || 0) + (opps || 0))}
+                            {fmtCompact(exp)}
                           </td>
                         )}
                         <td

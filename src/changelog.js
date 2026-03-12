@@ -1,5 +1,16 @@
 export const CHANGELOG = [
     {
+        version: '0.1.3',
+        date: new Date().toISOString().split('T')[0],
+        changes: [
+            'Differentiated between actual and projected data in Cashflow graphs.',
+            'Added a dedicated legend for Actual (solid) vs Projected (dashed) graph lines.',
+            'Redesigned Cashflow metrics layout to focus on Actual figures in a single-row view.',
+            'Enhanced graph Y-Axis with polished, compact numerical labels (e.g., 50k, 1M).',
+            'Improved X-axis alignment by moving month labels into the SVG layer.'
+        ]
+    },
+    {
         version: '0.1.2',
         date: new Date().toISOString().split('T')[0],
         changes: [

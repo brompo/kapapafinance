@@ -3761,24 +3761,67 @@ export default function App() {
       const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp)), 1);
 
       const width = 300;
-      const height = 120;
-      const padding = 20;
+      const height = 130; // Slightly taller for X-axis labels
+      const paddingLeft = 22;
+      const paddingRight = 5;
+      const paddingTop = 15;
+      const paddingBottom = 25; // Space for X-axis labels
 
-      const getX = (i) => (i * (width - padding * 2)) / 11 + padding;
-      const getY = (v) => height - (v / maxVal) * (height - padding * 2) - padding;
+      const getNiceMax = (rawMax) => {
+        const p = Math.pow(10, Math.floor(Math.log10(rawMax)));
+        const fraction = rawMax / p;
+        let niceFraction;
+        if (fraction <= 1) niceFraction = 1;
+        else if (fraction <= 2) niceFraction = 2;
+        else if (fraction <= 2.5) niceFraction = 2.5;
+        else if (fraction <= 5) niceFraction = 5;
+        else niceFraction = 10;
+        return niceFraction * p;
+      };
+      const chartMax = getNiceMax(maxVal);
 
-      const incomePath = data.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
-      const expensePath = data.map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
+      const getX = (i) => (i * (width - paddingLeft - paddingRight)) / 11 + paddingLeft;
+      const getY = (v) => height - (v / chartMax) * (height - paddingTop - paddingBottom) - paddingBottom;
+
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+      const currentMonthIndex = statYear === currentYear ? currentMonth : (statYear < currentYear ? 11 : -1);
+
+      const incomePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
+      const expensePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
+      
+      const projStartIndex = Math.max(0, currentMonthIndex);
+      const incomePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.inc)}`).join(' ');
+      const expensePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.exp)}`).join(' ');
 
       const totalInc = data.reduce((s, m) => s + m.inc, 0);
       const totalExp = data.reduce((s, m) => s + m.exp, 0);
       const totalCos = data.reduce((s, m) => s + (m.cos || 0), 0);
       const totalOpps = data.reduce((s, m) => s + (m.opps || 0), 0);
 
+      const actualInc = data.reduce((s, m) => s + (m.actualInc || 0), 0);
+      const projInc = Math.max(0, totalInc - actualInc);
+
+      const actualExp = data.reduce((s, m) => s + (m.actualExp || 0), 0);
+      const projExp = Math.max(0, totalExp - actualExp);
+
+      const totalBal = totalInc - totalExp;
+      const actualBal = actualInc - actualExp;
+      const projBal = projInc - projExp;
+
       const avgInc = totalInc / 12;
       const lastMonth = new Date().getMonth();
       const currentInc = data[lastMonth]?.inc || 0;
       const incDiff = avgInc > 0 ? ((currentInc - avgInc) / avgInc) * 100 : 0;
+
+      const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      const fmtChartLabel = (val) => {
+        if (val === 0) return '0';
+        if (Math.abs(val) >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (Math.abs(val) >= 1_000) return (val / 1_000).toFixed(0) + 'k';
+        return val.toString();
+      };
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
@@ -3788,23 +3831,46 @@ export default function App() {
               <div style={{ fontSize: 12, color: 'var(--text-sec)', background: 'var(--bg-2)', padding: '4px 8px', borderRadius: 8 }}>{statYear}</div>
             </div>
 
-            <div style={{ display: 'flex', gap: 20, marginBottom: 25, flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 120px' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Total Income</div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 25, fontSize: 11, color: 'var(--text-sec)', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                Actual
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" strokeLinecap="round" /></svg>
+                Projected
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 25, justifyContent: 'space-between' }}>
+              <div style={{ flex: '1' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Actual Income</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{fmtCompact(totalInc)}</span>
-                  <span style={{ fontSize: 11, color: incDiff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-                    {incDiff >= 0 ? '↑' : '↓'} {Math.abs(incDiff).toFixed(1)}%
-                  </span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{fmtCompact(actualInc)}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span>Proj: {fmtCompact(projInc)}</span>
+                  <span>Total: {fmtCompact(totalInc)}</span>
                 </div>
               </div>
-              <div style={{ flex: '1 1 120px' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Total Expenses</div>
+              <div style={{ flex: '1' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Actual Expenses</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: '#ef4444' }}>{fmtCompact(totalExp)}</span>
-                  <span style={{ fontSize: 11, color: totalInc > 0 ? '#ef4444' : 'var(--text-sec)', fontWeight: 600 }}>
-                    {totalInc > 0 ? ((totalExp / totalInc) * 100).toFixed(1) : 0}% ↘
-                  </span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: '#ef4444' }}>{fmtCompact(actualExp)}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span>Proj: {fmtCompact(projExp)}</span>
+                  <span>Total: {fmtCompact(totalExp)}</span>
+                </div>
+              </div>
+              <div style={{ flex: '1' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 4 }}>Actual Balance</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: actualBal >= 0 ? '#16A34A' : '#ef4444' }}>{fmtCompact(actualBal)}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span>Proj: {fmtCompact(projBal)}</span>
+                  <span>Total: {fmtCompact(totalBal)}</span>
                 </div>
               </div>
               {activeLedger.type === 'business' && (
@@ -3823,29 +3889,37 @@ export default function App() {
 
             <div style={{ position: 'relative', height: height, width: '100%', marginBottom: 10 }}>
               <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                {/* Grid Lines */}
-                {[0, 0.5, 1].map(p => (
-                  <line key={p} x1={padding} y1={getY(maxVal * p)} x2={width - padding} y2={getY(maxVal * p)} stroke="var(--border)" strokeDasharray="4 4" strokeWidth="0.5" />
+                {/* Grid Lines & Labels */}
+                {[0, 0.25, 0.5, 0.75, 1].map(p => {
+                  const val = chartMax * p;
+                  const y = getY(val);
+                  return (
+                    <React.Fragment key={p}>
+                      <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="var(--border)" strokeDasharray="4 4" strokeWidth="0.5" />
+                      <text x={paddingLeft - 3} y={y} textAnchor="end" alignmentBaseline="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>{fmtChartLabel(val)}</text>
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* X-Axis Month Labels */}
+                {monthLabels.map((m, i) => (
+                  <text key={m} x={getX(i)} y={height - 5} textAnchor="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>{m}</text>
                 ))}
 
                 {/* Expense Line */}
-                <path d={expensePath} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+                {currentMonthIndex >= 0 && <path d={expensePathActual} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />}
+                {currentMonthIndex < 11 && <path d={expensePathProjected} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.4" />}
                 {data.map((m, i) => (
-                  <circle key={`e-${i}`} cx={getX(i)} cy={getY(m.exp)} r="2" fill="#fff" stroke="#ef4444" strokeWidth="1.5" />
+                  <circle key={`e-${i}`} cx={getX(i)} cy={getY(m.exp)} r="2" fill={i <= currentMonthIndex ? "#ef4444" : "#fff"} stroke="#ef4444" strokeWidth={i <= currentMonthIndex ? "0" : "1.5"} opacity={i <= currentMonthIndex ? "0.6" : "0.4"} />
                 ))}
 
                 {/* Income Line */}
-                <path d={incomePath} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                {currentMonthIndex >= 0 && <path d={incomePathActual} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+                {currentMonthIndex < 11 && <path d={incomePathProjected} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.6" />}
                 {data.map((m, i) => (
-                  <circle key={`i-${i}`} cx={getX(i)} cy={getY(m.inc)} r="2" fill="#fff" stroke="#22c55e" strokeWidth="1.5" />
+                  <circle key={`i-${i}`} cx={getX(i)} cy={getY(m.inc)} r="2" fill={i <= currentMonthIndex ? "#22c55e" : "#fff"} stroke="#22c55e" strokeWidth={i <= currentMonthIndex ? "0" : "1.5"} opacity={i <= currentMonthIndex ? "1" : "0.6"} />
                 ))}
               </svg>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 5px' }}>
-              {['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Dec'].map(m => (
-                <span key={m} style={{ fontSize: 10, color: 'var(--text-sec)' }}>{m}</span>
-              ))}
             </div>
           </div>
 

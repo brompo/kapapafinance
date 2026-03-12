@@ -3088,7 +3088,7 @@ label {
   display: flex;
   padding: 4px;
   border-radius: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 13px;
   gap: 4px;
 }
 
@@ -3178,7 +3178,7 @@ label {
 .intelDashboard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
   padding: 8px 0 20px;
 }
 

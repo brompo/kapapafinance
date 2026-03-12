@@ -11,6 +11,22 @@ export function fmtTZS(amount) {
   }
 }
 
+export function daysBetween(a, b) {
+  const start = new Date(a);
+  const end = new Date(b);
+  const ms = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) -
+    Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+export function monthsBetween(a, b) {
+  const start = new Date(a);
+  const end = new Date(b);
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
 export function monthKey(dStr) {
   const d = new Date(dStr)
   if (Number.isNaN(d.getTime())) return ''

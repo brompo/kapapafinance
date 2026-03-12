@@ -13,7 +13,7 @@ import {
   resetAll
 } from './cryptoVault.js'
 
-import { fmtTZS, fmtCompact, monthKey, todayISO, calculateAssetMetrics } from './money.js'
+import { fmtTZS, fmtCompact, monthKey, todayISO, calculateAssetMetrics, daysBetween, monthsBetween } from './money.js'
 
 import AccountsScreen from './screens/Accounts.jsx'
 import BottomNav from './components/BottomNav.jsx'
@@ -3244,6 +3244,294 @@ export default function App() {
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
+    const [insightTab, setInsightTab] = useState('cashflow')
+    const [infoModal, setInfoModal] = useState(null)
+    const [showImportantNumbers, setShowImportantNumbers] = useState(true)
+    const groups = activeLedger.groups || []
+    const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+    const visibleAccounts = useMemo(
+      () => accounts.filter((a) => !a.archived),
+      [accounts]
+    );
+
+
+
+
+
+    function computeAccruedForAccount(account, balanceType = 'current') {
+      const creditEntries = accountTxns.filter((t) => t.accountId === account.id && t.kind === "credit");
+      const today = new Date().toISOString().slice(0, 10);
+      let accrued = 0;
+      creditEntries.forEach((t) => {
+        if (balanceType === 'current' && t.date > today) return;
+        const rate = Number(t.creditRate || 0) / 100;
+        if (!rate || !t.interestStartDate) return;
+        const start = t.interestStartDate;
+        if (t.creditType === "compound") {
+          const months = monthsBetween(start, today);
+          const monthlyRate = rate / 12;
+          const compounded = Number(t.amount || 0) * Math.pow(1 + monthlyRate, months);
+          const monthStart = new Date(start);
+          monthStart.setMonth(monthStart.getMonth() + months);
+          const remDays = daysBetween(monthStart.toISOString().slice(0, 10), today);
+          const dailyRate = rate / 365;
+          accrued += compounded * dailyRate * remDays + (compounded - Number(t.amount || 0));
+        } else {
+          const days = daysBetween(start, today);
+          accrued += Number(t.amount || 0) * rate * (days / 365);
+        }
+      });
+      return accrued;
+    }
+
+
+
+    function getAccountBalance(account, balanceType = 'current', ignoreLedgerFilter = false) {
+      const today = new Date().toISOString().slice(0, 10);
+      const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+
+      const getBaseBalance = (acc) => {
+        let b = Number(acc.balance || 0);
+        if (balanceType === 'current') {
+          const futureTxns = accountTxns.filter(t => t.accountId === acc.id && t.date > today);
+          futureTxns.forEach(t => {
+            const amt = Number(t.amount || 0);
+            if (t.direction === 'out') b += amt;
+            else if (t.direction === 'in') b -= amt;
+          });
+        }
+        return b;
+      };
+
+      // Show only the total of sub-accounts associated with the active ledger
+      const base = subs.length > 0
+        ? subs.reduce((s, sub) => {
+          if (ignoreLedgerFilter || activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
+            return s + getBaseBalance(sub);
+          }
+          return s;
+        }, 0)
+        : getBaseBalance(account);
+
+      const groupType = account.accountType || groupById.get(account.groupId)?.type;
+      if (groupType === "credit") return base + computeAccruedForAccount(account, balanceType);
+
+      if (groupType === "asset") {
+        // If account has subaccounts, trust the base sum (which filters subs by ledger)
+        if (subs.length > 0) return base;
+
+        // Fix ledger corruption: Dynamically calculate raw base from valid cash-flow transactions
+        let cleanBase = 0;
+        const txns = accountTxns.filter(t => t.accountId === account.id);
+        for (const t of txns) {
+          if (t.kind === 'valuation') continue;
+          if (balanceType === 'current' && t.date > today) continue;
+          const amt = Number(t.amount || 0);
+          if (t.direction === 'in') cleanBase += amt;
+          if (t.direction === 'out') cleanBase -= amt;
+        }
+
+        const info = calculateAssetMetrics(account, accountTxns, groupType, balanceType === 'current' ? today : null);
+        if (info.hasData) {
+          const uninvestedCash = cleanBase - (info.costBasis || 0) + (info.realizedGain || 0);
+          return (info.value || 0) + uninvestedCash;
+        }
+      }
+
+      // Default fallback (cash balance)
+      // If we have sub-accounts, we trust the base sum (which filters subs by ledger)
+      if (subs.length > 0) return base;
+
+      // Otherwise, check if the parent account belongs to the active ledger
+      if (activeLedgerId !== "all" && account.ledgerId !== activeLedgerId) return 0;
+      return base;
+    }
+
+
+    const totals = useMemo(() => {
+      let assets = 0;
+      let liabilities = 0;
+      let capitalDeployed = 0;
+      let invested = 0;
+      let loanBook = 0;
+      let liquidCash = 0;
+      let assetCost = 0;
+      let assetValue = 0;
+      let landCapital = 0;
+      let landValue = 0;
+      let landRealizedGains = 0;
+      let sharesCapital = 0;
+      let sharesValue = 0;
+      let sharesRealizedGains = 0;
+      let totalRealizedGains = 0;
+      let totalDebt = 0;
+
+      for (const a of visibleAccounts) {
+        const g = groupById.get(a.groupId);
+        const type = a.accountType || g?.type;
+        const val = getAccountBalance(a); // Market Value
+
+        if (type === "credit") {
+          liabilities += val;
+          totalDebt += val;
+          capitalDeployed -= val;
+        } else if (type === "loan") {
+          assets += val;
+          loanBook += val;
+          capitalDeployed += val;
+          invested += val;
+        } else if (type === "asset") {
+          assets += val;
+          const info = calculateAssetMetrics(a, accountTxns, 'asset');
+          capitalDeployed += (info.costBasis || 0);
+          invested += (info.costBasis || 0);
+          assetCost += (info.costBasis || 0);
+          assetValue += val;
+          totalRealizedGains += (info.realizedGain || 0);
+          // Classify as land or shares based on account name AND group name
+          const name = (a.name || '').toLowerCase();
+          const gName = (g?.name || '').toLowerCase();
+          const isLand = ['land', 'plot', 'property', 'shamba', 'farm', 'estate', 'real estate'].some(k => name.includes(k) || gName.includes(k));
+          if (isLand) {
+            landCapital += (info.costBasis || 0);
+            landValue += val;
+            landRealizedGains += (info.realizedGain || 0);
+          } else {
+            sharesCapital += (info.costBasis || 0);
+            sharesValue += val;
+            sharesRealizedGains += (info.realizedGain || 0);
+          }
+        } else {
+          // Debit
+          assets += val;
+          liquidCash += val;
+          capitalDeployed += val;
+          invested += val;
+        }
+      }
+
+      const productiveCapital = assetCost + loanBook;
+      const idleCash = Math.max(0, liquidCash - loanBook);
+      const netWorth = assets - liabilities;
+      const friendLoanExposure = netWorth > 0 ? (loanBook / netWorth) * 100 : 0;
+
+      // --- Capital Coverage Metrics ---
+      // 1. Monthly Return (Avg last 3 months)
+      const now = new Date();
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(now.getMonth() - 3);
+      const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
+
+      // Ledger income/expense
+      const recentTxns = txns.filter(t => t.date >= iso3m);
+      let income3m = 0;
+      let expense3m = 0;
+      for (const t of recentTxns) {
+        const amt = Number(t.amount || 0);
+        if (t.type === 'income') income3m += amt;
+        else if (t.type === 'expense') expense3m += amt;
+      }
+
+      // Also include realized gains from asset sales in the last 3 months
+      let recentRealizedGains = 0;
+      for (const a of visibleAccounts) {
+        const g = groupById.get(a.groupId);
+        const type = a.accountType || g?.type;
+        if (type === 'asset') {
+          const info = calculateAssetMetrics(a, accountTxns, 'asset');
+          if (info.realizedGains) {
+            for (const rg of info.realizedGains) {
+              if (rg.date >= iso3m) recentRealizedGains += (rg.amount || 0);
+            }
+          }
+        }
+      }
+
+      const avgMonthlyProfit = (income3m - expense3m + recentRealizedGains) / 3;
+      const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
+
+      // YTD Profit computation
+      const currentYearStr = String(now.getFullYear());
+      const ytdTxns = txns.filter(t => t.date && t.date.startsWith(currentYearStr));
+      let ytdIncome = 0;
+      let ytdExpense = 0;
+      for (const t of ytdTxns) {
+        const amt = Number(t.amount || 0);
+        if (t.type === 'income') ytdIncome += amt;
+        else if (t.type === 'expense') ytdExpense += amt;
+      }
+      let ytdRealizedGains = 0;
+      for (const a of visibleAccounts) {
+        const g = groupById.get(a.groupId);
+        const type = a.accountType || g?.type;
+        if (type === 'asset') {
+          const info = calculateAssetMetrics(a, accountTxns, 'asset');
+          if (info.realizedGains) {
+            for (const rg of info.realizedGains) {
+              if (rg.date && rg.date.startsWith(currentYearStr)) ytdRealizedGains += (rg.amount || 0);
+            }
+          }
+        }
+      }
+      const profitYTD = ytdIncome - ytdExpense + ytdRealizedGains;
+
+      // 2. Cost of Capital (Weighted Avg Monthly Interest)
+      let totalWeightedRate = 0;
+      for (const a of visibleAccounts) {
+        const g = groupById.get(a.groupId);
+        const type = a.accountType || g?.type;
+        if (type === 'credit') {
+          const bal = getAccountBalance(a);
+          const rate = Number(a.creditRate || 0);
+          if (bal > 0) {
+            totalWeightedRate += (bal * (rate / 12));
+          }
+        }
+      }
+      const costOfCapital = totalDebt > 0 ? (totalWeightedRate / totalDebt) : 0;
+      const costOfDebtAnnual = costOfCapital * 12;
+
+      // 3. Coverage
+      const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (totalDebt > 0 ? 0 : 999);
+
+      // ROC = annualized monthly return
+      const roc = monthlyReturn * 12;
+      // ROBC = ROC / Cost of Debt
+      const robc = costOfDebtAnnual > 0 ? (roc / costOfDebtAnnual) : 0;
+      // Capital Turns
+      const capitalTurns = productiveCapital > 0 ? (totalRealizedGains / productiveCapital) : 0;
+
+      return {
+        assets,
+        liabilities,
+        netWorth,
+        capitalDeployed,
+        invested,
+        monthlyReturn,
+        costOfCapital,
+        costOfDebtAnnual,
+        coverage,
+        loanBook,
+        liquidCash,
+        idleCash,
+        assetCost,
+        assetValue,
+        productiveCapital,
+        friendLoanExposure,
+        totalDebt,
+        totalRealizedGains,
+        roc,
+        robc,
+        capitalTurns,
+        landCapital,
+        landValue,
+        landRealizedGains,
+        sharesCapital,
+        sharesValue,
+        sharesRealizedGains,
+        profitYTD
+      };
+    }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
     const combinedTxns = useMemo(() => {
@@ -3836,33 +4124,458 @@ export default function App() {
         </div>
 
 
+
         <div className="txList">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <CashflowChart />
-            <div className="card" style={{ margin: 0, padding: 15 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Customer</div>
-                {clientRevenue.length > 0 && (
-                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--success)' }}>
-                    {fmtCompact(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
+          <div className="viewTabs">
+            <button
+              className={`viewTab ${insightTab === 'cashflow' ? 'active' : ''}`}
+              onClick={() => setInsightTab('cashflow')}
+            >
+              Cashflow
+            </button>
+            <button
+              className={`viewTab ${insightTab === 'capital' ? 'active' : ''}`}
+              onClick={() => setInsightTab('capital')}
+            >
+              Capital
+            </button>
+          </div>
+
+          {insightTab === 'cashflow' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <CashflowChart />
+              <div className="card" style={{ margin: 0, padding: 15 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Customer</div>
+                  {clientRevenue.length > 0 && (
+                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--success)' }}>
+                      {fmtCompact(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
+                    </div>
+                  )}
+                </div>
+                {clientRevenue.length === 0 ? (
+                  <div className="emptyRow">No client revenue recorded in {statYear}.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {clientRevenue.map(c => (
+                      <div key={c.clientId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ fontWeight: 500 }}>{c.name}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtCompact(c.total)}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-              {clientRevenue.length === 0 ? (
-                <div className="emptyRow">No client revenue recorded in {statYear}.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  {clientRevenue.map(c => (
-                    <div key={c.clientId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ fontWeight: 500 }}>{c.name}</div>
-                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtCompact(c.total)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-          </div>
+          )}
+
+          {insightTab === 'capital' && (() => {
+            // Allocation percentages — 4 buckets
+            const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook
+            const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0
+            const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0
+            const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0
+            const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
+
+            // Next Best Action rules
+            const actions = []
+            if (totals.friendLoanExposure > 5) {
+              actions.push(`Friend-loan exposure is ${totals.friendLoanExposure.toFixed(0)}% (above 5%): Pause new loans until exposure drops below threshold.`)
+            }
+            if (totalCap > 0 && deployablePct > 25) {
+              actions.push(`Idle cash is ${deployablePct.toFixed(0)}%: Deploy into highest-velocity pipeline.`)
+            }
+            if (totals.totalDebt > 0 && totals.robc < 1.2) {
+              actions.push(`ROBC is ${totals.robc.toFixed(1)}×: Don't borrow more — focus on higher-yield deals.`)
+            }
+            if (totals.totalDebt > 0 && totals.roc < totals.costOfDebtAnnual) {
+              actions.push(`ROC (${totals.roc.toFixed(1)}%) < Cost of Debt (${totals.costOfDebtAnnual.toFixed(1)}%): Returns don't cover borrowing costs.`)
+            }
+            if (actions.length === 0) {
+              actions.push('All metrics within healthy thresholds. Keep deploying capital into productive assets.')
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 24 }}>
+                {/* Growth View */}
+                <div className="topMetricsRow">
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Capital Efficiency</div>
+                    <div className="topMetricValue" style={{ color: '#16A34A' }}>
+                      {(() => {
+                        const profit = totals.netWorth - totals.capitalDeployed;
+                        const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
+                        return (
+                          <>
+                            {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                            <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="topMetricSub">
+                      Return on Capital
+                    </div>
+                  </div>
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Capital Coverage</div>
+                    <div className="topMetricValue" style={{
+                      color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
+                    }}>
+                      {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
+                    </div>
+                    <div className="topMetricSub" style={{ marginBottom: 2 }}>
+                      {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 'auto', display: 'flex', gap: 8 }}>
+                      <span>Ret: {totals.monthlyReturn.toFixed(1)}%</span>
+                      <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Source of Capital</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                      {(() => {
+                        const selfFunded = Math.max(0, totals.invested - totals.liabilities);
+                        const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
+                        const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
+                        return (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#6b7280' }}>Self Funded</span>
+                              <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
+                            </div>
+                            <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                              <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
+                              <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#6b7280' }}>Credit</span>
+                              <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Capital Allocation Bar */}
+
+                <div className="intelSection" style={{ marginBottom: 12 }} >
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
+                  </div>
+                  <div className="allocationBarWrap">
+                    <div className="allocationBar">
+                      {(() => {
+                        const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
+                        const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
+                        const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
+                        const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
+                        const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
+
+                        return (
+                          <>
+                            {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
+                            {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
+                            {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
+                            {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="allocationLegend">
+                      {(() => {
+                        const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
+                        const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
+                        const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
+                        const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
+                        const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
+
+                        return (
+                          <>
+                            <div className="allocLegendItem">
+                              <span className="allocDot" style={{ background: '#16A34A' }} />
+                              <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
+                              <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
+                            </div>
+                            <div className="allocLegendItem">
+                              <span className="allocDot" style={{ background: '#6366F1' }} />
+                              <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
+                              <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
+                            </div>
+                            <div className="allocLegendItem">
+                              <span className="allocDot" style={{ background: '#F59E0B' }} />
+                              <span>Cash / Idle Asset {deployablePct.toFixed(0)}%</span>
+                              <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
+                            </div>
+                            <div className="allocLegendItem" style={{ color: '#DC2626' }}>
+                              <span className="allocDot" style={{ background: '#DC2626' }} />
+                              <span>At-Risk / Loans {atRiskPct.toFixed(0)}%</span>
+                              <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <div className="intelDashboard">
+                  {/* 1. Important Numbers (Collapsible) */}
+                  <div className="intelSection" style={{ paddingBottom: showImportantNumbers ? 16 : 0, padding: showImportantNumbers ? 16 : '12px 16px' }}>
+                    <div
+                      className="intelSectionTitle"
+                      onClick={() => setShowImportantNumbers(!showImportantNumbers)}
+                      style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', marginBottom: showImportantNumbers ? 14 : 0 }}
+                    >
+                      <span>1. Important Numbers</span>
+                      <span>{showImportantNumbers ? '▼' : '▶'}</span>
+                    </div>
+                    {showImportantNumbers && (
+                      <div className="intelMetricRow">
+                        <div className="intelMetricCard">
+                          <div className="intelMetricValue" style={{ color: totals.profitYTD >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {fmtCompact(totals.profitYTD)}
+                          </div>
+                          <div className="intelMetricLabel">Profit (YTD)</div>
+                          <div className="intelMetricSub">Income − Exp + Gains</div>
+                        </div>
+                        <div className="intelMetricCard">
+                          <div className="intelMetricValue" style={{ color: '#6366F1' }}>
+                            {fmtCompact(totals.productiveCapital)}
+                          </div>
+                          <div className="intelMetricLabel">Avg Productive Capital</div>
+                          <div className="intelMetricSub">Assets + Loans</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Decision Numbers */}
+                  <div className="intelSection">
+                    <div className="intelSectionTitle">2. Decision Numbers</div>
+                    <div className="intelMetricRow">
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          {totals.roc.toFixed(1)}%
+                          <span
+                            className="infoIcon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInfoModal({
+                                title: 'ROC (Return on Capital)',
+                                description: 'Measures how much profit your productive assets generate. It is calculated as your annualized YTD profit divided by your average productive capital. \n\nFormula: (Annualized Profit) ÷ (Assets + Loans)'
+                              });
+                            }}
+                          >ⓘ</span>
+                        </div>
+                        <div className="intelMetricLabel">ROC (YTD)</div>
+                        <div className="intelMetricTarget">Target: ≥ 24%</div>
+                        <div className="intelMetricSub">Profit ÷ Avg productive capital</div>
+                      </div>
+
+                      {totals.totalDebt > 0 ? (
+                        <div className="intelMetricCard">
+                          <div className="intelMetricValue" style={{ color: totals.robc >= 2 ? '#16A34A' : totals.robc >= 1.2 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            {totals.robc.toFixed(1)}×
+                            <span
+                              className="infoIcon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInfoModal({
+                                  title: 'ROBC (Return on Borrowed Capital)',
+                                  description: 'Measures how effectively you are using leverage (debt). It is your ROC divided by your Cost of Debt. \n\nA ratio > 1 means your investments are earning more than the interest you pay on debt. A ratio < 1 means debt is destroying wealth.'
+                                });
+                              }}
+                            >ⓘ</span>
+                          </div>
+                          <div className="intelMetricLabel">ROBC Ratio</div>
+                          <div className="intelMetricTarget">Target: ≥ 2.0×</div>
+                          <div className="intelMetricSub" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span>Cost of Debt: {totals.costOfDebtAnnual.toFixed(1)}%</span>
+                            <span>Leveraged Yield: {(totals.roc + totals.costOfDebtAnnual).toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="intelMetricCard">
+                          <div className="intelMetricValue" style={{ color: totals.capitalTurns >= 1 ? '#16A34A' : '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            {totals.capitalTurns.toFixed(1)}×
+                            <span
+                              className="infoIcon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInfoModal({
+                                  title: 'Capital Turns',
+                                  description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
+                                });
+                              }}
+                            >ⓘ</span>
+                          </div>
+                          <div className="intelMetricLabel">Capital Turns</div>
+                          <div className="intelMetricTarget">Velocity of capital</div>
+                          <div className="intelMetricSub">How many times capital cycled</div>
+                        </div>
+                      )}
+
+                      <div className="intelMetricCard">
+                        <div className="intelMetricValue" style={{ color: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          {totals.capitalTurns.toFixed(1)}×
+                          <span
+                            className="infoIcon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInfoModal({
+                                title: 'Capital Turns',
+                                description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
+                              });
+                            }}
+                          >ⓘ</span>
+                        </div>
+                        <div className="intelMetricLabel">Capital Turns</div>
+                        <div className="intelMetricTarget">YTD velocity</div>
+                        <div className="intelMetricSub">Realized ÷ Productive capital</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Risk & Leakage */}
+                  <div className="intelSection">
+                    <div className="intelSectionTitle">3. Risk & Leakage</div>
+                    <div className="riskGrid">
+                      <div className={`riskCard ${totals.friendLoanExposure > 5 ? 'danger' : 'safe'}`}>
+                        <div className="riskIcon">{totals.friendLoanExposure > 5 ? '⚠' : '✓'}</div>
+                        <div className="riskBody">
+                          <div className="riskTitle">Friend Loan Exposure</div>
+                          <div className="riskMetric">{fmtTZS(totals.loanBook)}</div>
+                          <div className="riskSub">
+                            Leakage Ratio: {totals.friendLoanExposure.toFixed(1)}% of Net Worth
+                            <br />Target: ≤ 5%
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`riskCard ${deployablePct > 25 ? 'warning' : 'safe'}`}>
+                        <div className="riskIcon">{deployablePct > 25 ? '◉' : '✓'}</div>
+                        <div className="riskBody">
+                          <div className="riskTitle">Dead Capital Warning</div>
+                          <div className="riskMetric">{deployablePct.toFixed(0)}% Idle</div>
+                          <div className="riskSub">
+                            {deployablePct > 25 ? `Idle cash exceeds 25% — deploy capital.` : 'Idle cash within healthy range.'}
+                          </div>
+                        </div>
+                      </div>
+                      {totals.totalDebt > 0 && (
+                        <div className={`riskCard ${totals.roc < totals.costOfDebtAnnual ? 'danger' : totals.robc < 1.2 ? 'warning' : 'safe'}`}>
+                          <div className="riskIcon">{totals.roc < totals.costOfDebtAnnual ? '⚠' : totals.robc < 1.2 ? '◉' : '✓'}</div>
+                          <div className="riskBody">
+                            <div className="riskTitle">Leverage Warning</div>
+                            <div className="riskMetric">{totals.robc.toFixed(1)}× ROBC</div>
+                            <div className="riskSub">
+                              {totals.roc < totals.costOfDebtAnnual
+                                ? 'ROC < Cost of Debt — danger zone.'
+                                : totals.robc < 1.2
+                                  ? 'ROBC < 1.2× — stop new borrowing.'
+                                  : 'Leverage is productive.'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4. Engine Cards */}
+                  <div className="intelSection">
+                    <div className="intelSectionTitle">4. Performance Engines</div>
+                    <div className="engineGrid">
+                      <div className="engineCard">
+                        <div className="engineHeader">
+                          <span className="engineEmoji">🏗️</span>
+                          <span className="engineName">Land Engine</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Capital in Land</span>
+                          <span className="engineVal">{fmtTZS(totals.landCapital)}</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Market Value</span>
+                          <span className="engineVal">{fmtTZS(totals.landValue)}</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Realized Profit</span>
+                          <span className="engineVal" style={{ color: totals.landRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {fmtTZS(totals.landRealizedGains)}
+                          </span>
+                        </div>
+                        <div className="engineRow">
+                          <span>ROI</span>
+                          <span className="engineVal" style={{ color: '#6366F1' }}>
+                            {totals.landCapital > 0 ? ((totals.landValue - totals.landCapital) / totals.landCapital * 100).toFixed(1) : '0.0'}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="engineCard">
+                        <div className="engineHeader">
+                          <span className="engineEmoji">📈</span>
+                          <span className="engineName">Shares Engine</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Market Value</span>
+                          <span className="engineVal">{fmtTZS(totals.sharesValue)}</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Cost Basis</span>
+                          <span className="engineVal">{fmtTZS(totals.sharesCapital)}</span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Realized Gains</span>
+                          <span className="engineVal" style={{ color: totals.sharesRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
+                            {fmtTZS(totals.sharesRealizedGains)}
+                          </span>
+                        </div>
+                        <div className="engineRow">
+                          <span>Total Return</span>
+                          <span className="engineVal" style={{ color: '#6366F1' }}>
+                            {totals.sharesCapital > 0 ? (((totals.sharesValue - totals.sharesCapital + totals.sharesRealizedGains) / totals.sharesCapital) * 100).toFixed(1) : '0.0'}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Next Best Action */}
+                  <div className="intelSection">
+                    <div className="intelSectionTitle">5. 🧠 Next Best Action</div>
+                    <div className="nextActionCard">
+                      {actions.map((a, i) => (
+                        <div className="nextActionLine" key={i}>{a}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )
+          })()}
         </div>
+        {
+          infoModal && (
+            <div className="modalBackdrop" onClick={() => setInfoModal(null)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 300 }}>
+                <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span>{infoModal.title}</span>
+                  <button className="iconBtn" type="button" onClick={() => setInfoModal(null)} style={{ fontSize: 18 }}>✕</button>
+                </div>
+                <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                  {infoModal.description}
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn primary" onClick={() => setInfoModal(null)}>Got it</button>
+                </div>
+              </div>
+            </div>
+          )
+        }
       </div>
     )
   }

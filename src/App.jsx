@@ -3246,7 +3246,6 @@ export default function App() {
     const [showMonthLog, setShowMonthLog] = useState(null)
     const [insightTab, setInsightTab] = useState('cashflow')
     const [infoModal, setInfoModal] = useState(null)
-    const [showImportantNumbers, setShowImportantNumbers] = useState(true)
     const groups = activeLedger.groups || []
     const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
     const visibleAccounts = useMemo(
@@ -4094,6 +4093,155 @@ export default function App() {
       );
     }
 
+    const CategoryBreakdown = () => {
+        const [breakdownType, setBreakdownType] = useState('expense'); // 'income' or 'expense'
+        
+        const yearTxns = txns.filter(t => t.date && t.date.startsWith(String(statYear)));
+        
+        const catTotals = useMemo(() => {
+          const totals = {};
+          yearTxns.forEach(t => {
+            if (t.type === breakdownType) {
+              const cat = t.category || 'Uncategorized';
+              totals[cat] = (totals[cat] || 0) + Number(t.amount || 0);
+            }
+          });
+          return Object.entries(totals)
+            .map(([name, total]) => ({ name, total }))
+            .sort((a, b) => b.total - a.total);
+        }, [yearTxns, breakdownType]);
+
+        const totalAmount = catTotals.reduce((sum, c) => sum + c.total, 0);
+        
+        const colors = [
+          '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#6366f1', 
+          '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'
+        ];
+
+        // Donut Chart logic
+        const radius = 50;
+        const centerX = 60;
+        const centerY = 60;
+        const strokeWidth = 15;
+        const innerRadius = radius - strokeWidth / 2;
+        
+        let cumulativeAngle = -Math.PI / 2; // Start from top
+
+        const segments = catTotals.map((c, i) => {
+          const percentage = totalAmount > 0 ? c.total / totalAmount : 0;
+          const angle = percentage * 2 * Math.PI;
+          
+          // SVG Arc calculation
+          const x1 = centerX + innerRadius * Math.cos(cumulativeAngle);
+          const y1 = centerY + innerRadius * Math.sin(cumulativeAngle);
+          cumulativeAngle += angle;
+          const x2 = centerX + innerRadius * Math.cos(cumulativeAngle);
+          const y2 = centerY + innerRadius * Math.sin(cumulativeAngle);
+          
+          const largeArcFlag = percentage > 0.5 ? 1 : 0;
+          
+          const pathData = totalAmount > 0 && percentage < 1 
+            ? `M ${x1} ${y1} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2}`
+            : (percentage === 1 
+                ? `M ${centerX} ${centerY - innerRadius} A ${innerRadius} ${innerRadius} 0 1 1 ${centerX - 0.01} ${centerY - innerRadius}` 
+                : '');
+
+          return {
+            ...c,
+            percentage: (percentage * 100).toFixed(0),
+            pathData,
+            color: colors[i % colors.length]
+          };
+        });
+
+        // Totals for headers
+        const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+        const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 30 }}>
+            {/* Top Headers */}
+            <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', marginBottom: 15 }}>
+              <button 
+                onClick={() => setBreakdownType('income')}
+                style={{ 
+                  flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
+                  borderBottom: breakdownType === 'income' ? '3px solid #6366f1' : '3px solid transparent',
+                  transition: 'all 0.2s', cursor: 'pointer',
+                  opacity: breakdownType === 'income' ? 1 : 0.5
+                }}
+              >
+                <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4 }}>Income Breakdown</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtTZS(incomeTotal)}</div>
+              </button>
+              <button 
+                onClick={() => setBreakdownType('expense')}
+                style={{ 
+                  flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
+                  borderBottom: breakdownType === 'expense' ? '3px solid #ef4444' : '3px solid transparent',
+                  transition: 'all 0.2s', cursor: 'pointer',
+                  opacity: breakdownType === 'expense' ? 1 : 0.5
+                }}
+              >
+                <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4 }}>Expense Breakdown</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtTZS(expenseTotal)}</div>
+              </button>
+            </div>
+
+            {/* Donut Chart Card */}
+            <div className="card" style={{ padding: '30px 20px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ position: 'relative', width: 220, height: 120 }}>
+                <svg viewBox="0 0 120 120" style={{ width: '100%', height: '100%', transform: 'rotate(0deg)' }}>
+                  {segments.map((s, i) => (
+                    <path 
+                      key={i} 
+                      d={s.pathData} 
+                      fill="none" 
+                      stroke={s.color} 
+                      strokeWidth={strokeWidth}
+                      strokeLinecap="butt"
+                    />
+                  ))}
+                  {/* Center Text */}
+                  <text x="60" y="58" textAnchor="middle" style={{ fontSize: 8, fontWeight: 600, fill: 'var(--text-sec)' }}>Total</text>
+                  <text x="60" y="72" textAnchor="middle" style={{ fontSize: 11, fontWeight: 800, fill: 'var(--text)' }}>
+                    {fmtCompact(totalAmount)}
+                  </text>
+                </svg>
+              </div>
+            </div>
+
+            {/* List */}
+            <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+              {segments.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-sec)' }}>No data for this period</div>
+              ) : (
+                segments.map((s, i) => (
+                  <div 
+                    key={i} 
+                    style={{ 
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                      padding: '16px 20px', borderBottom: i === segments.length - 1 ? 'none' : '1px solid var(--border-subtle)' 
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ 
+                        background: s.color, color: '#fff', fontSize: 10, fontWeight: 800, 
+                        padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center' 
+                      }}>
+                        {s.percentage}%
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtTZS(s.total)}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      };
+
     if (selectedTxn) {
       return (
         <TransactionDetail
@@ -4213,6 +4361,12 @@ export default function App() {
             >
               Capital
             </button>
+            <button
+              className={`viewTab ${insightTab === 'analysis' ? 'active' : ''}`}
+              onClick={() => setInsightTab('analysis')}
+            >
+              Analysis
+            </button>
           </div>
 
           {insightTab === 'cashflow' && (
@@ -4251,91 +4405,9 @@ export default function App() {
             const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0
             const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
 
-            // Next Best Action rules
-            const actions = []
-            if (totals.friendLoanExposure > 5) {
-              actions.push(`Friend-loan exposure is ${totals.friendLoanExposure.toFixed(0)}% (above 5%): Pause new loans until exposure drops below threshold.`)
-            }
-            if (totalCap > 0 && deployablePct > 25) {
-              actions.push(`Idle cash is ${deployablePct.toFixed(0)}%: Deploy into highest-velocity pipeline.`)
-            }
-            if (totals.totalDebt > 0 && totals.robc < 1.2) {
-              actions.push(`ROBC is ${totals.robc.toFixed(1)}×: Don't borrow more — focus on higher-yield deals.`)
-            }
-            if (totals.totalDebt > 0 && totals.roc < totals.costOfDebtAnnual) {
-              actions.push(`ROC (${totals.roc.toFixed(1)}%) < Cost of Debt (${totals.costOfDebtAnnual.toFixed(1)}%): Returns don't cover borrowing costs.`)
-            }
-            if (actions.length === 0) {
-              actions.push('All metrics within healthy thresholds. Keep deploying capital into productive assets.')
-            }
-
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 24 }}>
-                {/* Growth View */}
-                <div className="topMetricsRow">
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Capital Efficiency</div>
-                    <div className="topMetricValue" style={{ color: '#16A34A' }}>
-                      {(() => {
-                        const profit = totals.netWorth - totals.capitalDeployed;
-                        const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
-                        return (
-                          <>
-                            {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
-                            <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <div className="topMetricSub">
-                      Return on Capital
-                    </div>
-                  </div>
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Capital Coverage</div>
-                    <div className="topMetricValue" style={{
-                      color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
-                    }}>
-                      {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
-                    </div>
-                    <div className="topMetricSub" style={{ marginBottom: 2 }}>
-                      {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 'auto', display: 'flex', gap: 8 }}>
-                      <span>Ret: {totals.monthlyReturn.toFixed(1)}%</span>
-                      <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Source of Capital</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                      {(() => {
-                        const selfFunded = Math.max(0, totals.invested - totals.liabilities);
-                        const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
-                        const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
-                        return (
-                          <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                              <span style={{ color: '#6b7280' }}>Self Funded</span>
-                              <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
-                            </div>
-                            <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-                              <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
-                              <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                              <span style={{ color: '#6b7280' }}>Credit</span>
-                              <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
-                            </div>
-                          </>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Capital Allocation Bar */}
-
+                {/* 1. Capital Allocation Bar */}
                 <div className="intelSection" style={{ marginBottom: 12 }} >
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
@@ -4396,241 +4468,78 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <div className="intelDashboard">
-                  {/* 1. Important Numbers (Collapsible) */}
-                  <div className="intelSection" style={{ paddingBottom: showImportantNumbers ? 16 : 0, padding: showImportantNumbers ? 16 : '12px 16px' }}>
-                    <div
-                      className="intelSectionTitle"
-                      onClick={() => setShowImportantNumbers(!showImportantNumbers)}
-                      style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', marginBottom: showImportantNumbers ? 14 : 0 }}
-                    >
-                      <span>1. Important Numbers</span>
-                      <span>{showImportantNumbers ? '▼' : '▶'}</span>
-                    </div>
-                    {showImportantNumbers && (
-                      <div className="intelMetricRow">
-                        <div className="intelMetricCard">
-                          <div className="intelMetricValue" style={{ color: totals.profitYTD >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {fmtCompact(totals.profitYTD)}
-                          </div>
-                          <div className="intelMetricLabel">Profit (YTD)</div>
-                          <div className="intelMetricSub">Income − Exp + Gains</div>
-                        </div>
-                        <div className="intelMetricCard">
-                          <div className="intelMetricValue" style={{ color: '#6366F1' }}>
-                            {fmtCompact(totals.productiveCapital)}
-                          </div>
-                          <div className="intelMetricLabel">Avg Productive Capital</div>
-                          <div className="intelMetricSub">Assets + Loans</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* 2. Decision Numbers */}
-                  <div className="intelSection">
-                    <div className="intelSectionTitle">2. Decision Numbers</div>
-                    <div className="intelMetricRow">
-                      <div className="intelMetricCard">
-                        <div className="intelMetricValue" style={{ color: totals.roc >= 24 ? '#16A34A' : totals.roc >= 12 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          {totals.roc.toFixed(1)}%
-                          <span
-                            className="infoIcon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setInfoModal({
-                                title: 'ROC (Return on Capital)',
-                                description: 'Measures how much profit your productive assets generate. It is calculated as your annualized YTD profit divided by your average productive capital. \n\nFormula: (Annualized Profit) ÷ (Assets + Loans)'
-                              });
-                            }}
-                          >ⓘ</span>
-                        </div>
-                        <div className="intelMetricLabel">ROC (YTD)</div>
-                        <div className="intelMetricTarget">Target: ≥ 24%</div>
-                        <div className="intelMetricSub">Profit ÷ Avg productive capital</div>
-                      </div>
-
-                      {totals.totalDebt > 0 ? (
-                        <div className="intelMetricCard">
-                          <div className="intelMetricValue" style={{ color: totals.robc >= 2 ? '#16A34A' : totals.robc >= 1.2 ? '#F59E0B' : '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            {totals.robc.toFixed(1)}×
-                            <span
-                              className="infoIcon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInfoModal({
-                                  title: 'ROBC (Return on Borrowed Capital)',
-                                  description: 'Measures how effectively you are using leverage (debt). It is your ROC divided by your Cost of Debt. \n\nA ratio > 1 means your investments are earning more than the interest you pay on debt. A ratio < 1 means debt is destroying wealth.'
-                                });
-                              }}
-                            >ⓘ</span>
-                          </div>
-                          <div className="intelMetricLabel">ROBC Ratio</div>
-                          <div className="intelMetricTarget">Target: ≥ 2.0×</div>
-                          <div className="intelMetricSub" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span>Cost of Debt: {totals.costOfDebtAnnual.toFixed(1)}%</span>
-                            <span>Leveraged Yield: {(totals.roc + totals.costOfDebtAnnual).toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="intelMetricCard">
-                          <div className="intelMetricValue" style={{ color: totals.capitalTurns >= 1 ? '#16A34A' : '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            {totals.capitalTurns.toFixed(1)}×
-                            <span
-                              className="infoIcon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInfoModal({
-                                  title: 'Capital Turns',
-                                  description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
-                                });
-                              }}
-                            >ⓘ</span>
-                          </div>
-                          <div className="intelMetricLabel">Capital Turns</div>
-                          <div className="intelMetricTarget">Velocity of capital</div>
-                          <div className="intelMetricSub">How many times capital cycled</div>
-                        </div>
-                      )}
-
-                      <div className="intelMetricCard">
-                        <div className="intelMetricValue" style={{ color: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          {totals.capitalTurns.toFixed(1)}×
-                          <span
-                            className="infoIcon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setInfoModal({
-                                title: 'Capital Turns',
-                                description: 'Measures the velocity of your capital—how many times your productive capital has been fully cycled into realized gains.\n\nFormula: (Total Realized Gains) ÷ (Productive Capital)'
-                              });
-                            }}
-                          >ⓘ</span>
-                        </div>
-                        <div className="intelMetricLabel">Capital Turns</div>
-                        <div className="intelMetricTarget">YTD velocity</div>
-                        <div className="intelMetricSub">Realized ÷ Productive capital</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Risk & Leakage */}
-                  <div className="intelSection">
-                    <div className="intelSectionTitle">3. Risk & Leakage</div>
-                    <div className="riskGrid">
-                      <div className={`riskCard ${totals.friendLoanExposure > 5 ? 'danger' : 'safe'}`}>
-                        <div className="riskIcon">{totals.friendLoanExposure > 5 ? '⚠' : '✓'}</div>
-                        <div className="riskBody">
-                          <div className="riskTitle">Friend Loan Exposure</div>
-                          <div className="riskMetric">{fmtTZS(totals.loanBook)}</div>
-                          <div className="riskSub">
-                            Leakage Ratio: {totals.friendLoanExposure.toFixed(1)}% of Net Worth
-                            <br />Target: ≤ 5%
-                          </div>
-                        </div>
-                      </div>
-                      <div className={`riskCard ${deployablePct > 25 ? 'warning' : 'safe'}`}>
-                        <div className="riskIcon">{deployablePct > 25 ? '◉' : '✓'}</div>
-                        <div className="riskBody">
-                          <div className="riskTitle">Dead Capital Warning</div>
-                          <div className="riskMetric">{deployablePct.toFixed(0)}% Idle</div>
-                          <div className="riskSub">
-                            {deployablePct > 25 ? `Idle cash exceeds 25% — deploy capital.` : 'Idle cash within healthy range.'}
-                          </div>
-                        </div>
-                      </div>
-                      {totals.totalDebt > 0 && (
-                        <div className={`riskCard ${totals.roc < totals.costOfDebtAnnual ? 'danger' : totals.robc < 1.2 ? 'warning' : 'safe'}`}>
-                          <div className="riskIcon">{totals.roc < totals.costOfDebtAnnual ? '⚠' : totals.robc < 1.2 ? '◉' : '✓'}</div>
-                          <div className="riskBody">
-                            <div className="riskTitle">Leverage Warning</div>
-                            <div className="riskMetric">{totals.robc.toFixed(1)}× ROBC</div>
-                            <div className="riskSub">
-                              {totals.roc < totals.costOfDebtAnnual
-                                ? 'ROC < Cost of Debt — danger zone.'
-                                : totals.robc < 1.2
-                                  ? 'ROBC < 1.2× — stop new borrowing.'
-                                  : 'Leverage is productive.'}
+                {/* 2. Main Metrics */}
+                <div className="topMetricsRow">
+                  {/* Source of Capital */}
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Source of Capital</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                      {(() => {
+                        const selfFunded = Math.max(0, totals.invested - totals.liabilities);
+                        const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
+                        const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
+                        return (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#6b7280' }}>Self Funded</span>
+                              <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
                             </div>
-                          </div>
-                        </div>
-                      )}
+                            <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                              <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
+                              <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#6b7280' }}>Credit</span>
+                              <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
+                            </div>
+                          </>
+                        )
+                      })()}
                     </div>
                   </div>
 
-                  {/* 4. Engine Cards */}
-                  <div className="intelSection">
-                    <div className="intelSectionTitle">4. Performance Engines</div>
-                    <div className="engineGrid">
-                      <div className="engineCard">
-                        <div className="engineHeader">
-                          <span className="engineEmoji">🏗️</span>
-                          <span className="engineName">Land Engine</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Capital in Land</span>
-                          <span className="engineVal">{fmtTZS(totals.landCapital)}</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Market Value</span>
-                          <span className="engineVal">{fmtTZS(totals.landValue)}</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Realized Profit</span>
-                          <span className="engineVal" style={{ color: totals.landRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {fmtTZS(totals.landRealizedGains)}
-                          </span>
-                        </div>
-                        <div className="engineRow">
-                          <span>ROI</span>
-                          <span className="engineVal" style={{ color: '#6366F1' }}>
-                            {totals.landCapital > 0 ? ((totals.landValue - totals.landCapital) / totals.landCapital * 100).toFixed(1) : '0.0'}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="engineCard">
-                        <div className="engineHeader">
-                          <span className="engineEmoji">📈</span>
-                          <span className="engineName">Shares Engine</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Market Value</span>
-                          <span className="engineVal">{fmtTZS(totals.sharesValue)}</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Cost Basis</span>
-                          <span className="engineVal">{fmtTZS(totals.sharesCapital)}</span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Realized Gains</span>
-                          <span className="engineVal" style={{ color: totals.sharesRealizedGains >= 0 ? '#16A34A' : '#DC2626' }}>
-                            {fmtTZS(totals.sharesRealizedGains)}
-                          </span>
-                        </div>
-                        <div className="engineRow">
-                          <span>Total Return</span>
-                          <span className="engineVal" style={{ color: '#6366F1' }}>
-                            {totals.sharesCapital > 0 ? (((totals.sharesValue - totals.sharesCapital + totals.sharesRealizedGains) / totals.sharesCapital) * 100).toFixed(1) : '0.0'}%
-                          </span>
-                        </div>
-                      </div>
+                  {/* Capital Efficiency */}
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Capital Efficiency</div>
+                    <div className="topMetricValue" style={{ color: '#16A34A' }}>
+                      {(() => {
+                        const profit = totals.netWorth - totals.capitalDeployed;
+                        const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
+                        return (
+                          <>
+                            {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                            <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="topMetricSub">
+                      Return on Capital
                     </div>
                   </div>
 
-                  {/* 5. Next Best Action */}
-                  <div className="intelSection">
-                    <div className="intelSectionTitle">5. 🧠 Next Best Action</div>
-                    <div className="nextActionCard">
-                      {actions.map((a, i) => (
-                        <div className="nextActionLine" key={i}>{a}</div>
-                      ))}
+                  {/* Capital Coverage */}
+                  <div className="topMetricCard">
+                    <div className="topMetricLabel">Capital Coverage</div>
+                    <div className="topMetricValue" style={{
+                      color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
+                    }}>
+                      {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
+                    </div>
+                    <div className="topMetricSub" style={{ marginBottom: 2 }}>
+                      {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 'auto', display: 'flex', gap: 8 }}>
+                      <span>Ret: {totals.monthlyReturn.toFixed(1)}%</span>
+                      <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
                     </div>
                   </div>
                 </div>
-
               </div>
             )
           })()}
+          {insightTab === 'analysis' && <CategoryBreakdown />}
         </div>
         {
           infoModal && (

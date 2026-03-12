@@ -3762,8 +3762,8 @@ export default function App() {
 
       const width = 300;
       const height = 130; // Slightly taller for X-axis labels
-      const paddingLeft = 22;
-      const paddingRight = 5;
+      const paddingLeft = 10;
+      const paddingRight = 10;
       const paddingTop = 15;
       const paddingBottom = 25; // Space for X-axis labels
 
@@ -3789,7 +3789,7 @@ export default function App() {
 
       const incomePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
       const expensePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
-      
+
       const projStartIndex = Math.max(0, currentMonthIndex);
       const incomePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.inc)}`).join(' ');
       const expensePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.exp)}`).join(' ');
@@ -3815,7 +3815,7 @@ export default function App() {
       const incDiff = avgInc > 0 ? ((currentInc - avgInc) / avgInc) * 100 : 0;
 
       const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      
+
       const fmtChartLabel = (val) => {
         if (val === 0) return '0';
         if (Math.abs(val) >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -3887,7 +3887,7 @@ export default function App() {
               )}
             </div>
 
-            <div style={{ position: 'relative', height: height, width: '100%', marginBottom: 10 }}>
+            <div style={{ position: 'relative', height: height, width: 'calc(100% + 16px)', marginLeft: -7, marginBottom: 10 }}>
               <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                 {/* Grid Lines & Labels */}
                 {[0, 0.25, 0.5, 0.75, 1].map(p => {
@@ -3896,7 +3896,7 @@ export default function App() {
                   return (
                     <React.Fragment key={p}>
                       <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="var(--border)" strokeDasharray="4 4" strokeWidth="0.5" />
-                      <text x={paddingLeft - 3} y={y} textAnchor="end" alignmentBaseline="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>{fmtChartLabel(val)}</text>
+                      <text x={paddingLeft - 4} y={y} textAnchor="end" alignmentBaseline="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>{fmtChartLabel(val)}</text>
                     </React.Fragment>
                   );
                 })}

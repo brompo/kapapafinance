@@ -1,5 +1,15 @@
 export const CHANGELOG = [
     {
+        version: '0.1.4',
+        date: new Date().toISOString().split('T')[0],
+        changes: [
+            'Added "Income Expense Analysis" tab with category-based breakdowns.',
+            'Implemented interactive SVG Donut Charts for Income and Expense distribution.',
+            'Restructured Capital Insights tab: logical allocation and source of capital prioritized.',
+            'Cleaned up Insights UI by removing legacy/unused analytical sections.'
+        ]
+    },
+    {
         version: '0.1.3',
         date: new Date().toISOString().split('T')[0],
         changes: [

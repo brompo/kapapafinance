@@ -134,6 +134,314 @@ function uid() {
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
 
+function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
+  const isEditable = !txn.kind || txn.kind === 'txn'
+  const [type, setType] = useState(txn.type || 'expense')
+  const [amount, setAmount] = useState(String(txn.amount || ''))
+  const [amountError, setAmountError] = useState(false)
+  const [category, setCategory] = useState(txn.category || '')
+  const [accountId, setAccountId] = useState(txn.accountId || '')
+  const [accountError, setAccountError] = useState(false)
+  const [clientId, setClientId] = useState(txn.raw?.clientId || '')
+  const [pendingClient, setPendingClient] = useState(null)
+  
+  const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id) 
+    ? [...clients, pendingClient] 
+    : clients;
+  const [date, setDate] = useState(txn.date || todayISO())
+
+  // Fix: Separate logic for subCategory vs note
+  const [subCategory, setSubCategory] = useState(() => {
+    if (txn.raw?.subCategory) return txn.raw.subCategory;
+    if (!txn.note) return ''
+    if (txn.note.includes(' • ')) {
+      const [head] = txn.note.split(' • ')
+      return head || ''
+    }
+    return ''
+  })
+  const [note, setNote] = useState(() => {
+    if (!txn.note) return ''
+    const parts = txn.note.split(' • ')
+    if (parts.length > 1) return parts.slice(1).join(' • ')
+    return txn.note
+  })
+
+  const labelType = type === 'income' ? 'Income' :
+    type === 'cos' ? 'Cost of Sales' :
+    type === 'opps' ? 'Operating Expenses' : 'Expense'
+  const categoryOptions = type === 'income' ? incomeCats :
+    type === 'cos' ? cosCats :
+    type === 'opps' ? oppsCats : expenseCats
+
+  const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
+
+  function handleSave() {
+    if (!isEditable) return
+    const amt = Number(amount || 0)
+    if (!amt || amt <= 0) {
+      setAmountError(true)
+      show('Enter a valid amount.')
+      return
+    }
+    if (settings.requireAccountForTxns && !accountId) {
+      setAccountError(true)
+      show('Please select an account.')
+      return
+    }
+    setAccountError(false)
+    
+    // Maintain legacy note format for backward compatibility while saving dedicated subCategory
+    const combinedNote = subCategory ? `${subCategory}${note ? ` • ${note}` : ''}` : note;
+
+    onSave?.({
+      ...txn.raw,
+      type,
+      amount: amt,
+      category: category || '',
+      subCategory: subCategory || '', // Dedicated field
+      note: combinedNote || '', // Use combined format for display compatibility
+      rawNote: note || '', // Storing raw note separately for future use
+      accountId: accountId || '',
+      clientId: clientId || '',
+      date: date || todayISO()
+    }, pendingClient)
+    onClose()
+  }
+
+  const accountName = accounts.find(a => a.id === accountId)?.name || ''
+
+  return (
+    <div className="txnDetailScreen">
+      <div className="txnDetailHeader">
+        <button className="iconBtn" onClick={onClose} type="button">✕</button>
+        <div className="txnDetailTitle">Transaction Details</div>
+        <div style={{ width: 32 }}></div>
+      </div>
+
+      <div className="card" style={{ margin: '0 10px' }}>
+        <div className="field">
+          <label style={{ fontWeight: 600, color: type === 'income' ? 'var(--ok)' : 'var(--danger)' }}>
+            Amount (TZS)
+          </label>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: 12, fontWeight: 700, fontSize: 18, color: 'var(--muted)' }}>
+              {type === 'income' ? '+' : '-'}
+            </span>
+            <input
+              className="txnAmountInput"
+              inputMode="decimal"
+              value={amount}
+              onChange={e => {
+                setAmount(e.target.value)
+                if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+              }}
+              placeholder="0"
+              style={{ paddingLeft: 30, fontSize: 20, fontWeight: 700, border: amountError ? '1px solid var(--danger)' : '' }}
+              disabled={!isEditable}
+              autoFocus
+            />
+          </div>
+          {amountError && <div className="small" style={{ color: 'var(--danger)', marginTop: 4 }}>Please enter a valid amount</div>}
+        </div>
+
+        <div className="txnDetailGrid">
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Type</div>
+            {isEditable ? (
+              <select className="txnDetailSelect" value={type} onChange={e => {
+                setType(e.target.value)
+                setCategory('')
+                setSubCategory('')
+              }}>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
+                {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
+              </select>
+            ) : (
+              <div className="txnDetailValue">{labelType}</div>
+            )}
+          </div>
+
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Category</div>
+            {isEditable ? (
+              <select className="txnDetailSelect" value={category} onChange={e => {
+                setCategory(e.target.value)
+                setSubCategory('')
+              }}>
+                <option value="">None</option>
+                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : (
+              <div className="txnDetailValue">{txn.category || 'None'}</div>
+            )}
+          </div>
+
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Subcategory</div>
+            {isEditable ? (
+              subOptions.length > 0 ? (
+                <select className="txnDetailSelect" value={subCategory} onChange={e => setSubCategory(e.target.value)}>
+                  <option value="">None</option>
+                  {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              ) : (
+                <input
+                  className="txnDetailInput"
+                  value={subCategory}
+                  onChange={e => setSubCategory(e.target.value)}
+                  placeholder="None"
+                />
+              )
+            ) : (
+              <div className="txnDetailValue">{subCategory || 'None'}</div>
+            )}
+          </div>
+
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Account</div>
+            {isEditable ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <select
+                  className="txnDetailSelect"
+                  value={accountId}
+                  onChange={e => {
+                    setAccountId(e.target.value)
+                    if (e.target.value) setAccountError(false)
+                  }}
+                  style={accountError ? { borderColor: 'var(--danger)' } : {}}
+                >
+                  <option value="">None</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {accountError && <div className="small" style={{ color: 'var(--danger)', marginTop: 2 }}>Required</div>}
+              </div>
+            ) : (
+              <div className="txnDetailValue">{accountName || 'None'}</div>
+            )}
+          </div>
+
+          {type === 'income' && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Client</div>
+              {isEditable ? (
+                <select
+                  className="txnDetailSelect"
+                  value={clientId}
+                  onChange={e => {
+                    if (e.target.value === 'new') {
+                      const name = prompt('New client name?');
+                      if (name && name.trim()) {
+                        const newClient = { id: uid(), name: name.trim() };
+                        setPendingClient(newClient);
+                        setClientId(newClient.id);
+                      }
+                    } else {
+                      setClientId(e.target.value)
+                    }
+                  }}
+                >
+                  <option value="">None</option>
+                  {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="new">+ Add New Client</option>
+                </select>
+              ) : (
+                <div className="txnDetailValue">{clients.find(c => c.id === clientId)?.name || 'None'}</div>
+              )}
+            </div>
+          )}
+
+          <div className="txnDetailRow">
+            <div className="txnDetailLabel">Date</div>
+            {isEditable ? (
+              <input
+                className="txnDetailInput"
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+              />
+            ) : (
+              <div className="txnDetailValue">{txn.date}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="hr" />
+
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label style={{ fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Notes</label>
+          <div className="txnDetailNote" style={{ padding: 0, border: 'none', boxShadow: 'none' }}>
+            {isEditable ? (
+              <textarea
+                className="txnDetailTextarea"
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="What was this for?"
+                style={{ minHeight: 80 }}
+              />
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>
+                {note || 'No notes added.'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="txnDetailFooter">
+        {onDelete && isEditable && (
+          <button className="btn danger" type="button" onClick={() => {
+            if (confirm('Delete this transaction?')) onDelete()
+          }} style={{ padding: '14px', borderRadius: 14 }}>
+            🗑️
+          </button>
+        )}
+        
+        {onReimburse && (
+          <button
+            className="btn"
+            type="button"
+            onClick={onReimburse}
+            style={{ 
+              borderRadius: 14, 
+              padding: '14px', 
+              flex: 1, 
+              fontWeight: 600, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: 8,
+              background: 'var(--border)',
+              color: 'var(--accent)'
+            }}
+          >
+            Reimburse
+          </button>
+        )}
+        
+        <button 
+          className="btn primary" 
+          type="button" 
+          disabled={!isEditable} 
+          onClick={handleSave}
+          style={{ 
+            borderRadius: 14, 
+            padding: '14px', 
+            flex: 2, 
+            fontWeight: 700,
+            fontSize: 15,
+            boxShadow: '0 4px 12px rgba(90, 95, 176, 0.2)'
+          }}
+        >
+          Save Transaction
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function base64UrlEncode(buf) {
   const bytes = new Uint8Array(buf)
   let s = ''
@@ -2799,9 +3107,11 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={cosCats}
           oppsCats={oppsCats}
+          settings={settings}
+          show={show}
+          categoryMeta={activeLedger.categoryMeta || {}}
           onSave={(next, pendingClient) => updateTxn(selectedTxn.raw, next, pendingClient)}
           onClose={() => setSelectedTxn(null)}
-          clients={clients}
           onDelete={() => {
             delTxn(selectedTxn.raw.id)
             setSelectedTxn(null)
@@ -4364,8 +4674,15 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={activeLedger.categories?.cos || []}
           oppsCats={activeLedger.categories?.opps || []}
+          settings={settings}
+          show={show}
+          categoryMeta={activeLedger.categoryMeta || {}}
           onSave={(next, pendingClient) => updateTxn(selectedTxn.raw, next, pendingClient)}
           onClose={() => setSelectedTxn(null)}
+          onDelete={() => {
+            delTxn(selectedTxn.raw.id)
+            setSelectedTxn(null)
+          }}
           clients={clients}
         />
       )
@@ -4669,270 +4986,6 @@ export default function App() {
     )
   }
 
-  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [] }) {
-    const isEditable = !txn.kind || txn.kind === 'txn'
-    const [type, setType] = useState(txn.type || 'expense')
-    const [amount, setAmount] = useState(String(txn.amount || ''))
-    const [amountError, setAmountError] = useState(false)
-    const [category, setCategory] = useState(txn.category || '')
-    const [accountId, setAccountId] = useState(txn.accountId || '')
-    const [accountError, setAccountError] = useState(false)
-    const [clientId, setClientId] = useState(txn.raw?.clientId || '')
-    const [pendingClient, setPendingClient] = useState(null)
-    const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
-      ? [...clients, pendingClient]
-      : clients;
-    const [date, setDate] = useState(txn.date || todayISO())
-
-    const [subCategory, setSubCategory] = useState(() => {
-      if (!txn.note) return ''
-      const [head] = txn.note.split(' • ')
-      return head || ''
-    })
-    const [note, setNote] = useState(() => {
-      if (!txn.note) return ''
-      const parts = txn.note.split(' • ')
-      return parts.length > 1 ? parts.slice(1).join(' • ') : ''
-    })
-
-    const labelType = type === 'income' ? 'Income' :
-      type === 'cos' ? 'Cost of Sales' :
-        type === 'opps' ? 'Operating Expenses' : 'Expense'
-    const categoryOptions = type === 'income' ? incomeCats :
-      type === 'cos' ? cosCats :
-        type === 'opps' ? oppsCats : expenseCats
-
-    function handleSave() {
-      if (!isEditable) return
-      const amt = Number(amount || 0)
-      if (!amt || amt <= 0) {
-        setAmountError(true)
-        show('Enter a valid amount.')
-        return
-      }
-      if (settings.requireAccountForTxns && !accountId) {
-        setAccountError(true)
-        show('Please select an account.')
-        return
-      }
-      setAccountError(false)
-      const combinedNote = subCategory
-        ? `${subCategory}${note ? ` • ${note}` : ''}`
-        : note
-      onSave?.({
-        ...txn.raw,
-        type,
-        amount: amt,
-        category: category || '',
-        note: combinedNote || '',
-        accountId: accountId || '',
-        clientId: clientId || '',
-        date: date || todayISO()
-      }, pendingClient)
-      onClose()
-    }
-
-    const accountName = accounts.find(a => a.id === accountId)?.name || ''
-    return (
-      <div className="txnDetailScreen">
-        <div className="txnDetailHeader">
-          <button className="iconBtn" onClick={onClose} type="button">✕</button>
-          <div className="txnDetailTitle">Transactions</div>
-          <div className="row" style={{ gap: 8 }}>
-            {onDelete && isEditable && (
-              <button className="pillBtn danger" type="button" onClick={() => {
-                if (confirm('Delete this transaction?')) onDelete()
-              }}>
-                Delete
-              </button>
-            )}
-            <button className="pillBtn" type="button" disabled={!isEditable} onClick={handleSave}>
-              Save
-            </button>
-          </div>
-        </div>
-
-        <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
-          {isEditable ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                <span>{type === 'income' ? '+' : '-'}</span>
-                <input
-                  className="txnAmountInput"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={e => {
-                    setAmount(e.target.value)
-                    if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
-                  }}
-                  placeholder="0"
-                  style={amountError ? { borderColor: '#f8a5a5', borderBottomWidth: '2px', borderBottomStyle: 'solid' } : {}}
-                  autoFocus
-                />
-              </div>
-              {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
-            </div>
-          ) : (
-            <>{type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}</>
-          )}
-        </div>
-
-        <div className="txnDetailGrid">
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Type</div>
-            {isEditable ? (
-              <select className="txnDetailSelect" value={type} onChange={e => {
-                setType(e.target.value)
-                setCategory('')
-              }}>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-                {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
-                {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
-              </select>
-            ) : (
-              <div className="txnDetailValue">{labelType}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Category</div>
-            {isEditable ? (
-              <select className="txnDetailSelect" value={category} onChange={e => setCategory(e.target.value)}>
-                <option value="">None</option>
-                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            ) : (
-              <div className="txnDetailValue">{txn.category || 'None'}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Subcategory</div>
-            {isEditable ? (
-              <input
-                className="txnDetailInput"
-                value={subCategory}
-                onChange={e => setSubCategory(e.target.value)}
-                placeholder="None"
-              />
-            ) : (
-              <div className="txnDetailValue">{txn.note ? txn.note.split(' • ')[0] : 'None'}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Tag</div>
-            <div className="txnDetailValue">None</div>
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Account {settings.requireAccountForTxns ? '*' : ''}</div>
-            {isEditable ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <select
-                  className="txnDetailSelect"
-                  value={accountId}
-                  onChange={e => {
-                    setAccountId(e.target.value)
-                    if (e.target.value) setAccountError(false)
-                  }}
-                  style={accountError ? { borderColor: '#f8a5a5' } : {}}
-                >
-                  <option value="">None</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-                {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
-              </div>
-            ) : (
-              <div className="txnDetailValue">{accountName || 'None'}</div>
-            )}
-          </div>
-          {type === 'income' && (
-            <div className="txnDetailRow">
-              <div className="txnDetailLabel">Client</div>
-              {isEditable ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <select
-                    className="txnDetailSelect"
-                    value={clientId}
-                    onChange={e => {
-                      if (e.target.value === 'new') {
-                        const name = prompt('New client name?');
-                        if (name && name.trim()) {
-                          const newClient = { id: uid(), name: name.trim() };
-                          setPendingClient(newClient);
-                          setClientId(newClient.id);
-                        }
-                      } else {
-                        setClientId(e.target.value)
-                      }
-                    }}
-                  >
-                    <option value="">None</option>
-                    {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    <option value="new">+ Add New Client</option>
-                  </select>
-                </div>
-              ) : (
-                <div className="txnDetailValue">{clients.find(c => c.id === clientId)?.name || 'None'}</div>
-              )}
-            </div>
-          )}
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Recorder</div>
-            <div className="txnDetailValue">You</div>
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Time</div>
-            {isEditable ? (
-              <input
-                className="txnDetailInput"
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-              />
-            ) : (
-              <div className="txnDetailValue">{txn.date}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Exclude</div>
-            <div className="txnDetailValue">None</div>
-          </div>
-        </div>
-
-        {isEditable ? (
-          <div className="txnDetailNote">
-            <textarea
-              className="txnDetailTextarea"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="Add note"
-            />
-          </div>
-        ) : txn.note ? (
-          <div className="txnDetailNote">
-            {txn.note}
-          </div>
-        ) : null}
-
-        {onReimburse && (
-          <div style={{ padding: '12px 0' }}>
-            {txn.raw?.reimbursedBy && txn.raw.reimbursedBy.length > 0 && (
-              <div className="reimbursedBadge" style={{ marginBottom: 10, fontSize: 13, padding: '6px 12px' }}>
-                ✓ Reimbursed {fmtTZS(txn.raw.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
-              </div>
-            )}
-            <button
-              className="btn primary"
-              type="button"
-              style={{ width: '100%' }}
-              onClick={onReimburse}
-            >
-              Reimburse This Expense
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
 
 
   function GeneralSettings() {
@@ -5224,270 +5277,6 @@ export default function App() {
   }
 
 
-  function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [] }) {
-    const isEditable = !txn.kind || txn.kind === 'txn'
-    const [type, setType] = useState(txn.type || 'expense')
-    const [amount, setAmount] = useState(String(txn.amount || ''))
-    const [amountError, setAmountError] = useState(false)
-    const [category, setCategory] = useState(txn.category || '')
-    const [accountId, setAccountId] = useState(txn.accountId || '')
-    const [accountError, setAccountError] = useState(false)
-    const [clientId, setClientId] = useState(txn.raw?.clientId || '')
-    const [pendingClient, setPendingClient] = useState(null)
-    const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
-      ? [...clients, pendingClient]
-      : clients;
-    const [date, setDate] = useState(txn.date || todayISO())
-
-    const [subCategory, setSubCategory] = useState(() => {
-      if (!txn.note) return ''
-      const [head] = txn.note.split(' • ')
-      return head || ''
-    })
-    const [note, setNote] = useState(() => {
-      if (!txn.note) return ''
-      const parts = txn.note.split(' • ')
-      return parts.length > 1 ? parts.slice(1).join(' • ') : ''
-    })
-
-    const labelType = type === 'income' ? 'Income' :
-      type === 'cos' ? 'Cost of Sales' :
-        type === 'opps' ? 'Operating Expenses' : 'Expense'
-    const categoryOptions = type === 'income' ? incomeCats :
-      type === 'cos' ? cosCats :
-        type === 'opps' ? oppsCats : expenseCats
-
-    function handleSave() {
-      if (!isEditable) return
-      const amt = Number(amount || 0)
-      if (!amt || amt <= 0) {
-        setAmountError(true)
-        show('Enter a valid amount.')
-        return
-      }
-      if (settings.requireAccountForTxns && !accountId) {
-        setAccountError(true)
-        show('Please select an account.')
-        return
-      }
-      setAccountError(false)
-      const combinedNote = subCategory
-        ? `${subCategory}${note ? ` • ${note}` : ''}`
-        : note
-      onSave?.({
-        ...txn.raw,
-        type,
-        amount: amt,
-        category: category || '',
-        note: combinedNote || '',
-        accountId: accountId || '',
-        clientId: clientId || '',
-        date: date || todayISO()
-      }, pendingClient)
-      onClose()
-    }
-
-    const accountName = accounts.find(a => a.id === accountId)?.name || ''
-    return (
-      <div className="txnDetailScreen">
-        <div className="txnDetailHeader">
-          <button className="iconBtn" onClick={onClose} type="button">✕</button>
-          <div className="txnDetailTitle">Transactions</div>
-          <div className="row" style={{ gap: 8 }}>
-            {onDelete && isEditable && (
-              <button className="pillBtn danger" type="button" onClick={() => {
-                if (confirm('Delete this transaction?')) onDelete()
-              }}>
-                Delete
-              </button>
-            )}
-            <button className="pillBtn" type="button" disabled={!isEditable} onClick={handleSave}>
-              Save
-            </button>
-          </div>
-        </div>
-
-        <div className={`txnAmountPill ${type === 'income' ? 'pos' : 'neg'}`}>
-          {isEditable ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                <span>{type === 'income' ? '+' : '-'}</span>
-                <input
-                  className="txnAmountInput"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={e => {
-                    setAmount(e.target.value)
-                    if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
-                  }}
-                  placeholder="0"
-                  style={amountError ? { borderColor: '#f8a5a5', borderBottomWidth: '2px', borderBottomStyle: 'solid' } : {}}
-                  autoFocus
-                />
-              </div>
-              {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
-            </div>
-          ) : (
-            <>{type === 'income' ? '+' : '-'}{fmtTZS(amount || 0)}</>
-          )}
-        </div>
-
-        <div className="txnDetailGrid">
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Type</div>
-            {isEditable ? (
-              <select className="txnDetailSelect" value={type} onChange={e => {
-                setType(e.target.value)
-                setCategory('')
-              }}>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-                {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
-                {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
-              </select>
-            ) : (
-              <div className="txnDetailValue">{labelType}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Category</div>
-            {isEditable ? (
-              <select className="txnDetailSelect" value={category} onChange={e => setCategory(e.target.value)}>
-                <option value="">None</option>
-                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            ) : (
-              <div className="txnDetailValue">{txn.category || 'None'}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Subcategory</div>
-            {isEditable ? (
-              <input
-                className="txnDetailInput"
-                value={subCategory}
-                onChange={e => setSubCategory(e.target.value)}
-                placeholder="None"
-              />
-            ) : (
-              <div className="txnDetailValue">{txn.note ? txn.note.split(' • ')[0] : 'None'}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Tag</div>
-            <div className="txnDetailValue">None</div>
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Account {settings.requireAccountForTxns ? '*' : ''}</div>
-            {isEditable ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <select
-                  className="txnDetailSelect"
-                  value={accountId}
-                  onChange={e => {
-                    setAccountId(e.target.value)
-                    if (e.target.value) setAccountError(false)
-                  }}
-                  style={accountError ? { borderColor: '#f8a5a5' } : {}}
-                >
-                  <option value="">None</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-                {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
-              </div>
-            ) : (
-              <div className="txnDetailValue">{accountName || 'None'}</div>
-            )}
-          </div>
-          {type === 'income' && (
-            <div className="txnDetailRow">
-              <div className="txnDetailLabel">Client</div>
-              {isEditable ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <select
-                    className="txnDetailSelect"
-                    value={clientId}
-                    onChange={e => {
-                      if (e.target.value === 'new') {
-                        const name = prompt('New client name?');
-                        if (name && name.trim()) {
-                          const newClient = { id: uid(), name: name.trim() };
-                          setPendingClient(newClient);
-                          setClientId(newClient.id);
-                        }
-                      } else {
-                        setClientId(e.target.value)
-                      }
-                    }}
-                  >
-                    <option value="">None</option>
-                    {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    <option value="new">+ Add New Client</option>
-                  </select>
-                </div>
-              ) : (
-                <div className="txnDetailValue">{clients.find(c => c.id === clientId)?.name || 'None'}</div>
-              )}
-            </div>
-          )}
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Recorder</div>
-            <div className="txnDetailValue">You</div>
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Time</div>
-            {isEditable ? (
-              <input
-                className="txnDetailInput"
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-              />
-            ) : (
-              <div className="txnDetailValue">{txn.date}</div>
-            )}
-          </div>
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Exclude</div>
-            <div className="txnDetailValue">None</div>
-          </div>
-        </div>
-
-        {isEditable ? (
-          <div className="txnDetailNote">
-            <textarea
-              className="txnDetailTextarea"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="Add note"
-            />
-          </div>
-        ) : txn.note ? (
-          <div className="txnDetailNote">
-            {txn.note}
-          </div>
-        ) : null}
-
-        {onReimburse && (
-          <div style={{ padding: '12px 0' }}>
-            {txn.raw?.reimbursedBy && txn.raw.reimbursedBy.length > 0 && (
-              <div className="reimbursedBadge" style={{ marginBottom: 10, fontSize: 13, padding: '6px 12px' }}>
-                ✓ Reimbursed {fmtTZS(txn.raw.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
-              </div>
-            )}
-            <button
-              className="btn primary"
-              type="button"
-              style={{ width: '100%' }}
-              onClick={onReimburse}
-            >
-              Reimburse This Expense
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
 
   function BudgetSettings() {
     const [draftBudgets, setDraftBudgets] = useState(() => {

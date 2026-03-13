@@ -1,6 +1,13 @@
 @keyframes slideIn {
-  from { transform: translateX(30px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 :root {
@@ -1524,8 +1531,8 @@ label {
 .txnDetailScreen {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 10px 2px 80px;
+  gap: 12px;
+  padding: 12px 4px 100px;
 }
 
 .txnDetailHeader {
@@ -1533,46 +1540,30 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  margin-bottom: 8px;
+  padding: 0 10px;
 }
 
 .txnDetailTitle {
-  font-weight: 600;
-  color: #1f2332;
-  font-size: 16px
-}
-
-.txnAmountPill {
-  align-self: center;
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: #ffffff;
-  font-size: 24px;
   font-weight: 700;
-}
-
-.txnAmountPill.pos {
-  color: #2fbf71
-}
-
-.txnAmountPill.neg {
-  color: #e24b4b
+  color: var(--text);
+  font-size: 17px;
+  letter-spacing: -0.01em;
 }
 
 .txnAmountInput {
-  background: transparent;
-  border: none;
-  font-size: 24px;
-  font-weight: 700;
-  text-align: center;
-  width: 140px;
-  color: inherit;
+  background: #f8f9fc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
   outline: none;
+  width: 100%;
 }
 
 .txnDetailGrid {
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
 .txnDetailRow {
@@ -1580,50 +1571,67 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f8f9fc;
+}
+
+.txnDetailRow:last-child {
+  border-bottom: none;
 }
 
 .txnDetailLabel {
-  color: #8b90b2
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .txnDetailValue {
   background: #f1f2f7;
-  border-radius: 999px;
-  padding: 6px 12px;
-  color: #1f2332;
+  border-radius: 8px;
+  padding: 4px 10px;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .txnDetailSelect,
 .txnDetailInput {
-  border: 1px solid #e6e8f2;
+  border: 1px solid var(--border);
   background: #fff;
-  border-radius: 999px;
-  padding: 6px 12px;
-  color: #1f2332;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text);
   font-size: 14px;
+  text-align: right;
 }
 
 .txnDetailTextarea {
   width: 100%;
-  border: 1px solid #e6e8f2;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   min-height: 90px;
   font-size: 14px;
   resize: vertical;
-}
-
-.pillBtn:disabled {
-  opacity: .5;
-  cursor: not-allowed;
+  background: #f9fafc;
+  color: var(--text);
 }
 
 .txnDetailNote {
-  background: #fff;
-  border: 1px solid #eceef6;
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 6px 18px rgba(27, 33, 62, .05);
+  background: var(--card);
+}
+
+.txnDetailFooter {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  z-index: 1000;
 }
 
 /* =========================

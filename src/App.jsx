@@ -4230,7 +4230,7 @@ export default function App() {
           </div>
 
           {/* Pie Chart Card */}
-          <div className="card" style={{ padding: '40px 10px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', background: '#fff' }}>
+          <div className="card" style={{ padding: '10px 10px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', background: '#fff' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: 400, height: 340 }}>
               <svg viewBox={`0 0 ${fullWidth} ${fullHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                 {segments.map((s, i) => (

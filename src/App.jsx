@@ -144,9 +144,9 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
   const [accountError, setAccountError] = useState(false)
   const [clientId, setClientId] = useState(txn.raw?.clientId || '')
   const [pendingClient, setPendingClient] = useState(null)
-  
-  const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id) 
-    ? [...clients, pendingClient] 
+
+  const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
+    ? [...clients, pendingClient]
     : clients;
   const [date, setDate] = useState(txn.date || todayISO())
 
@@ -169,10 +169,10 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
 
   const labelType = type === 'income' ? 'Income' :
     type === 'cos' ? 'Cost of Sales' :
-    type === 'opps' ? 'Operating Expenses' : 'Expense'
+      type === 'opps' ? 'Operating Expenses' : 'Expense'
   const categoryOptions = type === 'income' ? incomeCats :
     type === 'cos' ? cosCats :
-    type === 'opps' ? oppsCats : expenseCats
+      type === 'opps' ? oppsCats : expenseCats
 
   const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
 
@@ -190,7 +190,7 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
       return
     }
     setAccountError(false)
-    
+
     // Maintain legacy note format for backward compatibility while saving dedicated subCategory
     const combinedNote = subCategory ? `${subCategory}${note ? ` • ${note}` : ''}` : note;
 
@@ -398,20 +398,20 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
             🗑️
           </button>
         )}
-        
+
         {onReimburse && (
           <button
             className="btn"
             type="button"
             onClick={onReimburse}
-            style={{ 
-              borderRadius: 14, 
-              padding: '14px', 
-              flex: 1, 
-              fontWeight: 600, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
+            style={{
+              borderRadius: 14,
+              padding: '14px',
+              flex: 1,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: 8,
               background: 'var(--border)',
               color: 'var(--accent)'
@@ -420,16 +420,16 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
             Reimburse
           </button>
         )}
-        
-        <button 
-          className="btn primary" 
-          type="button" 
-          disabled={!isEditable} 
+
+        <button
+          className="btn primary"
+          type="button"
+          disabled={!isEditable}
           onClick={handleSave}
-          style={{ 
-            borderRadius: 14, 
-            padding: '14px', 
-            flex: 2, 
+          style={{
+            borderRadius: 14,
+            padding: '14px',
+            flex: 2,
             fontWeight: 700,
             fontSize: 15,
             boxShadow: '0 4px 12px rgba(90, 95, 176, 0.2)'
@@ -658,7 +658,13 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false, requireAccountForTxns: false },
+      settings: {
+        pinLockEnabled: false,
+        requireAccountForTxns: false,
+        defaultAppTab: 'tx',
+        defaultInsightTab: 'cashflow',
+        insightTabOrder: ['cashflow', 'capital', 'analysis']
+      },
       clients: []
     }
   }
@@ -669,7 +675,13 @@ function normalizeVault(data) {
     return {
       ledgers: [ledger],
       activeLedgerId: ledger.id,
-      settings: { pinLockEnabled: false, requireAccountForTxns: false },
+      settings: {
+        pinLockEnabled: false,
+        requireAccountForTxns: false,
+        defaultAppTab: 'tx',
+        defaultInsightTab: 'cashflow',
+        insightTabOrder: ['cashflow', 'capital', 'analysis']
+      },
       clients: []
     }
   }
@@ -682,7 +694,15 @@ function normalizeVault(data) {
       activeLedgerId,
       accounts: Array.isArray(data.accounts) ? data.accounts : [],
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns },
+      settings: {
+        ...(data.settings || {}),
+        pinLockEnabled: !!data.settings?.pinLockEnabled,
+        requireAccountForTxns: !!data.settings?.requireAccountForTxns,
+        defaultAppTab: data.settings?.defaultAppTab || 'tx',
+        defaultInsightTab: data.settings?.defaultInsightTab || 'cashflow',
+        insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'capital', 'analysis'],
+        appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
+      },
       clients: Array.isArray(data.clients) ? data.clients : []
     }
   }
@@ -698,7 +718,15 @@ function normalizeVault(data) {
     activeLedgerId: legacyLedger.id,
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    settings: { ...(data.settings || {}), pinLockEnabled: !!data.settings?.pinLockEnabled, requireAccountForTxns: !!data.settings?.requireAccountForTxns },
+    settings: {
+      ...(data.settings || {}),
+      pinLockEnabled: !!data.settings?.pinLockEnabled,
+      requireAccountForTxns: !!data.settings?.requireAccountForTxns,
+      defaultAppTab: data.settings?.defaultAppTab || 'tx',
+      defaultInsightTab: data.settings?.defaultInsightTab || 'cashflow',
+      insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'capital', 'analysis'],
+      appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
+    },
     clients: Array.isArray(data.clients) ? data.clients : []
   }
 }
@@ -725,12 +753,22 @@ function GlobalToast() {
 
 export default function App() {
   const [stage, setStage] = useState('loading') // loading | setpin | unlock | app
-  const [tab, setTab] = useState(DEFAULT_TAB) // home | accounts | tx | settings
+  const [tab, setTab] = useState(() => {
+    const saved = localStorage.getItem('kapapa_vault')
+    if (saved) {
+      try {
+        const v = JSON.parse(saved)
+        return v.settings?.defaultAppTab || DEFAULT_TAB
+      } catch (e) { }
+    }
+    return DEFAULT_TAB
+  })
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
   const [showGeneralSettings, setShowGeneralSettings] = useState(false)
   const [showFinanceSettings, setShowFinanceSettings] = useState(false)
   const [showBackupSettings, setShowBackupSettings] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
+  const [showVisibilitySettings, setShowVisibilitySettings] = useState(false)
 
 
   const [pin, setPin] = useState('')
@@ -865,9 +903,10 @@ export default function App() {
     const pinFlowEnabled = localStorage.getItem(PIN_FLOW_KEY) !== 'false'
     if (!pinFlowEnabled) {
       const plain = loadVaultPlain()
-      setVaultState(normalizeVault(plain))
+      const normalized = normalizeVault(plain)
+      setVaultState(normalized)
       setStage('app')
-      setTab(DEFAULT_TAB)
+      setTab(normalized.settings?.defaultAppTab || DEFAULT_TAB)
       return
     }
     setStage(hasPin() ? 'unlock' : 'setpin')
@@ -1101,7 +1140,7 @@ export default function App() {
       setVaultState(nextVault)
       localStorage.setItem(PIN_FLOW_KEY, 'false')
       setStage('app')
-      setTab(DEFAULT_TAB)
+      setTab(nextVault.settings?.defaultAppTab || DEFAULT_TAB)
       show('PIN lock disabled.')
     } catch (e) {
       show('Could not disable PIN lock.')
@@ -1124,7 +1163,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab(DEFAULT_TAB)
+      setTab(data.settings?.defaultAppTab || DEFAULT_TAB)
       show('PIN set. Vault created.')
     } catch (e) {
       show(e.message || 'Failed to set PIN.')
@@ -1143,7 +1182,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab(DEFAULT_TAB)
+      setTab(data.settings?.defaultAppTab || DEFAULT_TAB)
       show('Unlocked.')
     } catch (e) {
       show('Wrong PIN or vault corrupted.')
@@ -3552,11 +3591,60 @@ export default function App() {
 
   function FinanceInsightsScreen() {
     console.log("FinanceInsightsScreen render triggered. Tab is:", tab);
-    const [statYear, setStatYear] = useState(() => new Date().getFullYear())
+    const [viewGranularity, setViewGranularity] = useState('year') // 'year' | 'month' | 'week'
+    const [statPeriod, setStatPeriod] = useState(() => new Date().toISOString().slice(0, 4))
+    const [showGranularityPicker, setShowGranularityPicker] = useState(false)
+    const statYear = Number(statPeriod.slice(0, 4))
+
+    function getMonday(date) {
+      const d = new Date(date)
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1) // adjust when day is sunday
+      return new Date(d.setDate(diff))
+    }
+
+    function shiftPeriod(delta) {
+      if (viewGranularity === 'year') {
+        const nextY = statYear + delta
+        setStatPeriod(String(nextY))
+      } else if (viewGranularity === 'month') {
+        const d = new Date(statPeriod + '-01')
+        d.setMonth(d.getMonth() + delta)
+        setStatPeriod(d.toISOString().slice(0, 7))
+      } else {
+        // week
+        const d = new Date(statPeriod)
+        d.setDate(d.getDate() + (delta * 7))
+        setStatPeriod(d.toISOString().slice(0, 10))
+      }
+    }
+
+    function handleSelectGranularity(g) {
+      setViewGranularity(g)
+      const now = new Date()
+      if (g === 'year') {
+        setStatPeriod(String(statYear))
+      } else if (g === 'month') {
+        if (statYear === now.getFullYear()) {
+          setStatPeriod(now.toISOString().slice(0, 7))
+        } else {
+          setStatPeriod(`${statYear}-01`)
+        }
+      } else {
+        // week
+        if (statYear === now.getFullYear()) {
+          setStatPeriod(getMonday(now).toISOString().slice(0, 10))
+        } else {
+          setStatPeriod(getMonday(new Date(statYear, 0, 1)).toISOString().slice(0, 10))
+        }
+      }
+      setShowGranularityPicker(false)
+    }
+
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
-    const [insightTab, setInsightTab] = useState('cashflow')
+    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab || 'cashflow')
     const [infoModal, setInfoModal] = useState(null)
     const groups = activeLedger.groups || []
     const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -3906,15 +3994,25 @@ export default function App() {
     }, [combinedTxns])
 
     const monthlyStats = useMemo(() => {
-      // Aggregate by month for the selected year
-      const stats = new Map() // 'YYYY-MM' -> { inc, exp }
+      // Aggregate by month (if year view), by day (if month view), or by day (if week view)
+      const stats = new Map() // 'YYYY-MM' or 'YYYY-MM-DD' -> { inc, exp, ... }
+      const isMonthView = viewGranularity === 'month'
+      const isWeekView = viewGranularity === 'week'
 
-      // Only use txns (Category transactions), ignore account adjustments/transfers
       txns.forEach(t => {
         const date = t.date || todayISO()
-        const y = Number(date.slice(0, 4))
-        if (y !== statYear) return
-        const key = date.slice(0, 7)
+        if (isMonthView) {
+          if (!date.startsWith(statPeriod)) return
+        } else if (isWeekView) {
+          const start = new Date(statPeriod)
+          const end = new Date(statPeriod)
+          end.setDate(end.getDate() + 7)
+          if (date < statPeriod || date >= end.toISOString().slice(0, 10)) return
+        } else {
+          if (Number(date.slice(0, 4)) !== statYear) return
+        }
+        const key = (isMonthView || isWeekView) ? date : date.slice(0, 7)
+
         if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 })
         const entry = stats.get(key)
 
@@ -3948,15 +4046,22 @@ export default function App() {
       });
 
       for (const acc of assets) {
-        // We need all txns for this account to calculate WAC
         const info = calculateAssetMetrics(acc, accountTxns, 'asset');
         for (const g of info.realizedGains) {
           const date = g.date || todayISO();
-          const y = Number(date.slice(0, 4));
-          if (y !== statYear) continue;
+          if (isMonthView) {
+            if (!date.startsWith(statPeriod)) continue
+          } else if (isWeekView) {
+            const start = new Date(statPeriod)
+            const end = new Date(statPeriod)
+            end.setDate(end.getDate() + 7)
+            if (date < statPeriod || date >= end.toISOString().slice(0, 10)) continue
+          } else {
+            if (Number(date.slice(0, 4)) !== statYear) continue
+          }
 
           const isActual = date <= todayISO();
-          const key = date.slice(0, 7);
+          const key = (isMonthView || isWeekView) ? date : date.slice(0, 7);
           if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 });
           const entry = stats.get(key);
           entry.inc += g.amount;
@@ -3964,24 +4069,57 @@ export default function App() {
         }
       }
 
-      // Fill in all months for the year
+      // Fill in all periods
       const result = []
-      for (let m = 1; m <= 12; m++) {
-        const mm = String(m).padStart(2, '0')
-        const key = `${statYear}-${mm}`
-        const dateObj = new Date(statYear, m - 1, 1)
-        const monthName = dateObj.toLocaleString('default', { month: 'long' })
-        const data = stats.get(key) || { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 }
-        result.push({
-          key,
-          label: monthName,
-          ...data,
-          bal: data.inc - data.exp,
-          actualBal: (data.actualInc || 0) - (data.actualExp || 0)
-        })
+      if (isMonthView) {
+        // Days of the month
+        const [y, m] = statPeriod.split('-').map(Number)
+        const daysInMonth = new Date(y, m, 0).getDate()
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = `${statPeriod}-${String(d).padStart(2, '0')}`
+          const data = stats.get(dateKey) || { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 }
+          result.push({
+            key: dateKey,
+            label: String(d),
+            ...data,
+            bal: data.inc - data.exp,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+          })
+        }
+      } else if (isWeekView) {
+        // 7 days
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(statPeriod)
+          d.setDate(d.getDate() + i)
+          const dateKey = d.toISOString().slice(0, 10)
+          const data = stats.get(dateKey) || { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 }
+          result.push({
+            key: dateKey,
+            label: d.toLocaleDateString('default', { weekday: 'short', day: 'numeric' }),
+            ...data,
+            bal: data.inc - data.exp,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+          })
+        }
+      } else {
+        // 12 Months
+        for (let m = 1; m <= 12; m++) {
+          const mm = String(m).padStart(2, '0')
+          const key = `${statYear}-${mm}`
+          const monthName = new Date(statYear, m - 1, 1).toLocaleString('default', { month: 'long' })
+          const data = stats.get(key) || { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 }
+          result.push({
+            key,
+            label: monthName,
+            ...data,
+            bal: data.inc - data.exp,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+          })
+        }
       }
-      return result.reverse() // Dec to Jan
-    }, [statYear, txns, accounts, activeLedger.groups, accountTxns])
+      return result.reverse() // Current day/month to start (reverse for breakdown table, but wait)
+      // Actually table expects result.reverse() for newest first. 
+    }, [statPeriod, viewGranularity, txns, accounts, activeLedger.groups, accountTxns])
 
     const monthLogTxns = useMemo(() => {
       if (!showMonthLog) return []
@@ -4041,15 +4179,14 @@ export default function App() {
 
     const clientRevenue = useMemo(() => {
       const revenueMap = new Map()
-      const currentYear = statYear
 
-      const yearTxns = combinedTxns.filter(t =>
-        t.date.startsWith(String(currentYear)) &&
+      const periodTxns = combinedTxns.filter(t =>
+        t.date.startsWith(statPeriod) &&
         t.type === 'income' &&
         t.raw?.clientId
       )
 
-      for (const t of yearTxns) {
+      for (const t of periodTxns) {
         const amt = Number(t.amount || 0)
         const current = revenueMap.get(t.raw.clientId) || 0
         revenueMap.set(t.raw.clientId, current + amt)
@@ -4068,15 +4205,17 @@ export default function App() {
     }, [combinedTxns, statYear, clients])
 
     const CashflowChart = () => {
-      const data = [...monthlyStats].reverse(); // Jan to Dec
+      const data = [...monthlyStats].reverse(); // Chronological: Jan to Dec OR 1 to 31
       const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp)), 1);
+      const isMonthView = viewGranularity === 'month'
+      const isWeekView = viewGranularity === 'week'
 
       const width = 300;
-      const height = 130; // Slightly taller for X-axis labels
+      const height = 130;
       const paddingLeft = 10;
       const paddingRight = 10;
       const paddingTop = 15;
-      const paddingBottom = 25; // Space for X-axis labels
+      const paddingBottom = 25;
 
       const getNiceMax = (rawMax) => {
         const p = Math.pow(10, Math.floor(Math.log10(rawMax)));
@@ -4091,17 +4230,41 @@ export default function App() {
       };
       const chartMax = getNiceMax(maxVal);
 
-      const getX = (i) => (i * (width - paddingLeft - paddingRight)) / 11 + paddingLeft;
+      const getX = (i) => (i * (width - paddingLeft - paddingRight)) / Math.max(data.length - 1, 1) + paddingLeft;
       const getY = (v) => height - (v / chartMax) * (height - paddingTop - paddingBottom) - paddingBottom;
 
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth();
-      const currentMonthIndex = statYear === currentYear ? currentMonth : (statYear < currentYear ? 11 : -1);
+      const now = new Date()
+      const todayISOStr = now.toISOString().slice(0, 10)
+      const currentYear = now.getFullYear()
+      const currentMonthIndex = now.getMonth()
 
-      const incomePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
-      const expensePathActual = data.slice(0, currentMonthIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
+      let activeIndex = -1
+      if (isMonthView) {
+        if (statPeriod === todayISOStr.slice(0, 7)) {
+          activeIndex = now.getDate() - 1
+        } else if (statPeriod < todayISOStr.slice(0, 7)) {
+          activeIndex = data.length - 1
+        }
+      } else if (isWeekView) {
+        const start = new Date(statPeriod)
+        const diff = Math.floor((now - start) / (1000 * 60 * 60 * 24))
+        if (diff >= 0 && diff < 7) {
+          activeIndex = diff
+        } else if (diff >= 7) {
+          activeIndex = 6
+        }
+      } else {
+        if (statYear === currentYear) {
+          activeIndex = currentMonthIndex
+        } else if (statYear < currentYear) {
+          activeIndex = 11
+        }
+      }
 
-      const projStartIndex = Math.max(0, currentMonthIndex);
+      const incomePathActual = data.slice(0, activeIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.inc)}`).join(' ');
+      const expensePathActual = data.slice(0, activeIndex + 1).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(m.exp)}`).join(' ');
+
+      const projStartIndex = Math.max(0, activeIndex);
       const incomePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.inc)}`).join(' ');
       const expensePathProjected = data.slice(projStartIndex).map((m, i) => `${i === 0 ? 'M' : 'L'} ${getX(i + projStartIndex)} ${getY(m.exp)}`).join(' ');
 
@@ -4120,13 +4283,6 @@ export default function App() {
       const actualBal = actualInc - actualExp;
       const projBal = projInc - projExp;
 
-      const avgInc = totalInc / 12;
-      const lastMonth = new Date().getMonth();
-      const currentInc = data[lastMonth]?.inc || 0;
-      const incDiff = avgInc > 0 ? ((currentInc - avgInc) / avgInc) * 100 : 0;
-
-      const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
       const fmtChartLabel = (val) => {
         if (val === 0) return '0';
         if (Math.abs(val) >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -4139,7 +4295,14 @@ export default function App() {
           <div className="card" style={{ padding: '20px 16px', marginBottom: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <div style={{ fontWeight: 700, fontSize: 18 }}>Money Cashflow</div>
-              <div style={{ fontSize: 12, color: 'var(--text-sec)', background: 'var(--bg-2)', padding: '4px 8px', borderRadius: 8 }}>{statYear}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)', background: 'var(--bg-2)', padding: '4px 8px', borderRadius: 8 }}>
+                {viewGranularity === 'year'
+                  ? statYear
+                  : viewGranularity === 'month'
+                    ? new Date(statPeriod + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })
+                    : `Week of ${new Date(statPeriod).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
+                }
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 16, marginBottom: 25, fontSize: 11, color: 'var(--text-sec)', alignItems: 'center' }}>
@@ -4212,23 +4375,29 @@ export default function App() {
                   );
                 })}
 
-                {/* X-Axis Month Labels */}
-                {monthLabels.map((m, i) => (
-                  <text key={m} x={getX(i)} y={height - 5} textAnchor="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>{m}</text>
-                ))}
+                {/* X-Axis Labels */}
+                {data.map((m, i) => {
+                  const showLabel = (!isMonthView && !isWeekView) || isWeekView || i === 0 || i === data.length - 1 || (i + 1) % 5 === 0;
+                  if (!showLabel) return null;
+                  return (
+                    <text key={m.key} x={getX(i)} y={height - 5} textAnchor="middle" fill="var(--text-sec)" style={{ fontSize: 8 }}>
+                      {(isMonthView || isWeekView) ? m.label : m.label.slice(0, 3)}
+                    </text>
+                  );
+                })}
 
                 {/* Expense Line */}
-                {currentMonthIndex >= 0 && <path d={expensePathActual} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />}
-                {currentMonthIndex < 11 && <path d={expensePathProjected} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.4" />}
+                {activeIndex >= 0 && <path d={expensePathActual} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />}
+                {activeIndex < data.length - 1 && <path d={expensePathProjected} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.4" />}
                 {data.map((m, i) => (
-                  <circle key={`e-${i}`} cx={getX(i)} cy={getY(m.exp)} r="2" fill={i <= currentMonthIndex ? "#ef4444" : "#fff"} stroke="#ef4444" strokeWidth={i <= currentMonthIndex ? "0" : "1.5"} opacity={i <= currentMonthIndex ? "0.6" : "0.4"} />
+                  <circle key={`e-${i}`} cx={getX(i)} cy={getY(m.exp)} r="2" fill={i <= activeIndex ? "#ef4444" : "#fff"} stroke="#ef4444" strokeWidth={i <= activeIndex ? "0" : "1.5"} opacity={i <= activeIndex ? "0.6" : "0.4"} />
                 ))}
 
                 {/* Income Line */}
-                {currentMonthIndex >= 0 && <path d={incomePathActual} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
-                {currentMonthIndex < 11 && <path d={incomePathProjected} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.6" />}
+                {activeIndex >= 0 && <path d={incomePathActual} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+                {activeIndex < data.length - 1 && <path d={incomePathProjected} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" opacity="0.6" />}
                 {data.map((m, i) => (
-                  <circle key={`i-${i}`} cx={getX(i)} cy={getY(m.inc)} r="2" fill={i <= currentMonthIndex ? "#22c55e" : "#fff"} stroke="#22c55e" strokeWidth={i <= currentMonthIndex ? "0" : "1.5"} opacity={i <= currentMonthIndex ? "1" : "0.6"} />
+                  <circle key={`i-${i}`} cx={getX(i)} cy={getY(m.inc)} r="2" fill={i <= activeIndex ? "#22c55e" : "#fff"} stroke="#22c55e" strokeWidth={i <= activeIndex ? "0" : "1.5"} opacity={i <= activeIndex ? "1" : "0.6"} />
                 ))}
               </svg>
             </div>
@@ -4236,7 +4405,7 @@ export default function App() {
 
           <div className="card" style={{ padding: 15, margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-sec)' }}>Monthly Performance Breakdown</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-sec)' }}>{viewGranularity === 'year' ? 'Monthly' : (viewGranularity === 'month' ? 'Daily' : 'Weekly')} Performance Breakdown</div>
               <div className="modeSegmented" style={{ marginBottom: 0, padding: 2, borderRadius: 24, display: 'flex' }}>
                 <button
                   className={`modeSegBtn ${monthlyViewMode === 'actual' ? 'active' : ''}`}
@@ -4258,7 +4427,7 @@ export default function App() {
               <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ color: 'var(--text-sec)', borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 4px' }}>Month</th>
+                    <th style={{ textAlign: 'left', padding: '6px 4px' }}>{viewGranularity === 'year' ? 'Month' : 'Date'}</th>
                     <th style={{ textAlign: 'right', padding: '6px 4px' }}>Income</th>
                     {activeLedger.type === 'business' ? (
                       <>
@@ -4291,7 +4460,7 @@ export default function App() {
                           style={{ padding: '8px 4px', fontWeight: 600, cursor: 'pointer' }}
                           onClick={() => setShowMonthLog({ key: m.key, type: 'all', label: `${m.label} All` })}
                         >
-                          {m.label.slice(0, 3)}
+                          {viewGranularity === 'year' ? m.label.slice(0, 3) : m.label}
                         </td>
                         <td
                           style={{ textAlign: 'right', padding: '8px 4px', color: '#22c55e', cursor: 'pointer' }}
@@ -4342,7 +4511,16 @@ export default function App() {
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-1)' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{showMonthLog.label} Breakdown</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{statYear} • {monthlyViewMode === 'actual' ? 'Actuals' : 'Projected'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>
+                        {viewGranularity === 'year'
+                          ? statYear
+                          : viewGranularity === 'month'
+                            ? new Date(statPeriod + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })
+                            : `Week of ${new Date(statPeriod).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
+                        } • {monthlyViewMode === 'actual' ? 'Actuals' : 'Projected'}
+                      </div>
+                    </div>
                   </div>
                   <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => setShowMonthLog(null)}>Close</button>
                 </div>
@@ -4409,13 +4587,23 @@ export default function App() {
       const [breakdownType, setBreakdownType] = useState('expense');
       const [selectedCategory, setSelectedCategory] = useState(null);
 
-      const yearTxns = txns.filter(t => t.date && t.date.startsWith(String(statYear)));
-      const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-      const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const periodTxns = useMemo(() => {
+        if (viewGranularity === 'week') {
+          const start = statPeriod;
+          const end = new Date(statPeriod);
+          end.setDate(end.getDate() + 7);
+          const endISO = end.toISOString().slice(0, 10);
+          return txns.filter(t => t.date && t.date >= start && t.date < endISO);
+        }
+        return txns.filter(t => t.date && t.date.startsWith(statPeriod));
+      }, [txns, statPeriod, viewGranularity]);
+
+      const incomeTotal = periodTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const expenseTotal = periodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
 
       const catTotals = useMemo(() => {
         const totals = {};
-        yearTxns.forEach(t => {
+        periodTxns.forEach(t => {
           if (t.type === breakdownType) {
             const cat = t.category || 'Uncategorized';
             totals[cat] = (totals[cat] || 0) + Number(t.amount || 0);
@@ -4424,7 +4612,7 @@ export default function App() {
         return Object.entries(totals)
           .map(([name, total]) => ({ name, total }))
           .sort((a, b) => b.total - a.total);
-      }, [yearTxns, breakdownType]);
+      }, [periodTxns, breakdownType]);
 
       const totalAmount = catTotals.reduce((sum, c) => sum + c.total, 0);
       const colors = [
@@ -4536,7 +4724,19 @@ export default function App() {
         const pathD = points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
 
         const subTotals = {};
-        catTxns.filter(t => t.date && t.date.startsWith(String(statYear))).forEach(t => {
+        const subFilteredTxns = catTxns.filter(t => {
+          if (!t.date) return false;
+          if (viewGranularity === 'week') {
+            const start = statPeriod;
+            const end = new Date(statPeriod);
+            end.setDate(end.getDate() + 7);
+            const endISO = end.toISOString().slice(0, 10);
+            return t.date >= start && t.date < endISO;
+          }
+          return t.date.startsWith(statPeriod);
+        });
+
+        subFilteredTxns.forEach(t => {
           const sub = t.note ? t.note.split(' • ')[0] : 'General';
           subTotals[sub] = (subTotals[sub] || 0) + Number(t.amount || 0);
         });
@@ -4761,10 +4961,74 @@ export default function App() {
             {activeLedgerId === ALL_LEDGERS_ID ? 'All Ledgers' : (activeLedger.name || 'Personal')} ▾
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="ledgerPeriod" style={{ margin: 0 }}>
-              <button className="ledgerNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
-              <div className="ledgerPeriodLabel">{statYear}</div>
-              <button className="ledgerNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
+            <div className="ledgerPeriod" style={{ margin: 0, position: 'relative' }}>
+              <button className="ledgerNavBtn" onClick={() => shiftPeriod(-1)} type="button">‹</button>
+              <div
+                id="stat-period-label"
+                className="ledgerPeriodLabel"
+                onClick={() => setShowGranularityPicker(!showGranularityPicker)}
+                style={{ cursor: 'pointer', minWidth: 90, textAlign: 'center', padding: '0 4px' }}
+              >
+                {viewGranularity === 'year'
+                  ? statYear
+                  : viewGranularity === 'month'
+                    ? new Date(statPeriod + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })
+                    : `Week of ${new Date(statPeriod).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
+                }
+              </div>
+              <button className="ledgerNavBtn" onClick={() => shiftPeriod(1)} type="button">›</button>
+
+              {showGranularityPicker && (
+                <>
+                  <div
+                    id="gran-picker-backdrop"
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+                    onClick={() => setShowGranularityPicker(false)}
+                  />
+                  <div
+                    id="gran-picker-menu"
+                    className="card"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      marginTop: 8,
+                      width: 120,
+                      zIndex: 1000,
+                      padding: 4,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      borderRadius: 12
+                    }}
+                  >
+                    {[
+                      { id: 'year', label: 'Yearly' },
+                      { id: 'month', label: 'Monthly' },
+                      { id: 'week', label: 'Weekly' }
+                    ].map(g => (
+                      <button
+                        key={g.id}
+                        id={`btn-gran-${g.id}`}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          border: 'none',
+                          background: viewGranularity === g.id ? 'var(--bg-2)' : 'transparent',
+                          color: viewGranularity === g.id ? 'var(--primary)' : 'var(--text-main)',
+                          borderRadius: 8,
+                          fontSize: 13,
+                          fontWeight: viewGranularity === g.id ? 700 : 500,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleSelectGranularity(g.id)}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <button className="iconBtn" onClick={() => setShowSettings(true)}>⚙️</button>
@@ -4772,24 +5036,15 @@ export default function App() {
 
         <div className="txList">
           <div className="viewTabs">
-            <button
-              className={`viewTab ${insightTab === 'cashflow' ? 'active' : ''}`}
-              onClick={() => setInsightTab('cashflow')}
-            >
-              Cashflow
-            </button>
-            <button
-              className={`viewTab ${insightTab === 'capital' ? 'active' : ''}`}
-              onClick={() => setInsightTab('capital')}
-            >
-              Capital
-            </button>
-            <button
-              className={`viewTab ${insightTab === 'analysis' ? 'active' : ''}`}
-              onClick={() => setInsightTab('analysis')}
-            >
-              Analysis
-            </button>
+            {(settings.insightTabOrder || ['cashflow', 'capital', 'analysis']).map(id => (
+              <button
+                key={id}
+                className={`viewTab ${insightTab === id ? 'active' : ''}`}
+                onClick={() => setInsightTab(id)}
+              >
+                {id === 'cashflow' ? 'Cashflow' : id === 'capital' ? 'Capital' : 'Analysis'}
+              </button>
+            ))}
           </div>
 
           {insightTab === 'cashflow' && (
@@ -4805,7 +5060,14 @@ export default function App() {
                   )}
                 </div>
                 {clientRevenue.length === 0 ? (
-                  <div className="emptyRow">No client revenue recorded in {statYear}.</div>
+                  <div className="emptyRow">
+                    No client revenue recorded in {viewGranularity === 'year'
+                      ? statYear
+                      : viewGranularity === 'month'
+                        ? new Date(statPeriod + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })
+                        : `Week of ${new Date(statPeriod).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
+                    }.
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {clientRevenue.map(c => (
@@ -5233,6 +5495,14 @@ export default function App() {
               </div>
               <div className="stgChevron">›</div>
             </button>
+            <button id="stg-visibility" className="stgRow" onClick={() => setShowVisibilitySettings(true)}>
+              <div className="stgRowIcon">👁️</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">Visibility</div>
+                <div className="stgRowSub">Tab order, default start tab</div>
+              </div>
+              <div className="stgChevron">›</div>
+            </button>
           </div>
         </div>
 
@@ -5270,6 +5540,7 @@ export default function App() {
 
         {showGeneralSettings && <GeneralSettings />}
         {showFinanceSettings && <FinanceSettings />}
+        {showVisibilitySettings && <VisibilitySettings />}
         {showBackupSettings && <BackupSettingsScreen />}
         {showChangelog && <ChangelogScreen />}
       </div>
@@ -5381,6 +5652,163 @@ export default function App() {
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="btn" type="button" onClick={() => setShowClientsManager(false)}>
               Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function VisibilitySettings() {
+    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['cashflow', 'capital', 'analysis'])
+    const [appTabOrder, setAppTabOrder] = useState(settings.appTabOrder || ['insights', 'tx', 'accounts', 'settings'])
+    const [defaultTab, setDefaultTab] = useState(settings.defaultAppTab || 'tx')
+    const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'cashflow')
+
+    function moveInsight(index, delta) {
+      const newOrder = [...insightTabOrder]
+      const target = index + delta
+      if (target < 0 || target >= newOrder.length) return
+      const temp = newOrder[index]
+      newOrder[index] = newOrder[target]
+      newOrder[target] = temp
+      setInsightTabOrder(newOrder)
+    }
+
+    function moveAppTab(index, delta) {
+      const newOrder = [...appTabOrder]
+      const target = index + delta
+      if (target < 0 || target >= newOrder.length) return
+      const temp = newOrder[index]
+      newOrder[index] = newOrder[target]
+      newOrder[target] = temp
+      setAppTabOrder(newOrder)
+    }
+
+    function handleSave() {
+      persist({
+        ...vault,
+        settings: {
+          ...vault.settings,
+          defaultAppTab: defaultTab,
+          defaultInsightTab: defaultInsightTab,
+          insightTabOrder: insightTabOrder,
+          appTabOrder: appTabOrder
+        }
+      })
+      setShowVisibilitySettings(false)
+      show('Visibility settings saved.')
+    }
+
+    const tabLabels = {
+      cashflow: 'Cashflow',
+      capital: 'Capital',
+      analysis: 'Analysis',
+      insights: 'Insights',
+      tx: 'Transactions',
+      accounts: 'Accounts',
+      settings: 'Settings'
+    }
+
+    return (
+      <div className="modalBackdrop" onClick={() => setShowVisibilitySettings(false)}>
+        <div className="modalCard" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, width: '95%' }}>
+          <div className="modalTitle">Visibility Settings</div>
+
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-sec)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>App Tab Order</div>
+            <div className="stgGroup" style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+              {appTabOrder.map((id, i) => (
+                <div key={id} className="stgRow" style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i === appTabOrder.length - 1 ? 'none' : '1px solid var(--border)', background: 'var(--bg-1)' }}>
+                  <button
+                    onClick={() => setDefaultTab(id)}
+                    style={{ flex: 1, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', position: 'relative' }}
+                  >
+                    <div style={{ fontWeight: defaultTab === id ? 700 : 500, color: 'var(--text-main)', fontSize: 15 }}>{tabLabels[id]}</div>
+                    {defaultTab === id && (
+                      <div style={{ position: 'absolute', left: '70%', transform: 'translateX(-50%)', color: 'var(--primary)', fontWeight: 700, fontSize: 16 }}>
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="iconBtn"
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => moveAppTab(i, -1)}
+                      style={{ opacity: i === 0 ? 0.2 : 0.8, background: 'var(--bg-2)', width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="iconBtn"
+                      type="button"
+                      disabled={i === appTabOrder.length - 1}
+                      onClick={() => moveAppTab(i, 1)}
+                      style={{ opacity: i === appTabOrder.length - 1 ? 0.2 : 0.8, background: 'var(--bg-2)', width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-sec)', textAlign: 'center' }}>
+              Click a name to set as <b>default start page</b>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-sec)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Insights Tab Order</div>
+            <div className="stgGroup" style={{ border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+              {insightTabOrder.map((id, i) => (
+                <div key={id} className="stgRow" style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i === insightTabOrder.length - 1 ? 'none' : '1px solid var(--border)', background: 'var(--bg-1)' }}>
+                  <button
+                    onClick={() => setDefaultInsightTab(id)}
+                    style={{ flex: 1, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', position: 'relative' }}
+                  >
+                    <div style={{ fontWeight: defaultInsightTab === id ? 700 : 500, color: 'var(--text-main)', fontSize: 15 }}>{tabLabels[id]}</div>
+                    {defaultInsightTab === id && (
+                      <div style={{ position: 'absolute', left: '70%', transform: 'translateX(-50%)', color: 'var(--primary)', fontWeight: 700, fontSize: 16 }}>
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="iconBtn"
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => moveInsight(i, -1)}
+                      style={{ opacity: i === 0 ? 0.2 : 0.8, background: 'var(--bg-2)', width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="iconBtn"
+                      type="button"
+                      disabled={i === insightTabOrder.length - 1}
+                      onClick={() => moveInsight(i, 1)}
+                      style={{ opacity: i === insightTabOrder.length - 1 ? 0.2 : 0.8, background: 'var(--bg-2)', width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-sec)', textAlign: 'center' }}>
+              Click a name to set as <b>default sub-tab</b>
+            </div>
+          </div>
+
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8, gap: 12 }}>
+            <button className="btn" type="button" onClick={() => setShowVisibilitySettings(false)} style={{ borderRadius: 12, padding: '10px 20px', fontWeight: 600 }}>
+              Cancel
+            </button>
+            <button className="btn primary" type="button" onClick={handleSave} style={{ borderRadius: 12, padding: '10px 20px', fontWeight: 700 }}>
+              Save Changes
             </button>
           </div>
         </div>

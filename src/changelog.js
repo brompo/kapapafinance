@@ -1,5 +1,11 @@
 export const CHANGELOG = [
     {
+        version: '0.1.5',
+        date: new Date().toISOString().split('T')[0],
+        changes: [
+            'Adding Visibility Setting, where you can change the visibility of the accounts and sort them differently']
+    },
+    {
         version: '0.1.4',
         date: new Date().toISOString().split('T')[0],
         changes: [

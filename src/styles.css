@@ -1,4 +1,8 @@
-/* Minimal, clean UI */
+@keyframes slideIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 :root {
   --bg: #f5f6fb;
   --card: #ffffff;

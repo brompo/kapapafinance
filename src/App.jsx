@@ -23,8 +23,8 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   'Personal Care',
   'Personal Comms',
   'Transportation',
+  'Apps & Accessories',
   'Family Utilities',
-  'Technology Tools',
   'Family Expenses',
   'Helping Out',
   'Loans',
@@ -61,7 +61,6 @@ const DEFAULT_OPPS_CATEGORIES = [
 ]
 const CATEGORY_SUBS = {
   Transportation: [
-    'Cleaning',
     'Public Trans',
     'Fuel',
     'Maintenance',
@@ -97,8 +96,11 @@ const GROUP_IDS = {
   credit: 'group-credit',
   investment: 'group-invest',
   shares: 'group-shares',
-  realEstate: 'group-real-estate'
+  realEstate: 'group-real-estate',
+  businessCapital: 'group-business-cap',
+  businessDebt: 'group-business-debt'
 }
+const DEFAULT_TAB = 'tx' // insights | accounts | tx | settings
 
 const ALL_LEDGERS_ID = 'all'
 
@@ -415,7 +417,7 @@ function GlobalToast() {
 
 export default function App() {
   const [stage, setStage] = useState('loading') // loading | setpin | unlock | app
-  const [tab, setTab] = useState('insights') // home | accounts | tx | settings
+  const [tab, setTab] = useState(DEFAULT_TAB) // home | accounts | tx | settings
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
   const [showGeneralSettings, setShowGeneralSettings] = useState(false)
   const [showFinanceSettings, setShowFinanceSettings] = useState(false)
@@ -557,7 +559,7 @@ export default function App() {
       const plain = loadVaultPlain()
       setVaultState(normalizeVault(plain))
       setStage('app')
-      setTab('insights')
+      setTab(DEFAULT_TAB)
       return
     }
     setStage(hasPin() ? 'unlock' : 'setpin')
@@ -791,7 +793,7 @@ export default function App() {
       setVaultState(nextVault)
       localStorage.setItem(PIN_FLOW_KEY, 'false')
       setStage('app')
-      setTab('insights')
+      setTab(DEFAULT_TAB)
       show('PIN lock disabled.')
     } catch (e) {
       show('Could not disable PIN lock.')
@@ -814,7 +816,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab('insights')
+      setTab(DEFAULT_TAB)
       show('PIN set. Vault created.')
     } catch (e) {
       show(e.message || 'Failed to set PIN.')
@@ -833,7 +835,7 @@ export default function App() {
       setVaultState(data)
 
       setStage('app')
-      setTab('insights')
+      setTab(DEFAULT_TAB)
       show('Unlocked.')
     } catch (e) {
       show('Wrong PIN or vault corrupted.')
@@ -4095,7 +4097,11 @@ export default function App() {
 
     const CategoryBreakdown = () => {
       const [breakdownType, setBreakdownType] = useState('expense');
+      const [selectedCategory, setSelectedCategory] = useState(null);
+
       const yearTxns = txns.filter(t => t.date && t.date.startsWith(String(statYear)));
+      const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
 
       const catTotals = useMemo(() => {
         const totals = {};
@@ -4181,7 +4187,6 @@ export default function App() {
             curr.label.y = prev.label.y + minGap;
           }
         }
-        // Second pass from bottom to top to balance
         for (let i = labels.length - 2; i >= 0; i--) {
           const next = labels[i + 1];
           const curr = labels[i];
@@ -4189,24 +4194,105 @@ export default function App() {
             curr.label.y = next.label.y - minGap;
           }
         }
-        // Adjust elbows to match new Y
-        labels.forEach(s => {
-          s.label.ey = s.label.y;
-        });
+        labels.forEach(s => { s.label.ey = s.label.y; });
       };
 
       deconflict(leftLabels);
       deconflict(rightLabels);
 
-      const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-      const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const CategoryDetail = ({ category }) => {
+        const catTxns = txns.filter(t => (t.category || 'Uncategorized') === category && t.type === breakdownType);
+
+        const currentYear = new Date().getFullYear();
+        const years = Array.from({ length: 7 }, (_, i) => currentYear - 6 + i);
+        const trendData = years.map(y => {
+          const yearTotal = catTxns
+            .filter(t => t.date && t.date.startsWith(String(y)))
+            .reduce((s, t) => s + Number(t.amount || 0), 0);
+          return { year: y, total: yearTotal };
+        });
+
+        const maxVal = Math.max(...trendData.map(d => d.total), 1);
+        const chartHeight = 120;
+        const chartWidth = 300;
+        const padding = 30;
+
+        const points = trendData.map((d, i) => {
+          const x = padding + (i * (chartWidth - padding * 2) / (years.length - 1));
+          const y = chartHeight - 20 - (d.total / maxVal * (chartHeight - 40));
+          return { x, y, val: d.total, year: d.year };
+        });
+
+        const pathD = points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+
+        const subTotals = {};
+        catTxns.filter(t => t.date && t.date.startsWith(String(statYear))).forEach(t => {
+          const sub = t.note ? t.note.split(' • ')[0] : 'General';
+          subTotals[sub] = (subTotals[sub] || 0) + Number(t.amount || 0);
+        });
+        const subSegments = Object.entries(subTotals)
+          .map(([name, total]) => ({ name, total }))
+          .sort((a, b) => b.total - a.total);
+        const subTotalAmount = subSegments.reduce((s, c) => s + c.total, 0);
+
+        return (
+          <div style={{ animation: 'slideIn 0.3s ease-out' }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '15px 10px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
+              <button className="ledgerGhost" onClick={() => setSelectedCategory(null)} style={{ padding: '8px 12px' }}>‹ Back</button>
+              <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{category}</div>
+              <div style={{ width: 60 }} />
+            </div>
+
+            <div className="card" style={{ padding: '20px 15px', margin: '15px 10px' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 15, color: 'var(--text-sec)' }}>Historical Trend</div>
+              <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ overflow: 'visible' }}>
+                {[0, 0.5, 1].map(p => (
+                  <line key={p} x1={padding} y1={chartHeight - 20 - p * (chartHeight - 40)} x2={chartWidth - padding} y2={chartHeight - 20 - p * (chartHeight - 40)} stroke="#f1f5f9" strokeWidth="1" />
+                ))}
+                <path d={pathD} fill="none" stroke={breakdownType === 'income' ? '#22c55e' : '#ef4444'} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                {points.map((p, i) => (
+                  <g key={i}>
+                    <circle cx={p.x} cy={p.y} r="4" fill="#fff" stroke={breakdownType === 'income' ? '#22c55e' : '#ef4444'} strokeWidth="2" />
+                    {p.val > 0 && <text x={p.x} y={p.y - 12} textAnchor="middle" style={{ fontSize: 8, fontWeight: 700, fill: '#64748b' }}>{fmtCompact(p.val)}</text>}
+                    <text x={p.x} y={chartHeight - 5} textAnchor="middle" style={{ fontSize: 9, fill: '#94a3b8' }}>{p.year}</text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px 30px 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f3f3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{category} Breakdown</span>
+                <span style={{ fontWeight: 700, fontSize: 14, color: breakdownType === 'income' ? 'var(--success)' : 'var(--danger)' }}>{fmtTZS(subTotalAmount)}</span>
+              </div>
+              {subSegments.map((s, i) => {
+                const subPct = subTotalAmount > 0 ? (s.total / subTotalAmount) * 100 : 0;
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: i === subSegments.length - 1 ? 'none' : '1px solid #f3f3f3' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ background: colors[i % colors.length], color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center' }}>
+                        {Math.round(subPct)}%
+                      </div>
+                      <div style={{ fontWeight: 500, fontSize: 14 }}>{s.name}</div>
+                    </div>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{fmtTZS(s.total)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      if (selectedCategory) {
+        return <CategoryDetail category={selectedCategory} />;
+      }
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 30 }}>
-          {/* Top Headers */}
           <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', marginBottom: 15 }}>
             <button
-              onClick={() => setBreakdownType('income')}
+              onClick={() => { setBreakdownType('income'); setSelectedCategory(null); }}
               style={{
                 flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
                 borderBottom: breakdownType === 'income' ? '3px solid #6366f1' : '3px solid transparent',
@@ -4217,7 +4303,7 @@ export default function App() {
               <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Income {fmtCompact(incomeTotal)}</div>
             </button>
             <button
-              onClick={() => setBreakdownType('expense')}
+              onClick={() => { setBreakdownType('expense'); setSelectedCategory(null); }}
               style={{
                 flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
                 borderBottom: breakdownType === 'expense' ? '3px solid #ef4444' : '3px solid transparent',
@@ -4229,33 +4315,17 @@ export default function App() {
             </button>
           </div>
 
-          {/* Pie Chart Card */}
           <div className="card" style={{ padding: '10px 10px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', background: '#fff' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: 400, height: 340 }}>
               <svg viewBox={`0 0 ${fullWidth} ${fullHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                 {segments.map((s, i) => (
-                  <g key={i}>
+                  <g key={i} onClick={() => setSelectedCategory(s.name)} style={{ cursor: 'pointer' }}>
                     <path d={s.pathData} fill={s.color} stroke="#fff" strokeWidth="1" />
-                    {/* Callout Line */}
-                    <path
-                      d={`M ${s.label.sx} ${s.label.sy} Q ${s.label.ex} ${s.label.ey} ${s.label.x} ${s.label.y}`}
-                      fill="none" stroke={s.color} strokeWidth="0.8" opacity="0.6"
-                    />
-                    {/* Label Text */}
-                    <text
-                      x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)}
-                      y={s.label.y - 4}
-                      textAnchor={s.label.anchor}
-                      style={{ fontSize: 9, fontWeight: 700, fill: '#333' }}
-                    >
+                    <path d={`M ${s.label.sx} ${s.label.sy} Q ${s.label.ex} ${s.label.ey} ${s.label.x} ${s.label.y}`} fill="none" stroke={s.color} strokeWidth="0.8" opacity="0.6" />
+                    <text x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)} y={s.label.y - 4} textAnchor={s.label.anchor} style={{ fontSize: 9, fontWeight: 700, fill: '#333' }}>
                       {s.name.length > 12 ? s.name.slice(0, 10) + '...' : s.name}
                     </text>
-                    <text
-                      x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)}
-                      y={s.label.y + 8}
-                      textAnchor={s.label.anchor}
-                      style={{ fontSize: 8, fill: 'var(--text-sec)', fontWeight: 500 }}
-                    >
+                    <text x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)} y={s.label.y + 8} textAnchor={s.label.anchor} style={{ fontSize: 8, fill: 'var(--text-sec)', fontWeight: 500 }}>
                       {s.percentage}%
                     </text>
                   </g>
@@ -4264,24 +4334,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* List */}
           <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
             {segments.length === 0 ? (
               <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-sec)' }}>No data for this period</div>
             ) : (
               segments.map((s, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '16px 20px', borderBottom: i === segments.length - 1 ? 'none' : '1px solid #f3f3f3'
-                  }}
-                >
+                <div key={i} onClick={() => setSelectedCategory(s.name)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: i === segments.length - 1 ? 'none' : '1px solid #f3f3f3', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      background: s.color, color: '#fff', fontSize: 10, fontWeight: 800,
-                      padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center'
-                    }}>
+                    <div style={{ background: s.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center' }}>
                       {Math.round(s.percentage)}%
                     </div>
                     <div style={{ fontWeight: 500, fontSize: 14 }}>{s.name}</div>
@@ -4383,22 +4443,15 @@ export default function App() {
           <button className="ledgerGhost" type="button" onClick={() => setShowLedgerPicker(true)}>
             {activeLedgerId === ALL_LEDGERS_ID ? 'All Ledgers' : (activeLedger.name || 'Personal')} ▾
           </button>
-
-          <div className="brand" style={{ position: 'absolute', left: '30%', transform: 'translateX(-50%)' }}>
-            <div className="title" style={{ fontWeight: 600, fontSize: 16 }}>Insights</div>
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="ledgerPeriod" style={{ margin: 0 }}>
               <button className="ledgerNavBtn" onClick={() => setStatYear(y => y - 1)} type="button">‹</button>
               <div className="ledgerPeriodLabel">{statYear}</div>
               <button className="ledgerNavBtn" onClick={() => setStatYear(y => y + 1)} type="button">›</button>
             </div>
-            <button className="iconBtn" onClick={() => setShowSettings(true)}>⚙️</button>
           </div>
+          <button className="iconBtn" onClick={() => setShowSettings(true)}>⚙️</button>
         </div>
-
-
 
         <div className="txList">
           <div className="viewTabs">

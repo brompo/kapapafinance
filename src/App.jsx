@@ -4094,179 +4094,206 @@ export default function App() {
     };
 
     const CategoryBreakdown = () => {
-        const [breakdownType, setBreakdownType] = useState('expense');
-        const yearTxns = txns.filter(t => t.date && t.date.startsWith(String(statYear)));
-        
-        const catTotals = useMemo(() => {
-          const totals = {};
-          yearTxns.forEach(t => {
-            if (t.type === breakdownType) {
-              const cat = t.category || 'Uncategorized';
-              totals[cat] = (totals[cat] || 0) + Number(t.amount || 0);
-            }
-          });
-          return Object.entries(totals)
-            .map(([name, total]) => ({ name, total }))
-            .sort((a, b) => b.total - a.total);
-        }, [yearTxns, breakdownType]);
+      const [breakdownType, setBreakdownType] = useState('expense');
+      const yearTxns = txns.filter(t => t.date && t.date.startsWith(String(statYear)));
 
-        const totalAmount = catTotals.reduce((sum, c) => sum + c.total, 0);
-        const colors = [
-          '#FF6B6B', '#FF9E7D', '#FFD93D', '#A8E6CF', '#56C596', 
-          '#4D96FF', '#6BCBFF', '#9B72AA', '#E06C9F', '#F8BD7F'
-        ];
-
-        // Pie Chart & Label logic
-        const radius = 60;
-        const centerX = 160;
-        const centerY = 100;
-        const fullWidth = 320;
-        const fullHeight = 200;
-        
-        let cumulativeAngle = -Math.PI / 2;
-
-        const segments = catTotals.map((c, i) => {
-          const percentage = totalAmount > 0 ? c.total / totalAmount : 0;
-          const angle = percentage * 2 * Math.PI;
-          const middleAngle = cumulativeAngle + angle / 2;
-          
-          // Outer arc points
-          const x1 = centerX + radius * Math.cos(cumulativeAngle);
-          const y1 = centerY + radius * Math.sin(cumulativeAngle);
-          cumulativeAngle += angle;
-          const x2 = centerX + radius * Math.cos(cumulativeAngle);
-          const y2 = centerY + radius * Math.sin(cumulativeAngle);
-          const largeArcFlag = percentage > 0.5 ? 1 : 0;
-          
-          // Slice Path (to center)
-          const pathData = percentage === 1
-            ? `M ${centerX} ${centerY - radius} A ${radius} ${radius} 0 1 1 ${centerX - 0.01} ${centerY - radius} Z`
-            : `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
-
-          // Label placement logic
-          const labelDist = radius + 25;
-          const lineStartDist = radius + 2;
-          const lineEndDist = radius + 20;
-
-          const lx = centerX + labelDist * Math.cos(middleAngle);
-          const ly = centerY + labelDist * Math.sin(middleAngle);
-
-          const sx = centerX + lineStartDist * Math.cos(middleAngle);
-          const sy = centerY + lineStartDist * Math.sin(middleAngle);
-          const ex = centerX + lineEndDist * Math.cos(middleAngle);
-          const ey = centerY + lineEndDist * Math.sin(middleAngle);
-
-          return {
-            ...c,
-            percentage: (percentage * 100).toFixed(1),
-            pathData,
-            color: colors[i % colors.length],
-            label: {
-              x: lx,
-              y: ly,
-              sx, sy, ex, ey,
-              anchor: Math.cos(middleAngle) > 0 ? 'start' : 'end',
-              angle: middleAngle
-            }
-          };
+      const catTotals = useMemo(() => {
+        const totals = {};
+        yearTxns.forEach(t => {
+          if (t.type === breakdownType) {
+            const cat = t.category || 'Uncategorized';
+            totals[cat] = (totals[cat] || 0) + Number(t.amount || 0);
+          }
         });
+        return Object.entries(totals)
+          .map(([name, total]) => ({ name, total }))
+          .sort((a, b) => b.total - a.total);
+      }, [yearTxns, breakdownType]);
 
-        const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-        const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const totalAmount = catTotals.reduce((sum, c) => sum + c.total, 0);
+      const colors = [
+        '#FF6B6B', '#FF9E7D', '#FFD93D', '#A8E6CF', '#56C596',
+        '#4D96FF', '#6BCBFF', '#9B72AA', '#E06C9F', '#F8BD7F'
+      ];
 
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 30 }}>
-            {/* Top Headers */}
-            <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', marginBottom: 15 }}>
-              <button 
-                onClick={() => setBreakdownType('income')}
-                style={{ 
-                  flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
-                  borderBottom: breakdownType === 'income' ? '3px solid #6366f1' : '3px solid transparent',
-                  transition: 'all 0.2s', cursor: 'pointer',
-                  opacity: breakdownType === 'income' ? 1 : 0.5
-                }}
-              >
-                <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Income {fmtCompact(incomeTotal)}</div>
-              </button>
-              <button 
-                onClick={() => setBreakdownType('expense')}
-                style={{ 
-                  flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
-                  borderBottom: breakdownType === 'expense' ? '3px solid #ef4444' : '3px solid transparent',
-                  transition: 'all 0.2s', cursor: 'pointer',
-                  opacity: breakdownType === 'expense' ? 1 : 0.5
-                }}
-              >
-                <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Exp. {fmtCompact(expenseTotal)}</div>
-              </button>
-            </div>
+      // Pie Chart & Label logic
+      const radius = 60;
+      const centerX = 160;
+      const centerY = 140;
+      const fullWidth = 320;
+      const fullHeight = 280;
 
-            {/* Pie Chart Card */}
-            <div className="card" style={{ padding: '40px 10px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', background: '#fff' }}>
-              <div style={{ position: 'relative', width: '100%', maxWidth: 400, height: 260 }}>
-                <svg viewBox={`0 0 ${fullWidth} ${fullHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                  {segments.map((s, i) => (
-                    <g key={i}>
-                      <path d={s.pathData} fill={s.color} stroke="#fff" strokeWidth="1" />
-                      {/* Callout Line */}
-                      <path 
-                        d={`M ${s.label.sx} ${s.label.sy} Q ${s.label.ex} ${s.label.ey} ${s.label.x} ${s.label.y}`} 
-                        fill="none" stroke={s.color} strokeWidth="0.8" opacity="0.6" 
-                      />
-                      {/* Label Text */}
-                      <text 
-                        x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)} 
-                        y={s.label.y - 4} 
-                        textAnchor={s.label.anchor} 
-                        style={{ fontSize: 9, fontWeight: 700, fill: '#333' }}
-                      >
-                        {s.name.length > 12 ? s.name.slice(0, 10) + '...' : s.name}
-                      </text>
-                      <text 
-                        x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)} 
-                        y={s.label.y + 8} 
-                        textAnchor={s.label.anchor} 
-                        style={{ fontSize: 8, fill: 'var(--text-sec)', fontWeight: 500 }}
-                      >
-                        {s.percentage}%
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              </div>
-            </div>
+      let cumulativeAngle = -Math.PI / 2;
 
-            {/* List */}
-            <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-              {segments.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-sec)' }}>No data for this period</div>
-              ) : (
-                segments.map((s, i) => (
-                  <div 
-                    key={i} 
-                    style={{ 
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                      padding: '16px 20px', borderBottom: i === segments.length - 1 ? 'none' : '1px solid var(--border-subtle)' 
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ 
-                        background: s.color, color: '#fff', fontSize: 10, fontWeight: 800, 
-                        padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center' 
-                      }}>
-                        {Math.round(s.percentage)}%
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtTZS(s.total)}</div>
-                  </div>
-                ))
-              )}
+      let segments = catTotals.map((c, i) => {
+        const percentage = totalAmount > 0 ? c.total / totalAmount : 0;
+        const angle = percentage * 2 * Math.PI;
+        const middleAngle = cumulativeAngle + angle / 2;
+
+        const x1 = centerX + radius * Math.cos(cumulativeAngle);
+        const y1 = centerY + radius * Math.sin(cumulativeAngle);
+        cumulativeAngle += angle;
+        const x2 = centerX + radius * Math.cos(cumulativeAngle);
+        const y2 = centerY + radius * Math.sin(cumulativeAngle);
+        const largeArcFlag = percentage > 0.5 ? 1 : 0;
+
+        const pathData = percentage === 1
+          ? `M ${centerX} ${centerY - radius} A ${radius} ${radius} 0 1 1 ${centerX - 0.01} ${centerY - radius} Z`
+          : `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+
+        const labelDist = radius + 30;
+        const lineStartDist = radius + 2;
+        const lineEndDist = radius + 20;
+
+        const lx = centerX + labelDist * Math.cos(middleAngle);
+        const ly = centerY + labelDist * Math.sin(middleAngle);
+
+        const sx = centerX + lineStartDist * Math.cos(middleAngle);
+        const sy = centerY + lineStartDist * Math.sin(middleAngle);
+        const ex = centerX + lineEndDist * Math.cos(middleAngle);
+        const ey = centerY + lineEndDist * Math.sin(middleAngle);
+
+        return {
+          ...c,
+          percentage: (percentage * 100).toFixed(1),
+          pathData,
+          color: colors[i % colors.length],
+          label: {
+            x: lx,
+            y: ly,
+            sx, sy, ex, ey,
+            anchor: Math.cos(middleAngle) > 0 ? 'start' : 'end',
+            angle: middleAngle
+          }
+        };
+      });
+
+      // Label de-confliction (staggering)
+      const leftLabels = segments.filter(s => s.label.anchor === 'end').sort((a, b) => a.label.y - b.label.y);
+      const rightLabels = segments.filter(s => s.label.anchor === 'start').sort((a, b) => a.label.y - b.label.y);
+      const minGap = 22;
+
+      const deconflict = (labels) => {
+        for (let i = 1; i < labels.length; i++) {
+          const prev = labels[i - 1];
+          const curr = labels[i];
+          if (curr.label.y < prev.label.y + minGap) {
+            curr.label.y = prev.label.y + minGap;
+          }
+        }
+        // Second pass from bottom to top to balance
+        for (let i = labels.length - 2; i >= 0; i--) {
+          const next = labels[i + 1];
+          const curr = labels[i];
+          if (curr.label.y > next.label.y - minGap) {
+            curr.label.y = next.label.y - minGap;
+          }
+        }
+        // Adjust elbows to match new Y
+        labels.forEach(s => {
+          s.label.ey = s.label.y;
+        });
+      };
+
+      deconflict(leftLabels);
+      deconflict(rightLabels);
+
+      const incomeTotal = yearTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const expenseTotal = yearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 30 }}>
+          {/* Top Headers */}
+          <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', marginBottom: 15 }}>
+            <button
+              onClick={() => setBreakdownType('income')}
+              style={{
+                flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
+                borderBottom: breakdownType === 'income' ? '3px solid #6366f1' : '3px solid transparent',
+                transition: 'all 0.2s', cursor: 'pointer',
+                opacity: breakdownType === 'income' ? 1 : 0.5
+              }}
+            >
+              <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Income {fmtCompact(incomeTotal)}</div>
+            </button>
+            <button
+              onClick={() => setBreakdownType('expense')}
+              style={{
+                flex: 1, padding: '16px 12px', border: 'none', background: 'transparent',
+                borderBottom: breakdownType === 'expense' ? '3px solid #ef4444' : '3px solid transparent',
+                transition: 'all 0.2s', cursor: 'pointer',
+                opacity: breakdownType === 'expense' ? 1 : 0.5
+              }}
+            >
+              <div style={{ color: 'var(--text-sec)', fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Exp. {fmtCompact(expenseTotal)}</div>
+            </button>
+          </div>
+
+          {/* Pie Chart Card */}
+          <div className="card" style={{ padding: '40px 10px', margin: '0 10px 15px 10px', display: 'flex', justifyContent: 'center', background: '#fff' }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: 400, height: 340 }}>
+              <svg viewBox={`0 0 ${fullWidth} ${fullHeight}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                {segments.map((s, i) => (
+                  <g key={i}>
+                    <path d={s.pathData} fill={s.color} stroke="#fff" strokeWidth="1" />
+                    {/* Callout Line */}
+                    <path
+                      d={`M ${s.label.sx} ${s.label.sy} Q ${s.label.ex} ${s.label.ey} ${s.label.x} ${s.label.y}`}
+                      fill="none" stroke={s.color} strokeWidth="0.8" opacity="0.6"
+                    />
+                    {/* Label Text */}
+                    <text
+                      x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)}
+                      y={s.label.y - 4}
+                      textAnchor={s.label.anchor}
+                      style={{ fontSize: 9, fontWeight: 700, fill: '#333' }}
+                    >
+                      {s.name.length > 12 ? s.name.slice(0, 10) + '...' : s.name}
+                    </text>
+                    <text
+                      x={s.label.x + (s.label.anchor === 'start' ? 5 : -5)}
+                      y={s.label.y + 8}
+                      textAnchor={s.label.anchor}
+                      style={{ fontSize: 8, fill: 'var(--text-sec)', fontWeight: 500 }}
+                    >
+                      {s.percentage}%
+                    </text>
+                  </g>
+                ))}
+              </svg>
             </div>
           </div>
-        );
-      };
+
+          {/* List */}
+          <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {segments.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-sec)' }}>No data for this period</div>
+            ) : (
+              segments.map((s, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '16px 20px', borderBottom: i === segments.length - 1 ? 'none' : '1px solid #f3f3f3'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      background: s.color, color: '#fff', fontSize: 10, fontWeight: 800,
+                      padding: '4px 8px', borderRadius: 6, minWidth: 40, textAlign: 'center'
+                    }}>
+                      {Math.round(s.percentage)}%
+                    </div>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{s.name}</div>
+                  </div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>{fmtTZS(s.total)}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    };
 
     if (selectedTxn) {
       return (

@@ -5460,24 +5460,6 @@ export default function App() {
           </div>
         </div>
 
-        {showImportModal && importFileData && (
-          <div className="modalBackdrop" style={{ zIndex: 1100 }} onClick={() => { setShowImportModal(false); setImportFileData(null) }}>
-            <div className="modalCard" onClick={e => e.stopPropagation()}>
-              <div className="modalTitle">Confirm Import</div>
-              <div className="field">
-                <div style={{ fontWeight: 500 }}>{importFileData.name}</div>
-                <div className="small">{(importFileData.size / 1024).toFixed(1)} KB</div>
-              </div>
-              <div className="small" style={{ color: '#d27b00', marginTop: 8 }}>
-                This will replace your current data. You will need to unlock with the backup's PIN.
-              </div>
-              <div className="modalActions">
-                <button className="btn" onClick={() => { setShowImportModal(false); setImportFileData(null) }}>Cancel</button>
-                <button className="btn primary" onClick={handleImportConfirm}>Import</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     )
   }
@@ -6060,6 +6042,25 @@ export default function App() {
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn" onClick={() => setShowAddLedgerModal(null)}>Cancel</button>
               <button className="btn primary" onClick={handleSaveNewLedger}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && importFileData && (
+        <div className="modalBackdrop" style={{ zIndex: 1100 }} onClick={() => { setShowImportModal(false); setImportFileData(null) }}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Confirm Import</div>
+            <div className="field">
+              <div style={{ fontWeight: 500 }}>{importFileData.name}</div>
+              <div className="small">{(importFileData.size / 1024).toFixed(1)} KB</div>
+            </div>
+            <div className="small" style={{ color: '#d27b00', marginTop: 8 }}>
+              This will replace your current data. You will need to unlock with the backup's PIN.
+            </div>
+            <div className="modalActions">
+              <button className="btn" onClick={() => { setShowImportModal(false); setImportFileData(null) }}>Cancel</button>
+              <button className="btn primary" onClick={handleImportConfirm}>Import</button>
             </div>
           </div>
         </div>

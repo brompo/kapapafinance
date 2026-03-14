@@ -785,6 +785,8 @@ export default function App() {
   const [restoreFiles, setRestoreFiles] = useState([])
   const [restorePin, setRestorePin] = useState('')
   const [selectedRestoreId, setSelectedRestoreId] = useState('')
+  const [importFileData, setImportFileData] = useState(null)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [showClientsManager, setShowClientsManager] = useState(false)
   const [showAddLedgerModal, setShowAddLedgerModal] = useState(null)
   const [addLedgerName, setAddLedgerName] = useState('')
@@ -2240,11 +2242,25 @@ export default function App() {
     show('Exported encrypted backup.')
   }
 
-  async function handleImport(file) {
+  async function handleImportLoad(file) {
     try {
       const text = await file.text()
-      importEncryptedBackup(text)
-      show('Imported. Unlock with your PIN.')
+      const parsed = JSON.parse(text)
+      if (!parsed || typeof parsed !== 'object') throw new Error('Invalid backup file.')
+      if (!parsed.meta || !parsed.vault) throw new Error('Backup missing meta or vault.')
+      setImportFileData({ name: file.name, size: file.size, text })
+      setShowImportModal(true)
+    } catch (e) {
+      show(e.message || 'Invalid JSON file.')
+    }
+  }
+
+  function handleImportConfirm() {
+    try {
+      importEncryptedBackup(importFileData.text)
+      setShowImportModal(false)
+      setImportFileData(null)
+      show('Import successful! Unlock with your PIN.')
       setStage('unlock')
       const fresh = normalizeVault(null)
       setVaultState({
@@ -5366,7 +5382,7 @@ export default function App() {
                   onChange={e => {
                     const file = e.target.files?.[0]
                     if (file) {
-                      handleImport(file)
+                      handleImportLoad(file)
                       e.target.value = ''
                     }
                   }}
@@ -5446,6 +5462,25 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {showImportModal && importFileData && (
+          <div className="modalBackdrop" onClick={() => { setShowImportModal(false); setImportFileData(null) }}>
+            <div className="modalCard" onClick={e => e.stopPropagation()}>
+              <div className="modalTitle">Confirm Import</div>
+              <div className="field">
+                <div style={{ fontWeight: 500 }}>{importFileData.name}</div>
+                <div className="small">{(importFileData.size / 1024).toFixed(1)} KB</div>
+              </div>
+              <div className="small" style={{ color: '#d27b00', marginTop: 8 }}>
+                This will replace your current data. You will need to unlock with the backup's PIN.
+              </div>
+              <div className="modalActions">
+                <button className="btn" onClick={() => { setShowImportModal(false); setImportFileData(null) }}>Cancel</button>
+                <button className="btn primary" onClick={handleImportConfirm}>Import</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

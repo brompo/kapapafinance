@@ -5381,10 +5381,7 @@ export default function App() {
                   style={{ display: 'none' }}
                   onChange={e => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      handleImportLoad(file)
-                      e.target.value = ''
-                    }
+                    if (file) handleImportLoad(file)
                   }}
                 />
               </label>
@@ -5464,7 +5461,7 @@ export default function App() {
         </div>
 
         {showImportModal && importFileData && (
-          <div className="modalBackdrop" onClick={() => { setShowImportModal(false); setImportFileData(null) }}>
+          <div className="modalBackdrop" style={{ zIndex: 1100 }} onClick={() => { setShowImportModal(false); setImportFileData(null) }}>
             <div className="modalCard" onClick={e => e.stopPropagation()}>
               <div className="modalTitle">Confirm Import</div>
               <div className="field">

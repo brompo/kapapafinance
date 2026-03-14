@@ -5361,9 +5361,15 @@ export default function App() {
                 Import JSON
                 <input
                   type="file"
-                  accept="application/json"
+                  accept=".json,application/json"
                   style={{ display: 'none' }}
-                  onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      handleImport(file)
+                      e.target.value = ''
+                    }
+                  }}
                 />
               </label>
             </div>

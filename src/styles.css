@@ -2123,11 +2123,11 @@ label {
 .customKeypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 8px; /* Reduced from 12px */
   background: #f7f8fc;
-  padding: 16px;
+  padding: 10px; /* Reduced from 16px */
   border-radius: 16px;
-  margin: 16px 0;
+  margin: 12px 0; /* Slightly tighter */
 }
 
 .keypadBtn {
@@ -2135,8 +2135,8 @@ label {
   color: #1f2332;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
-  font-size: 20px;
+  padding: 12px; /* Reduced from 16px */
+  font-size: 18px; /* Reduced from 20px */
   font-weight: 600;
   cursor: pointer;
   display: flex;

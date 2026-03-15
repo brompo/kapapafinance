@@ -2938,7 +2938,7 @@ export default function App() {
     const [reimburseDate, setReimburseDate] = useState(todayISO())
     const [reimburseError, setReimburseError] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
-    const [showAddForm, setShowAddForm] = useState(false)
+    const [showAddForm, setShowAddForm] = useState(true)
     const [isSelectMode, setIsSelectMode] = useState(false)
     const [selectedTxnIds, setSelectedTxnIds] = useState([])
     const [showBatchEditModal, setShowBatchEditModal] = useState(false)
@@ -3210,28 +3210,32 @@ export default function App() {
 
     return (
       <div className="catDetailScreen">
-        <div className="catDetailHeader">
-          <button className="iconBtn" onClick={onClose} type="button">✕</button>
-          <div className="catDetailTitle">{category.name}</div>
-          <div className="catDetailActions">
-            <button className="pillBtn" type="button" onClick={openEditModal} style={{ padding: '6px 12px', fontSize: 12 }}>Edit Card</button>
-          </div>
-        </div>
-
-        <div className="catDetailTotal">{fmtTZS(total)}</div>
-
-        <div className={`catDetailStats ${budget > 0 && ratio >= 1 ? 'over' : 'ok'}`}>
-          <div>
-            <div className="catDetailStatValue">{fmtTZS(spent)}</div>
-            <div className="catDetailStatLabel">{budget > 0 ? `${pct}% Spent` : 'Spent'}</div>
-          </div>
-          <div>
-            <div className="catDetailStatValue">{fmtTZS(budget > 0 ? left : 0)}</div>
-            <div className="catDetailStatLabel">
-              {budget > 0 ? (over > 0 ? `${pct}% Exceeding` : `${(100 - Math.min(ratio * 100, 100)).toFixed(1)}% Left`) : 'No budget'}
+        {(() => {
+          const isOver = budget > 0 && ratio >= 1;
+          const headerBg = meta?.color || (isOver ? '#fee2e2' : '#f0fdf4');
+          return (
+            <div className="catDetailHeader" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: headerBg, borderBottom: meta?.color ? 'none' : `1px solid ${isOver ? '#fecaca' : '#dcfce7'}` }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <button className="iconBtn" onClick={onClose} type="button" style={{ marginTop: 2 }}>✕</button>
+                <div>
+                  <div className="catDetailTitle" style={{ fontSize: 17, fontWeight: 700, lineHeight: '1.2' }}>{category.name}</div>
+                  <button 
+                    type="button" 
+                    onClick={openEditModal} 
+                    style={{ 
+                      background: 'none', border: 'none', padding: 0, 
+                      color: '#4b5563', fontSize: 11, textDecoration: 'underline', 
+                      cursor: 'pointer', display: 'block', marginTop: 2 
+                    }}
+                  >
+                    Edit Card
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {subcats.length > 0 && (
           <div className="catDetailChips">
@@ -3255,67 +3259,95 @@ export default function App() {
           </div>
         )}
 
-        {!showAddForm && (
-          <div style={{ margin: '0 10px 16px' }}>
-            <button
-              className="btn"
-              type="button"
-              style={{ 
-                width: '100%', borderRadius: 16, padding: '15px', 
-                background: '#ffd76a', color: '#575866', // Golden yellow background with slate text
-                fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, 
-                border: '1px solid #ffd1d1', boxShadow: '0 2px 8px rgba(234, 179, 8, 0.15)',
-                cursor: 'pointer'
-              }}
-              onClick={() => setShowAddForm(true)}
-            >
-              + Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
-            </button>
-          </div>
-        )}
-
-        <div className="catDetailForm" style={!showAddForm ? { display: 'none' } : {}}>
-          <div className="field">
-            <label>Amount (TZS)</label>
-            <input
-              inputMode="none"
-              value={amount}
-              onChange={e => {
-                setAmount(e.target.value)
-                if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
-              }}
-              placeholder="e.g. 10000"
-              style={amountError ? { borderColor: '#f8a5a5' } : {}}
-              autoFocus
-            />
-            {amountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please add an amount</div>}
-          </div>
-          <div className="field">
-            <label>Date</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {showAddForm && (
+        <div className="catDetailForm">
+          {/* Row 1: Amount and Account */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+            <div className="field" style={{ flex: 1.2, marginBottom: 0 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Amount (TZS)</label>
               <input
-                type="date"
-                style={{ flex: 1 }}
-                value={date}
-                onChange={e => setDate(e.target.value)}
+                inputMode="none"
+                value={amount}
+                onChange={e => {
+                  setAmount(e.target.value)
+                  if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+                }}
+                placeholder="e.g. 10000"
+                style={amountError ? { borderColor: '#f8a5a5' } : {}}
+                autoFocus
               />
-              <button
-                type="button"
-                className={`RciconBtn ${isRecurring ? 'active' : ''}`}
-                style={isRecurring ? { background: '#a5eba5', color: '#000', borderRadius: 12, padding: '0 8px', fontSize: 13, border: '1px solid #a5eba5' } : { borderRadius: 12, padding: '0 8px', fontSize: 13, border: '1px solid var(--border)' }}
-                onClick={() => setIsRecurring(!isRecurring)}
-                title="Repeat/Inst."
+              {amountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
+            </div>
+
+            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Account {settings.requireAccountForTxns ? '*' : ''}</label>
+              <select
+                value={accountId}
+                onChange={e => {
+                  setAccountId(e.target.value)
+                  if (e.target.value) setAccountError(false)
+                }}
+                style={accountError ? { borderColor: '#f8a5a5' } : {}}
               >
-                ⟳ Rep/Inst.
-              </button>
+                <option value="">Select</option>
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              {accountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
+            </div>
+          </div>
+
+          {showSubAccountSelect && (
+            <div className="field" style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Sub-account</label>
+              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)}>
+                <option value="">Select sub-account</option>
+                {selectedAccount.subAccounts.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Row 2: Date and Note */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Date</label>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="date"
+                  style={{ flex: 1 }}
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={`RciconBtn ${isRecurring ? 'active' : ''}`}
+                  style={isRecurring ? { background: '#a5eba5', color: '#000', borderRadius: 10, padding: '4px 6px', fontSize: 11 } : { borderRadius: 10, padding: '4px 6px', fontSize: 11, border: '1px solid var(--border)' }}
+                  onClick={() => setIsRecurring(!isRecurring)}
+                  title="Repeat"
+                >
+                  ⟳
+                </button>
+              </div>
+            </div>
+
+            <div className="field" style={{ flex: 1.5, marginBottom: 0 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Note (optional)</label>
+              <input
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="e.g. Bus fare"
+              />
             </div>
           </div>
 
           {isRecurring && (
-            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 12 }}>
+            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 10, background: '#f8f9ff', padding: '10px', borderRadius: 12, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, marginBottom: 4 }}>Frequency</label>
-                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)}>
+                <label style={{ fontSize: 10, marginBottom: 3 }}>Frequency</label>
+                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '8px' }}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -3323,7 +3355,7 @@ export default function App() {
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, marginBottom: 4 }}>Occurrences</label>
+                <label style={{ fontSize: 10, marginBottom: 3 }}>Count</label>
                 <input
                   type="number"
                   min="2"
@@ -3331,48 +3363,15 @@ export default function App() {
                   value={recurringCount}
                   onChange={e => setRecurringCount(e.target.value)}
                   onBlur={e => setRecurringCount(Math.min(60, Math.max(2, parseInt(e.target.value) || 2)))}
+                  style={{ padding: '8px' }}
                 />
               </div>
             </div>
           )}
 
-          <div className="field">
-            <label>Account {settings.requireAccountForTxns ? '*' : ''}</label>
-            <select
-              value={accountId}
-              onChange={e => {
-                setAccountId(e.target.value)
-                if (e.target.value) setAccountError(false)
-              }}
-              style={accountError ? { borderColor: '#f8a5a5' } : {}}
-            >
-              <option value="">Select account</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            {accountError && <div style={{ color: '#e24b4b', fontSize: 13, marginTop: 4 }}>Please select an account</div>}
-          </div>
-
-          {showSubAccountSelect && (
-            <div className="field">
-              <label>Sub-account</label>
-              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)}>
-                <option value="">Select sub-account</option>
-                {selectedAccount.subAccounts
-                  // Filter valid sub-accounts for the current ledger if applicable, 
-                  // but here we rely on the component receiving active accounts only.
-                  .map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))
-                }
-              </select>
-            </div>
-          )}
-
-          {category.type === 'income' && (
-            <div className="field">
-              <label>Client</label>
+          {category.type === 'income' && activeLedger && activeLedger.type === 'business' && (
+            <div className="field" style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 10, marginBottom: 3 }}>Client</label>
               <select
                 value={clientId}
                 onChange={e => {
@@ -3396,15 +3395,6 @@ export default function App() {
               </select>
             </div>
           )}
-
-          <div className="field">
-            <label>Note (optional)</label>
-            <input
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="e.g. Bus fare"
-            />
-          </div>
 
           <div className="customKeypad">
             {['1','2','3','4','5','6','7','8','9','.', '0','⌫'].map(key => (
@@ -3489,6 +3479,24 @@ export default function App() {
             </button>
           </div>
         </div>
+        )}
+
+        {!showAddForm && (
+          <div style={{ margin: '10px 10px 15px' }}>
+            <button
+              className="btn"
+              type="button"
+              style={{ 
+                width: '100%', borderRadius: 14, padding: '12px', 
+                background: '#ffd76a', color: '#575866', border: '1px solid #ffd1d1', 
+                fontWeight: 600, cursor: 'pointer' 
+              }}
+              onClick={() => setShowAddForm(true)}
+            >
+              + Add {category.type === 'income' ? 'Income' : 'Expense'}
+            </button>
+          </div>
+        )}
 
         <div className="catDetailHistory">
           <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>

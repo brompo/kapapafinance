@@ -2046,8 +2046,8 @@ label {
   background: #f5f6fc;
   z-index: 102;
   padding: 16px 20px;
-  margin: 0 -16px;
-  /* negative margin flush with screen edges securely */
+  margin: -16px -16px 0;
+  /* negative margin flush with screen edges and top securely */
   border-bottom: 1px solid var(--border);
 }
 

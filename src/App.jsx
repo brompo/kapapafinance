@@ -766,6 +766,7 @@ export default function App() {
     return DEFAULT_TAB
   })
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
+  const [showAddForm, setShowAddForm] = useState(true)
   const [showGeneralSettings, setShowGeneralSettings] = useState(false)
   const [showFinanceSettings, setShowFinanceSettings] = useState(false)
   const [showBackupSettings, setShowBackupSettings] = useState(false)
@@ -2541,8 +2542,10 @@ export default function App() {
           onClose={() => setSelectedCategory(null)}
           highlightId={highlightId}
           setHighlightId={setHighlightId}
-          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) =>
-            addQuickTxn({
+          showAddForm={showAddForm}
+          setShowAddForm={setShowAddForm}
+          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) => {
+            return addQuickTxn({
               type: selectedCategory.type,
               amount,
               category: selectedCategory.name,
@@ -2553,8 +2556,8 @@ export default function App() {
               clientId,
               recurring,
               pendingClient
-            })
-          }
+            });
+          }}
           clients={clients}
           total={
             selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
@@ -2697,12 +2700,12 @@ export default function App() {
                   onDrop={() => handleDrop('income', c)}
                   onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
                   style={categoryMeta.income?.[c]?.color ? { background: categoryMeta.income[c].color } : undefined}
-                  onClick={() => setSelectedCategory({ type: 'income', name: c })}
+                  onClick={() => setSelectedCategory({ type: 'income', name: c, theme: `theme-${(i % 6) + 4}` })}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
-                      setSelectedCategory({ type: 'income', name: c })
+                      setSelectedCategory({ type: 'income', name: c, theme: `theme-${(i % 6) + 4}` })
                     }
                   }}
                 >
@@ -2756,12 +2759,12 @@ export default function App() {
                         '--progress-color': progressColor,
                         ...(categoryMeta.expense?.[c]?.color ? { background: categoryMeta.expense[c].color } : {})
                       }}
-                      onClick={() => setSelectedCategory({ type: 'expense', name: c })}
+                      onClick={() => setSelectedCategory({ type: 'expense', name: c, theme: `theme-${(i % 9) + 1}` })}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
-                          setSelectedCategory({ type: 'expense', name: c })
+                          setSelectedCategory({ type: 'expense', name: c, theme: `theme-${(i % 9) + 1}` })
                         }
                       }}
                     >
@@ -2818,12 +2821,12 @@ export default function App() {
                           '--progress-color': progressColor,
                           ...(categoryMeta.cos?.[c]?.color ? { background: categoryMeta.cos[c].color } : {})
                         }}
-                        onClick={() => setSelectedCategory({ type: 'cos', name: c })}
+                        onClick={() => setSelectedCategory({ type: 'cos', name: c, theme: `theme-${(i % 9) + 1}` })}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
-                            setSelectedCategory({ type: 'cos', name: c })
+                            setSelectedCategory({ type: 'cos', name: c, theme: `theme-${(i % 9) + 1}` })
                           }
                         }}
                       >
@@ -2877,12 +2880,12 @@ export default function App() {
                           '--progress-color': progressColor,
                           ...(categoryMeta.opps?.[c]?.color ? { background: categoryMeta.opps[c].color } : {})
                         }}
-                        onClick={() => setSelectedCategory({ type: 'opps', name: c })}
+                        onClick={() => setSelectedCategory({ type: 'opps', name: c, theme: `theme-${(i % 9) + 1}` })}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
-                            setSelectedCategory({ type: 'opps', name: c })
+                            setSelectedCategory({ type: 'opps', name: c, theme: `theme-${(i % 9) + 1}` })
                           }
                         }}
                       >
@@ -2912,7 +2915,9 @@ export default function App() {
     incomeCats = [],
     cosCats = [],
     oppsCats = [],
-    clients = []
+    clients = [],
+    showAddForm,
+    setShowAddForm
   }) {
     const [amount, setAmount] = useState('')
     const [amountError, setAmountError] = useState(false)
@@ -2938,7 +2943,7 @@ export default function App() {
     const [reimburseDate, setReimburseDate] = useState(todayISO())
     const [reimburseError, setReimburseError] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
-    const [showAddForm, setShowAddForm] = useState(true)
+    // State showAddForm now passed into props from App Root!
     const [isSelectMode, setIsSelectMode] = useState(false)
     const [selectedTxnIds, setSelectedTxnIds] = useState([])
     const [showBatchEditModal, setShowBatchEditModal] = useState(false)
@@ -3212,27 +3217,31 @@ export default function App() {
       <div className="catDetailScreen">
         {(() => {
           const isOver = budget > 0 && ratio >= 1;
-          const headerBg = meta?.color || (isOver ? '#fee2e2' : '#f0fdf4');
+          const headerBg = meta?.color; // If custom color exists
           return (
-            <div className="catDetailHeader" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: headerBg, borderBottom: meta?.color ? 'none' : `1px solid ${isOver ? '#fecaca' : '#dcfce7'}` }}>
+            <div className={`catDetailHeader ${!meta?.color ? category.theme || '' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: headerBg, borderBottom: meta?.color || showAddForm ? 'none' : `1px solid ${isOver ? '#fecaca' : '#dcfce7'}` }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <button className="iconBtn" onClick={onClose} type="button" style={{ marginTop: 2 }}>✕</button>
                 <div>
                   <div className="catDetailTitle" style={{ fontSize: 17, fontWeight: 700, lineHeight: '1.2' }}>{category.name}</div>
-                  <button 
-                    type="button" 
-                    onClick={openEditModal} 
-                    style={{ 
-                      background: 'none', border: 'none', padding: 0, 
-                      color: '#4b5563', fontSize: 11, textDecoration: 'underline', 
-                      cursor: 'pointer', display: 'block', marginTop: 2 
-                    }}
-                  >
-                    Edit Card
-                  </button>
+                  {!showAddForm && (
+                    <button 
+                      type="button" 
+                      onClick={openEditModal} 
+                      style={{ 
+                        background: 'none', border: 'none', padding: 0, 
+                        color: '#4b5563', fontSize: 11, textDecoration: 'underline', 
+                        cursor: 'pointer', display: 'block', marginTop: 2 
+                      }}
+                    >
+                      Edit Card
+                    </button>
+                  )}
                 </div>
               </div>
-              <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
+              {!showAddForm && (
+                <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
+              )}
             </div>
           );
         })()}
@@ -3261,41 +3270,40 @@ export default function App() {
 
         {showAddForm && (
         <div className="catDetailForm">
-          {/* Row 1: Amount and Account */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-            <div className="field" style={{ flex: 1.2, marginBottom: 0 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Amount (TZS)</label>
-              <input
-                inputMode="none"
-                value={amount}
-                onChange={e => {
-                  setAmount(e.target.value)
-                  if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
-                }}
-                placeholder="e.g. 10000"
-                style={amountError ? { borderColor: '#f8a5a5' } : {}}
-                autoFocus
-              />
-              {amountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
-            </div>
+          {/* Amount field solo row */}
+          <div className="field" style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 11, marginBottom: 4 }}>Amount (TZS)</label>
+            <input
+              inputMode="none"
+              value={amount}
+              onChange={e => {
+                setAmount(e.target.value)
+                if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
+              }}
+              placeholder="e.g. 10000"
+              style={amountError ? { borderColor: '#f8a5a5' } : {}}
+              autoFocus
+            />
+            {amountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
+          </div>
 
-            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Account {settings.requireAccountForTxns ? '*' : ''}</label>
-              <select
-                value={accountId}
-                onChange={e => {
-                  setAccountId(e.target.value)
-                  if (e.target.value) setAccountError(false)
-                }}
-                style={accountError ? { borderColor: '#f8a5a5' } : {}}
-              >
-                <option value="">Select</option>
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-              {accountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
-            </div>
+          {/* Account field solo row */}
+          <div className="field" style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 11, marginBottom: 4 }}>Account {settings.requireAccountForTxns ? '*' : ''}</label>
+            <select
+              value={accountId}
+              onChange={e => {
+                setAccountId(e.target.value)
+                if (e.target.value) setAccountError(false)
+              }}
+              style={accountError ? { borderColor: '#f8a5a5' } : {}}
+            >
+              <option value="">Select account</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            {accountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
           </div>
 
           {showSubAccountSelect && (
@@ -3498,6 +3506,7 @@ export default function App() {
           </div>
         )}
 
+        {!showAddForm && (
         <div className="catDetailHistory">
           <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>
             <span>Recent {category.name}</span>
@@ -3595,6 +3604,7 @@ export default function App() {
             })
           )}
         </div>
+        )}
 
         {isSelectMode && selectedTxnIds.length > 0 && (
           <div className="batchActionsBar" style={{
@@ -5132,7 +5142,30 @@ export default function App() {
       };
 
       if (selectedCategory) {
-        return <CategoryDetail category={selectedCategory} highlightId={highlightId} setHighlightId={setHighlightId} />;
+        const catObj = typeof selectedCategory === 'string' ? { name: selectedCategory, type: breakdownType } : selectedCategory;
+        return (
+          <CategoryDetail 
+            category={catObj} 
+            highlightId={highlightId} 
+            setHighlightId={setHighlightId} 
+            showAddForm={showAddForm} 
+            setShowAddForm={setShowAddForm} 
+            onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) => {
+              return addQuickTxn({
+                type: catObj.type,
+                amount,
+                category: catObj.name,
+                note,
+                accountId,
+                date,
+                subAccountId,
+                clientId,
+                recurring,
+                pendingClient
+              });
+            }}
+          />
+        );
       }
 
       return (

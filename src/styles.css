@@ -2123,11 +2123,14 @@ label {
 .customKeypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px; /* Reduced from 12px */
+  gap: 8px;
+  /* Reduced from 12px */
   background: #f7f8fc;
-  padding: 10px; /* Reduced from 16px */
+  padding: 10px;
+  /* Reduced from 16px */
   border-radius: 16px;
-  margin: 12px 0; /* Slightly tighter */
+  margin: 12px 0;
+  /* Slightly tighter */
 }
 
 .keypadBtn {
@@ -2135,8 +2138,10 @@ label {
   color: #1f2332;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 12px; /* Reduced from 16px */
-  font-size: 18px; /* Reduced from 20px */
+  padding: 12px;
+  /* Reduced from 16px */
+  font-size: 18px;
+  /* Reduced from 20px */
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -2151,15 +2156,16 @@ label {
 }
 
 .keypadBtn.backspace {
-  color: #ff5b5b; /* soft red for delete absolute */
+  color: #ff5b5b;
+  /* soft red for delete absolute */
 }
 
 .catDetailForm {
-  background: #fff;
-  border: 1px solid #eceef6;
+  background: #f5f6fc;
+  /*border: 1px solid #eceef6;*/
   border-radius: 16px;
   padding: 12px;
-  box-shadow: 0 6px 18px rgba(27, 33, 62, .05);
+  /*box-shadow: 0 6px 18px rgba(27, 33, 62, .05);*/
 }
 
 .catDetailActionsRow {

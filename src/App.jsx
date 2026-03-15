@@ -767,6 +767,13 @@ export default function App() {
   })
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
   const [showAddForm, setShowAddForm] = useState(true)
+  
+  useEffect(() => {
+    if (selectedCategory) {
+      setShowAddForm(true);
+    }
+  }, [selectedCategory]);
+
   const [showGeneralSettings, setShowGeneralSettings] = useState(false)
   const [showFinanceSettings, setShowFinanceSettings] = useState(false)
   const [showBackupSettings, setShowBackupSettings] = useState(false)
@@ -2928,6 +2935,8 @@ export default function App() {
       return parts.join('.');
     }
     const [amountError, setAmountError] = useState(false)
+    const [prevValue, setPrevValue] = useState('')
+    const [operator, setOperator] = useState('')
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState('')
@@ -3249,11 +3258,20 @@ export default function App() {
               {!showAddForm && (
                 <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
               )}
+              {showAddForm && (
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddForm(false)} 
+                  style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6366f1', fontSize: 14 }}
+                >
+                  📋
+                </button>
+              )}
             </div>
           );
         })()}
 
-        {subcats.length > 0 && (
+        {!showAddForm && subcats.length > 0 && (
           <div className="catDetailChips">
             {subcats.map(s => (
               <button
@@ -3269,7 +3287,7 @@ export default function App() {
           </div>
         )}
 
-        {subcats.length === 0 && (
+        {!showAddForm && subcats.length === 0 && (
           <div className="catDetailChips">
             <button className="catChip gear" type="button" onClick={addSubcategory}>+ Add subcategory</button>
           </div>
@@ -3277,116 +3295,93 @@ export default function App() {
 
         {showAddForm && (
         <div className="catDetailForm">
-          {/* Amount field solo row */}
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 11, marginBottom: 4 }}>Amount (TZS)</label>
-            <input
-              inputMode="none"
-              value={formatCommas(amount)}
-              onChange={e => {
-                setAmount(e.target.value.replace(/,/g, ''))
-                if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
-              }}
-              placeholder="e.g. 10000"
-              style={amountError ? { borderColor: '#f8a5a5' } : {}}
-              autoFocus
-            />
-            {amountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
+          {/* Huge Number Display */}
+          <div style={{ textAlign: 'center', margin: '15px 0 10px', fontWeight: 700, color: '#111827' }}>
+            {prevValue && operator ? (
+              <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2, fontWeight: 500 }}>
+                {formatCommas(prevValue)} {operator}
+              </div>
+            ) : null}
+            
+            {/* TSh at the top */}
+            <div style={{ fontSize: 28, color: '#111827', marginBottom: 2, fontWeight: 800 }}>TSh</div>
+            
+            {/* Fixed Sized Amount 35px */}
+            <div style={{ fontSize: 35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {formatCommas(amount || '0')}
+            </div>
           </div>
 
-          {/* Account field solo row */}
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 11, marginBottom: 4 }}>Account {settings.requireAccountForTxns ? '*' : ''}</label>
-            <select
-              value={accountId}
-              onChange={e => {
-                setAccountId(e.target.value)
-                if (e.target.value) setAccountError(false)
-              }}
-              style={accountError ? { borderColor: '#f8a5a5' } : {}}
-            >
-              <option value="">Select account</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+
+
+          {/* Inner Subcategory Chips */}
+          {subcats.length > 0 && (
+            <div className="catDetailChips" style={{ marginBottom: 15, padding: 0 }}>
+              {subcats.map(s => (
+                <button
+                  className={`catChip ${selectedSub === s ? 'active' : ''}`}
+                  key={s}
+                  type="button"
+                  onClick={() => setSelectedSub(s)}
+                >
+                  {s}
+                </button>
               ))}
-            </select>
-            {accountError && <div style={{ color: '#e24b4b', fontSize: 12 }}>Required</div>}
+              <button className="catChip gear" type="button" onClick={addSubcategory}>⚙</button>
+            </div>
+          )}
+
+          {/* 4-Item Action Grid Above Keypad */}
+          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+
+            <div style={{ position: 'relative' }}>
+              <input value={note} onChange={e => setNote(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} placeholder="Note" />
+              <div style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: note ? '#ffedd5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                <span style={{ fontSize: 16 }}>📝</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{note || 'Note'}</span>
+              </div>
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <select value={accountId} onChange={e => { setAccountId(e.target.value); if (e.target.value) setAccountError(false); }} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }}>
+                <option value="">Account</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <div style={{ padding: '10px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                <span style={{ fontSize: 16 }}>🏦</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}</span>
+              </div>
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} />
+              <div style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                <span style={{ fontSize: 16 }}>📅</span> <span style={{ fontWeight: 600 }}>{date === todayISO() ? 'Today' : date.split('-').slice(1).join('/')}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className={`RciconBtn ${isRecurring ? 'active' : ''}`}
+              style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: isRecurring ? '#a5eba5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: '#1f2937', cursor: 'pointer', justifyContent: 'center', height: '100%' }}
+              onClick={() => setIsRecurring(!isRecurring)}
+            >
+              <span style={{ fontSize: 16 }}>⟳</span> <span style={{ fontWeight: 600 }}>Repeat</span>
+            </button>
           </div>
 
-          {showSubAccountSelect && (
-            <div className="field" style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Sub-account</label>
-              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)}>
+          {showSubAccountSelect && accountId && accounts.find(a => a.id === accountId) && (
+            <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', background: '#fafafa', padding: '6px 12px', borderRadius: 8 }}>
+              <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Sub-account:</span>
+              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)} style={{ flex: 1, padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #e4e4e9' }}>
                 <option value="">Select sub-account</option>
-                {selectedAccount.subAccounts.map(s => (
+                {accounts.find(a => a.id === accountId).subAccounts.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Row 2: Date and Note */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Date</label>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input
-                  type="date"
-                  style={{ flex: 1 }}
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className={`RciconBtn ${isRecurring ? 'active' : ''}`}
-                  style={isRecurring ? { background: '#a5eba5', color: '#000', borderRadius: 10, padding: '4px 6px', fontSize: 11 } : { borderRadius: 10, padding: '4px 6px', fontSize: 11, border: '1px solid var(--border)' }}
-                  onClick={() => setIsRecurring(!isRecurring)}
-                  title="Repeat"
-                >
-                  ⟳
-                </button>
-              </div>
-            </div>
-
-            <div className="field" style={{ flex: 1.5, marginBottom: 0 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Note (optional)</label>
-              <input
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="e.g. Bus fare"
-              />
-            </div>
-          </div>
-
-          {isRecurring && (
-            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 10, background: '#f8f9ff', padding: '10px', borderRadius: 12, marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, marginBottom: 3 }}>Frequency</label>
-                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '8px' }}>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, marginBottom: 3 }}>Count</label>
-                <input
-                  type="number"
-                  min="2"
-                  max="60"
-                  value={recurringCount}
-                  onChange={e => setRecurringCount(e.target.value)}
-                  onBlur={e => setRecurringCount(Math.min(60, Math.max(2, parseInt(e.target.value) || 2)))}
-                  style={{ padding: '8px' }}
-                />
-              </div>
-            </div>
-          )}
-
-          {category.type === 'income' && activeLedger && activeLedger.type === 'business' && (
-            <div className="field" style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 10, marginBottom: 3 }}>Client</label>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+            {category.type === 'income' && activeLedger && activeLedger.type === 'business' && (
               <select
                 value={clientId}
                 onChange={e => {
@@ -3401,97 +3396,143 @@ export default function App() {
                     setClientId(e.target.value)
                   }
                 }}
+                style={{ padding: '6px', fontSize: 11, borderRadius: 8, flex: 1, height: 'auto', border: '1px solid #eef2ff' }}
               >
-                <option value="">Select client (optional)</option>
-                {activeClients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-                <option value="new">+ Add New Client</option>
+                <option value="">Client (optional)</option>
+                {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="new">+ Add Client</option>
               </select>
+            )}
+          </div>
+
+          {isRecurring && (
+            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 8, background: '#f8f9ff', padding: '10px', borderRadius: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 9, marginBottom: 2 }}>Frequency</label>
+                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '6px', fontSize: 12 }}>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 9, marginBottom: 2 }}>Count</label>
+                <input type="number" min="2" max="60" value={recurringCount} onChange={e => setRecurringCount(e.target.value)} style={{ padding: '6px', fontSize: 12 }} />
+              </div>
             </div>
           )}
 
-          <div className="customKeypad">
-            {['1','2','3','4','5','6','7','8','9','.', '0','⌫'].map(key => (
-              <button 
-                key={key} 
-                type="button" 
-                className={`keypadBtn ${key === '⌫' ? 'backspace' : ''}`}
-                onClick={() => {
-                  if (key === '⌫') {
-                    setAmount(prev => prev.slice(0, -1));
-                  } else if (key === '.') {
-                    if (!amount.includes('.')) setAmount(prev => prev + '.');
-                  } else {
-                    setAmount(prev => (prev === '0' ? key : prev + key));
-                    setAmountError(false);
-                  }
-                }}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-          <div className="catDetailActionsRow" style={{ display: 'flex', gap: 10 }}>
-            {showAddForm && (
-              <button
-                className="btn"
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                style={{ 
-                  background: '#eaedf3', color: '#1a1d2d', border: 'none', 
-                  padding: '14px', fontWeight: 700, flex: 1, fontSize: 15,
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              className="btn addTxnBtn"
-              type="button"
-              disabled={isSaving}
-              onClick={async () => {
-                const amtVal = Number(amount || 0)
-                if (!amtVal || amtVal <= 0) {
-                  setAmountError(true)
-                  show('Enter a valid amount.')
-                  return
-                }
-                if (settings.requireAccountForTxns && !accountId) {
-                  setAccountError(true)
-                  show('Please select an account.')
-                  return
-                }
-                setIsSaving(true)
-                const finalCount = parseInt(recurringCount, 10) || 12
-                const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note
+          <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '12px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', margin: '0 -16px -16px -16px' }}>
+            {[
+              '+', '-', '×', '÷',
+              '7', '8', '9', '=',
+              '4', '5', '6', '.',
+              '1', '2', '3', '⌫',
+              'C', '0', 'Save'
+            ].map((key, idx) => {
+              const isOperator = ['+', '-', '×', '÷'].includes(key);
+              
+              const handleCalculate = (nextOp) => {
+                 let res = Number(amount || '0');
+                 if (prevValue && operator) {
+                     const a = Number(prevValue);
+                     const b = Number(amount || '0');
+                     if (operator === '+') res = a + b;
+                     else if (operator === '-') res = a - b;
+                     else if (operator === '×') res = a * b;
+                     else if (operator === '÷') res = b !== 0 ? a / b : 0;
+                 } else {
+                     res = Number(amount || '0');
+                 }
+                 setAmount(String(res));
+                 if (nextOp) {
+                     setPrevValue(String(res));
+                     setOperator(nextOp);
+                     setAmount('');
+                 } else {
+                     setPrevValue('');
+                     setOperator('');
+                 }
+              };
 
-                const success = await onAdd(amount, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient)
-                setIsSaving(false)
-                if (success) {
-                  setAmount('')
-                  setNote('')
-                  setDate(todayISO())
-                  setAccountId('')
-                  setSubAccountId('')
-                  setIsRecurring(false)
-                  setShowAddForm(false)
-                  if (success.id) {
-                    setHighlightId(success.id)
-                    setTimeout(() => setHighlightId(null), 3000)
-                  }
-                }
-              }}
-              style={{ 
-                background: '#ffd76a', color: '#575866', 
-                border: '1px solid #ffd1d1', 
-                padding: '14px', fontWeight: 700, flex: 2.2, fontSize: 15, 
-                cursor: 'pointer' 
-              }}
-            >
-              Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
-            </button>
+              return (
+                <button 
+                  key={idx} 
+                  type="button" 
+                  className={`keypadBtn ${isOperator ? 'action' : key === 'Save' ? 'submit' : ''}`}
+                  style={{ 
+                    background: key === 'Save' ? '#ffd76a' : ['+', '-', '×', '÷', '='].includes(key) ? '#f3f4f6' : '#fff', 
+                    color: key === 'Save' ? '#575866' : '#1f2937', 
+                    border: '1px solid #e5e7eb', 
+                    borderRadius: 12, 
+                    padding: '16px', 
+                    fontWeight: 700, 
+                    fontSize: 20, 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gridColumn: key === 'Save' ? 'span 2' : 'auto'
+                  }}
+                  disabled={key === 'Save' && isSaving}
+                  onClick={async () => {
+                    if (key === '⌫') { 
+                      setAmount(prev => (prev.length <= 1 ? '' : prev.slice(0, -1))); 
+                    } else if (key === '.') { 
+                      if (!amount.includes('.')) setAmount(prev => prev + '.'); 
+                    } else if (key === 'C') {
+                      setAmount('');
+                      setPrevValue('');
+                      setOperator('');
+                    } else if (['+', '-', '×', '÷'].includes(key)) {
+                      handleCalculate(key);
+                    } else if (key === '=') {
+                      handleCalculate('');
+                    } else if (key === 'Save') { 
+                      // Submit transaction logic
+                      let finalAmt = amount;
+                      if (prevValue && operator) {
+                         const a = Number(prevValue);
+                         const b = Number(amount || '0');
+                         let res = b;
+                         if (operator === '+') res = a + b;
+                         else if (operator === '-') res = a - b;
+                         else if (operator === '×') res = a * b;
+                         else if (operator === '÷') res = b !== 0 ? a / b : 0;
+                         finalAmt = String(res);
+                      }
+
+                      const amtVal = Number(finalAmt || '0');
+                      if (!amtVal || amtVal <= 0) {
+                        setAmountError(true);
+                        show('Enter a valid amount.');
+                        return;
+                      }
+                      if (settings.requireAccountForTxns && !accountId) {
+                        setAccountError(true);
+                        show('Please select an account.');
+                        return;
+                      }
+                      setIsSaving(true);
+                      const finalCount = parseInt(recurringCount, 10) || 12;
+                      const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note;
+                      const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient);
+                      setIsSaving(false);
+                      if (success) {
+                        setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
+                        if (success.id) { setHighlightId(success.id); setTimeout(() => setHighlightId(null), 3000); }
+                      }
+                    } else { 
+                      setAmount(prev => (prev === '0' || prev === '' ? key : prev + key)); 
+                      setAmountError(false); 
+                    }
+                  }}
+                >
+                  {key}
+                </button>
+              );
+            })}
           </div>
         </div>
         )}
@@ -6429,7 +6470,9 @@ export default function App() {
       )}
 
       {/* Bottom tabs */}
-      <BottomNav tab={tab} setTab={setTab} variant="light" />
+      {!(selectedCategory && showAddForm) && (
+        <BottomNav tab={tab} setTab={setTab} variant="light" />
+      )}
       <GlobalToast />
     </div>
   )

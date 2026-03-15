@@ -1,6 +1,18 @@
 export const CHANGELOG = [
 
     {
+        version: '1.3.1',
+        date: '2026-03-15',
+        changes: [
+            'Implement own Input Keyboard for better mobile experience.',
+            'Redesigned Transaction Input display layout with Large Amount display display header.',
+            'Upgraded custom 5-Row Calculator Pad with Arithmetic operators evaluation triggers.',
+            'Grouped Action Grid Row (Note, Account, Date, Repeat) loaded above keypad grid layout index absolute.',
+            'Continuous Default Input View state overlay loads on Category dashboard card taps sequential fittest!'
+        ]
+    },
+
+    {
         version: '1.3.0',
         date: '2026-03-15',
         changes: [

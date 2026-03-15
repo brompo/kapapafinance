@@ -3272,16 +3272,16 @@ export default function App() {
                 <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
               )}
               {showAddForm && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddForm(false)}
-                    style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6366f1', fontSize: 16 }}
-                  >
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                >
+                  <div style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', fontSize: 16 }}>
                     📋
-                  </button>
+                  </div>
                   <span style={{ fontSize: 9, color: '#4b5563', fontWeight: 600, textAlign: 'center' }}>View Transactions</span>
-                </div>
+                </button>
               )}
             </div>
           );

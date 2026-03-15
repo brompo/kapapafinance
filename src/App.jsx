@@ -3311,7 +3311,7 @@ export default function App() {
 
         {showAddForm && (
         <div className="catDetailForm">
-          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 0, display: 'flex', flexDirection: 'column' }}>
           {/* Huge Number Display */}
           <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             {prevValue && operator ? (
@@ -3349,7 +3349,7 @@ export default function App() {
           )}
 
           {/* 4-Item Action Grid Above Keypad */}
-          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
+          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 0 }}>
 
             {/* 1. Account */}
             <div style={{ position: 'relative' }}>
@@ -3427,10 +3427,10 @@ export default function App() {
           </div>
 
           {isRecurring && (
-            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 8, background: '#f8f9ff', padding: '10px', borderRadius: 10, marginBottom: 12 }}>
+            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 8, background: '#f8f9fc', padding: '6px 10px', borderRadius: 10, marginBottom: 6, border: '1px solid #eef2ff' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 9, marginBottom: 2 }}>Frequency</label>
-                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '6px', fontSize: 12 }}>
+                <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Frequency</label>
+                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -3438,15 +3438,15 @@ export default function App() {
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 9, marginBottom: 2 }}>Count</label>
-                <input type="number" min="2" max="60" value={recurringCount} onChange={e => setRecurringCount(e.target.value)} style={{ padding: '6px', fontSize: 12 }} />
+                <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Count</label>
+                <input type="number" min="2" max="60" value={recurringCount} onChange={e => setRecurringCount(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }} />
               </div>
             </div>
           )}
 
           </div>
 
-          <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '12px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', margin: '0 -16px -16px -16px' }}>
+          <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '6px 16px 12px', background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
             {[
               '+', '-', '×', '÷',
               '7', '8', '9', '=',

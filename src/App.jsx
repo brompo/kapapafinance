@@ -5145,7 +5145,7 @@ export default function App() {
       deconflict(rightLabels);
 
       const CategoryDetail = ({ category }) => {
-        const catTxns = txns.filter(t => (t.category || 'Uncategorized') === category && t.type === breakdownType);
+        const catTxns = txns.filter(t => (t.category || 'Uncategorized') === category.name && t.type === breakdownType);
 
         const currentYear = new Date().getFullYear();
         const years = Array.from({ length: 7 }, (_, i) => currentYear - 6 + i);
@@ -5195,7 +5195,7 @@ export default function App() {
           <div style={{ animation: 'slideIn 0.3s ease-out' }}>
             <div style={{ display: 'flex', alignItems: 'center', padding: '15px 10px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
               <button className="ledgerGhost" onClick={() => setSelectedCategory(null)} style={{ padding: '8px 12px' }}>‹ Back</button>
-              <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{category}</div>
+              <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{category.name}</div>
               <div style={{ width: 60 }} />
             </div>
 
@@ -5218,7 +5218,7 @@ export default function App() {
 
             <div style={{ background: '#fff', borderRadius: 16, margin: '0 10px 30px 10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f3f3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>{category} Breakdown</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{category.name} Breakdown</span>
                 <span style={{ fontWeight: 700, fontSize: 14, color: breakdownType === 'income' ? 'var(--success)' : 'var(--danger)' }}>{fmtTZS(subTotalAmount)}</span>
               </div>
               {subSegments.map((s, i) => {

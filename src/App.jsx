@@ -3311,8 +3311,9 @@ export default function App() {
 
         {showAddForm && (
         <div className="catDetailForm">
+          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 12, display: 'flex', flexDirection: 'column' }}>
           {/* Huge Number Display */}
-          <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827' }}>
+          <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             {prevValue && operator ? (
               <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2, fontWeight: 500 }}>
                 {formatCommas(prevValue)} {operator}
@@ -3442,6 +3443,8 @@ export default function App() {
               </div>
             </div>
           )}
+
+          </div>
 
           <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '12px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', margin: '0 -16px -16px -16px' }}>
             {[

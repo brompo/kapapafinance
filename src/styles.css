@@ -2283,15 +2283,15 @@ label {
 }
 
 .catHistoryRow.highlightRow {
-  background: #fff9c4 !important;
-  box-shadow: 0 4px 12px rgba(253, 224, 71, 0.35);
+  background: #dcfce7 !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
   animation: fadeOutHighlight 3s forwards;
 }
 
 @keyframes fadeOutHighlight {
   0% {
     transform: scale(1);
-    background: #fff9c4;
+    background: #dcfce7;
   }
 
   10% {
@@ -2303,7 +2303,7 @@ label {
   }
 
   75% {
-    background: #fff9c4;
+    background: #dcfce7;
   }
 
   100% {

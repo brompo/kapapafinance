@@ -1592,7 +1592,7 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring, pendingClient }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (settings.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -1638,7 +1638,7 @@ export default function App() {
       totalDelta += (t.type === 'income' ? amt : -amt);
 
       if (t.accountId) {
-        const acct = allAccounts.find(a => a.id === t.accountId || a.name === t.accountId);
+        const acct = allAccounts.find(a => String(a.id) === String(t.accountId) || a.name === t.accountId);
         if (acct) {
           const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
           const targetSubId = subs.length
@@ -1668,7 +1668,7 @@ export default function App() {
     if (newAcctTxns.length > 0) {
       // We assume all recurring txns go to the same account based on current features
       const sampleT = newTxns[0];
-      const acct = allAccounts.find(a => a.id === sampleT.accountId || a.name === sampleT.accountId);
+      const acct = allAccounts.find(a => String(a.id) === String(sampleT.accountId) || a.name === sampleT.accountId);
 
       if (acct) {
         const targetId = acct.id;
@@ -1695,8 +1695,22 @@ export default function App() {
 
     const nextClients = pendingClient ? [...(vault.clients || []), pendingClient] : undefined;
 
+    let nextMeta = activeLedger.categoryMeta || {};
+    if (updateDefaultAccount && accountId) {
+      nextMeta = {
+        ...nextMeta,
+        [type]: {
+          ...(nextMeta[type] || {}),
+          [category]: {
+            ...(nextMeta[type]?.[category] || {}),
+            defaultAccountId: accountId
+          }
+        }
+      };
+    }
+
     persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns] },
+      nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns], categoryMeta: nextMeta },
       nextAccounts,
       nextAccountTxns,
       nextClients
@@ -2551,7 +2565,7 @@ export default function App() {
           setHighlightId={setHighlightId}
           showAddForm={showAddForm}
           setShowAddForm={setShowAddForm}
-          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) => {
+          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount) => {
             return addQuickTxn({
               type: selectedCategory.type,
               amount,
@@ -2562,7 +2576,8 @@ export default function App() {
               subAccountId,
               clientId,
               recurring,
-              pendingClient
+              pendingClient,
+              updateDefaultAccount
             });
           }}
           clients={clients}
@@ -2939,7 +2954,7 @@ export default function App() {
     const [operator, setOperator] = useState('')
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
-    const [accountId, setAccountId] = useState('')
+    const [accountId, setAccountId] = useState(meta?.defaultAccountId || '')
     const [accountError, setAccountError] = useState(false)
     const [clientId, setClientId] = useState('')
     const [pendingClient, setPendingClient] = useState(null)
@@ -3240,7 +3255,6 @@ export default function App() {
                 <button className="iconBtn" onClick={onClose} type="button" style={{ marginTop: 2 }}>✕</button>
                 <div>
                   <div className="catDetailTitle" style={{ fontSize: 17, fontWeight: 700, lineHeight: '1.2' }}>{category.name}</div>
-                  {!showAddForm && (
                     <button 
                       type="button" 
                       onClick={openEditModal} 
@@ -3252,20 +3266,22 @@ export default function App() {
                     >
                       Edit Card
                     </button>
-                  )}
                 </div>
               </div>
               {!showAddForm && (
                 <div style={{ fontSize: 23, fontWeight: 800, color: '#111827', paddingRight: '10px' }}>{fmtTZS(total)}</div>
               )}
               {showAddForm && (
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddForm(false)} 
-                  style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6366f1', fontSize: 14 }}
-                >
-                  📋
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAddForm(false)} 
+                    style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6366f1', fontSize: 16 }}
+                  >
+                    📋
+                  </button>
+                  <span style={{ fontSize: 9, color: '#4b5563', fontWeight: 600, textAlign: 'center' }}>View Transactions</span>
+                </div>
               )}
             </div>
           );
@@ -3296,7 +3312,7 @@ export default function App() {
         {showAddForm && (
         <div className="catDetailForm">
           {/* Huge Number Display */}
-          <div style={{ textAlign: 'center', margin: '15px 0 10px', fontWeight: 700, color: '#111827' }}>
+          <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827' }}>
             {prevValue && operator ? (
               <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2, fontWeight: 500 }}>
                 {formatCommas(prevValue)} {operator}
@@ -3332,36 +3348,40 @@ export default function App() {
           )}
 
           {/* 4-Item Action Grid Above Keypad */}
-          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
 
-            <div style={{ position: 'relative' }}>
-              <input value={note} onChange={e => setNote(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} placeholder="Note" />
-              <div style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: note ? '#ffedd5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
-                <span style={{ fontSize: 16 }}>📝</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{note || 'Note'}</span>
-              </div>
-            </div>
-
+            {/* 1. Account */}
             <div style={{ position: 'relative' }}>
               <select value={accountId} onChange={e => { setAccountId(e.target.value); if (e.target.value) setAccountError(false); }} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }}>
                 <option value="">Account</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-              <div style={{ padding: '10px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+              <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
                 <span style={{ fontSize: 16 }}>🏦</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}</span>
               </div>
             </div>
 
+            {/* 2. Date */}
             <div style={{ position: 'relative' }}>
               <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} />
-              <div style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+              <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
                 <span style={{ fontSize: 16 }}>📅</span> <span style={{ fontWeight: 600 }}>{date === todayISO() ? 'Today' : date.split('-').slice(1).join('/')}</span>
               </div>
             </div>
 
+            {/* 3. Note */}
+            <div style={{ position: 'relative' }}>
+              <input value={note} onChange={e => setNote(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} placeholder="Note" />
+              <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: note ? '#ffedd5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                <span style={{ fontSize: 16 }}>📝</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{note || 'Note'}</span>
+              </div>
+            </div>
+
+            {/* 4. Repeat */}
             <button
               type="button"
               className={`RciconBtn ${isRecurring ? 'active' : ''}`}
-              style={{ padding: '10px 4px', border: '1px solid #eef2ff', background: isRecurring ? '#a5eba5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: '#1f2937', cursor: 'pointer', justifyContent: 'center', height: '100%' }}
+              style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: isRecurring ? '#a5eba5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: '#1f2937', cursor: 'pointer', justifyContent: 'center', height: '100%' }}
               onClick={() => setIsRecurring(!isRecurring)}
             >
               <span style={{ fontSize: 16 }}>⟳</span> <span style={{ fontWeight: 600 }}>Repeat</span>
@@ -3427,9 +3447,9 @@ export default function App() {
             {[
               '+', '-', '×', '÷',
               '7', '8', '9', '=',
-              '4', '5', '6', '.',
+              '4', '5', '6', 'C',
               '1', '2', '3', '⌫',
-              'C', '0', 'Save'
+              '.', '0', 'Save'
             ].map((key, idx) => {
               const isOperator = ['+', '-', '×', '÷'].includes(key);
               
@@ -3463,7 +3483,7 @@ export default function App() {
                   className={`keypadBtn ${isOperator ? 'action' : key === 'Save' ? 'submit' : ''}`}
                   style={{ 
                     background: key === 'Save' ? '#ffd76a' : ['+', '-', '×', '÷', '='].includes(key) ? '#f3f4f6' : '#fff', 
-                    color: key === 'Save' ? '#575866' : '#1f2937', 
+                    color: key === 'Save' ? '#575866' : key === 'C' || key === '⌫' ? '#ff5b5b' : '#1f2937', 
                     border: '1px solid #e5e7eb', 
                     borderRadius: 12, 
                     padding: '16px', 
@@ -3517,7 +3537,7 @@ export default function App() {
                       setIsSaving(true);
                       const finalCount = parseInt(recurringCount, 10) || 12;
                       const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note;
-                      const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient);
+                      const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient, true);
                       setIsSaving(false);
                       if (success) {
                         setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
@@ -5729,12 +5749,7 @@ export default function App() {
               Demo data will overwrite your current accounts and account transactions. Only available on empty ledgers.
             </div>
 
-            <div className="hr" />
 
-            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn danger" onClick={handleReset}>Reset Empty</button>
-              <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
-            </div>
           </div>
         </div>
       </div>
@@ -5859,6 +5874,15 @@ export default function App() {
               <button className="btn" onClick={openRestorePicker} disabled={cloudBusy || !cloudGoogle.refreshToken}>
                 Restore
               </button>
+              <div className="hr" />
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn danger" onClick={handleReset}>Reset Empty</button>
+              </div>
+
+              <div className="hr" />
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn danger" onClick={handleWipeAll}>Clear All Data</button>
+              </div>
             </div>
           </div>
         </div>

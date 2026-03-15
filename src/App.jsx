@@ -3262,9 +3262,9 @@ export default function App() {
               type="button"
               style={{ 
                 width: '100%', borderRadius: 16, padding: '15px', 
-                background: '#ffe6d7', color: '#575866', // Peach background with slate text
+                background: '#ffd76a', color: '#575866', // Golden yellow background with slate text
                 fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, 
-                border: '1px solid #ffd1d1', boxShadow: '0 2px 8px rgba(255, 230, 215, 0.25)',
+                border: '1px solid #ffd1d1', boxShadow: '0 2px 8px rgba(234, 179, 8, 0.15)',
                 cursor: 'pointer'
               }}
               onClick={() => setShowAddForm(true)}

@@ -388,55 +388,57 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
             )}
           </div>
         </div>
-      </div>
 
-      <div className="txnDetailFooter">
-        {onDelete && isEditable && (
-          <button className="btn danger" type="button" onClick={() => {
-            if (confirm('Delete this transaction?')) onDelete()
-          }} style={{ padding: '14px', borderRadius: 14 }}>
-            🗑️
-          </button>
-        )}
+        <div className="txnDetailFooter">
+          {onDelete && isEditable && (
+            <button 
+              className="pillBtn danger" 
+              type="button" 
+              onClick={() => {
+                if (confirm('Delete this transaction?')) onDelete()
+              }} 
+              style={{ padding: '8px 16px', fontSize: 13, flex: 1, justifyContent: 'center', display: 'flex' }}
+            >
+              Delete
+            </button>
+          )}
 
-        {onReimburse && (
+          {onReimburse && (
+            <button
+              className="pillBtn"
+              type="button"
+              onClick={onReimburse}
+              style={{
+                flex: 1,
+                padding: '8px 16px',
+                fontSize: 13,
+                justifyContent: 'center',
+                display: 'flex',
+                background: '#f8f9fc',
+                borderColor: '#e2e8f0',
+                color: '#4a5568'
+              }}
+            >
+              Reimburse
+            </button>
+          )}
+
           <button
-            className="btn"
+            className="pillBtn"
             type="button"
-            onClick={onReimburse}
+            disabled={!isEditable}
+            onClick={handleSave}
             style={{
-              borderRadius: 14,
-              padding: '14px',
               flex: 1,
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
+              padding: '8px 16px',
+              fontSize: 13,
               justifyContent: 'center',
-              gap: 8,
-              background: 'var(--border)',
-              color: 'var(--accent)'
+              display: 'flex'
             }}
           >
-            Reimburse
+            Save
           </button>
-        )}
-
-        <button
-          className="btn primary"
-          type="button"
-          disabled={!isEditable}
-          onClick={handleSave}
-          style={{
-            borderRadius: 14,
-            padding: '14px',
-            flex: 2,
-            fontWeight: 700,
-            fontSize: 15,
-            boxShadow: '0 4px 12px rgba(90, 95, 176, 0.2)'
-          }}
-        >
-          Save Transaction
-        </button>
+        </div>
       </div>
     </div>
   )
@@ -662,8 +664,8 @@ function normalizeVault(data) {
         pinLockEnabled: false,
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
-        defaultInsightTab: 'cashflow',
-        insightTabOrder: ['cashflow', 'capital', 'analysis']
+        defaultInsightTab: 'analysis',
+        insightTabOrder: ['cashflow', 'analysis', 'capital']
       },
       clients: []
     }
@@ -679,8 +681,8 @@ function normalizeVault(data) {
         pinLockEnabled: false,
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
-        defaultInsightTab: 'cashflow',
-        insightTabOrder: ['cashflow', 'capital', 'analysis']
+        defaultInsightTab: 'analysis',
+        insightTabOrder: ['cashflow', 'analysis', 'capital']
       },
       clients: []
     }
@@ -699,8 +701,8 @@ function normalizeVault(data) {
         pinLockEnabled: !!data.settings?.pinLockEnabled,
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         defaultAppTab: data.settings?.defaultAppTab || 'tx',
-        defaultInsightTab: data.settings?.defaultInsightTab || 'cashflow',
-        insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'capital', 'analysis'],
+        defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
+        insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'analysis', 'capital'],
         appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
       },
       clients: Array.isArray(data.clients) ? data.clients : []
@@ -723,8 +725,8 @@ function normalizeVault(data) {
       pinLockEnabled: !!data.settings?.pinLockEnabled,
       requireAccountForTxns: !!data.settings?.requireAccountForTxns,
       defaultAppTab: data.settings?.defaultAppTab || 'tx',
-      defaultInsightTab: data.settings?.defaultInsightTab || 'cashflow',
-      insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'capital', 'analysis'],
+      defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
+      insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'analysis', 'capital'],
       appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
     },
     clients: Array.isArray(data.clients) ? data.clients : []
@@ -790,6 +792,7 @@ export default function App() {
   const [showClientsManager, setShowClientsManager] = useState(false)
   const [showAddLedgerModal, setShowAddLedgerModal] = useState(null)
   const [addLedgerName, setAddLedgerName] = useState('')
+  const [highlightId, setHighlightId] = useState(null)
 
   const [vault, setVaultState] = useState(() => normalizeVault(null))
 
@@ -1694,9 +1697,9 @@ export default function App() {
     if (isRecurring) {
       show(`Saved ${count} recurring transactions.`);
     } else {
-      show('Saved.');
+      show(`${type === 'income' ? 'Income' : 'Expense'} Added`);
     }
-    return true;
+    return newTxns[0];
   }
 
   async function addReimbursement({ originalTxnId, amount, accountId, subAccountId, date }) {
@@ -2247,7 +2250,9 @@ export default function App() {
       const text = await file.text()
       const parsed = JSON.parse(text)
       if (!parsed || typeof parsed !== 'object') throw new Error('Invalid backup file.')
-      if (!parsed.meta || !parsed.vault) throw new Error('Backup missing meta or vault.')
+      const hasEncrypted = parsed.meta && parsed.vault;
+      const hasPlain = parsed.plain;
+      if (!hasEncrypted && !hasPlain) throw new Error('Backup missing required data.')
       setImportFileData({ name: file.name, size: file.size, text })
       setShowImportModal(true)
     } catch (e) {
@@ -2260,13 +2265,20 @@ export default function App() {
       importEncryptedBackup(importFileData.text)
       setShowImportModal(false)
       setImportFileData(null)
-      show('Import successful! Unlock with your PIN.')
-      setStage('unlock')
-      const fresh = normalizeVault(null)
-      setVaultState({
-        ...fresh,
-        settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
-      })
+      if (hasPin()) {
+        show('Import successful! Unlock with your PIN.')
+        setStage('unlock')
+        const fresh = normalizeVault(null)
+        setVaultState({
+          ...fresh,
+          settings: { ...fresh.settings, pinLockEnabled: settings.pinLockEnabled }
+        })
+      } else {
+        const plain = loadVaultPlain()
+        setVaultState(normalizeVault(plain))
+        show('Import successful!')
+        setStage('app')
+      }
     } catch (e) {
       show(e.message || 'Import failed.')
     }
@@ -2527,6 +2539,8 @@ export default function App() {
         <CategoryDetail
           category={selectedCategory}
           onClose={() => setSelectedCategory(null)}
+          highlightId={highlightId}
+          setHighlightId={setHighlightId}
           onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) =>
             addQuickTxn({
               type: selectedCategory.type,
@@ -2883,8 +2897,6 @@ export default function App() {
             </div>
           </>
         )}
-
-        <GlobalToast />
       </div>
     )
   }
@@ -2926,6 +2938,16 @@ export default function App() {
     const [reimburseDate, setReimburseDate] = useState(todayISO())
     const [reimburseError, setReimburseError] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [showAddForm, setShowAddForm] = useState(false)
+    const [isSelectMode, setIsSelectMode] = useState(false)
+    const [selectedTxnIds, setSelectedTxnIds] = useState([])
+    const [showBatchEditModal, setShowBatchEditModal] = useState(false)
+    const [batchAccountId, setBatchAccountId] = useState('')
+    const [batchSubcat, setBatchSubcat] = useState('')
+    const [batchNote, setBatchNote] = useState('')
+    const [applyAccount, setApplyAccount] = useState(false)
+    const [applySubcat, setApplySubcat] = useState(false)
+    const [applyNote, setApplyNote] = useState(false)
 
     const reimburseAccount = accounts.find(a => a.id === reimburseAccountId)
     const showReimburseSubSelect = reimburseAccount && Array.isArray(reimburseAccount.subAccounts) && reimburseAccount.subAccounts.length > 0
@@ -3192,8 +3214,7 @@ export default function App() {
           <button className="iconBtn" onClick={onClose} type="button">✕</button>
           <div className="catDetailTitle">{category.name}</div>
           <div className="catDetailActions">
-            <button className="pillBtn" type="button" onClick={openEditModal}>Edit</button>
-            <button className="pillBtn danger" type="button" onClick={deleteCategory}>Delete</button>
+            <button className="pillBtn" type="button" onClick={openEditModal} style={{ padding: '6px 12px', fontSize: 12 }}>Edit Card</button>
           </div>
         </div>
 
@@ -3234,7 +3255,20 @@ export default function App() {
           </div>
         )}
 
-        <div className="catDetailForm">
+        {!showAddForm && (
+          <div style={{ margin: '0 10px 16px' }}>
+            <button
+              className="btn"
+              type="button"
+              style={{ width: '100%', borderRadius: 14, padding: '14px', background: 'rgba(90, 95, 176, 0.08)', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px dashed rgba(90, 95, 176, 0.3)' }}
+              onClick={() => setShowAddForm(true)}
+            >
+              + Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
+            </button>
+          </div>
+        )}
+
+        <div className="catDetailForm" style={!showAddForm ? { display: 'none' } : {}}>
           <div className="field">
             <label>Amount (TZS)</label>
             <input
@@ -3365,7 +3399,7 @@ export default function App() {
               placeholder="e.g. Bus fare"
             />
           </div>
-          <div className="catDetailActionsRow">
+          <div className="catDetailActionsRow" style={{ display: 'flex', gap: 10 }}>
             <button
               className="btn addTxnBtn"
               type="button"
@@ -3395,16 +3429,54 @@ export default function App() {
                   setAccountId('')
                   setSubAccountId('')
                   setIsRecurring(false)
+                  setShowAddForm(false)
+                  if (success.id) {
+                    setHighlightId(success.id)
+                    setTimeout(() => setHighlightId(null), 3000)
+                  }
                 }
               }}
+              style={{ background: '#fde047', color: '#52360b', border: '1px solid #fde047', borderRadius: 24, padding: '14px', fontWeight: 700, flex: 1, fontSize: 15 }}
             >
               Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
             </button>
+            {showAddForm && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                style={{ background: '#eaedf3', color: '#1a1d2d', border: '1px solid #eaedf3', padding: '14px', borderRadius: 24, fontWeight: 700, flex: 1, fontSize: 15 }}
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
 
         <div className="catDetailHistory">
-          <div className="catDetailHistoryTitle">Recent {category.name}</div>
+          <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>
+            <span>Recent {category.name}</span>
+            <button 
+              type="button" 
+              onClick={() => {
+                setIsSelectMode(!isSelectMode)
+                setSelectedTxnIds([])
+              }}
+              style={{
+                background: isSelectMode ? '#e2e8f0' : '#fafafa', 
+                border: '1px solid #e2e8f0', 
+                color: '#64748b', 
+                borderRadius: 14, 
+                padding: '4px 12px', 
+                fontSize: 12, 
+                fontWeight: 600, 
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              }}
+            >
+              {isSelectMode ? 'Cancel' : 'Select'}
+            </button>
+          </div>
           {groupedRecent.length === 0 ? (
             <div className="emptyRow">No transactions yet.</div>
           ) : (
@@ -3431,15 +3503,30 @@ export default function App() {
 
                       return (
                         <div
-                          className="catHistoryRow"
+                          className={`catHistoryRow ${t.id === highlightId ? 'highlightRow' : ''} ${selectedTxnIds.includes(t.id) ? 'selectedRow' : ''}`}
                           key={t.id}
-                          onClick={() => openTxnDetail(t)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') openTxnDetail(t)
+                          onClick={() => {
+                            if (isSelectMode) {
+                              setSelectedTxnIds(prev => 
+                                prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                              )
+                            } else {
+                              openTxnDetail(t)
+                            }
                           }}
+                          role="button"
+                          style={{ cursor: 'pointer', position: 'relative' }}
                         >
+                          {isSelectMode && (
+                            <div className="rowCheckbox" style={{ marginRight: 10, display: 'flex', alignItems: 'center' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={selectedTxnIds.includes(t.id)} 
+                                readOnly 
+                                style={{ width: 18, height: 18, cursor: 'pointer', border: '1px solid #dfe3ff' }}
+                              />
+                            </div>
+                          )}
                           <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
                           <div className="catHistoryInfo">
                             <div className="catHistoryTitleRow">{displayTitle}</div>
@@ -3453,6 +3540,7 @@ export default function App() {
                           <div className={`catHistoryAmount ${category.type === 'income' ? 'pos' : 'neg'}`}>
                             {category.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
                           </div>
+                          <div className="catHistoryArrow">›</div>
                         </div>
                       )
                     })}
@@ -3463,11 +3551,194 @@ export default function App() {
           )}
         </div>
 
+        {isSelectMode && selectedTxnIds.length > 0 && (
+          <div className="batchActionsBar" style={{
+            position: 'fixed', bottom: 80, left: 16, right: 16, 
+            background: '#e6fbf0', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 16, 
+            padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center', 
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 9999
+          }}>
+            <div style={{ fontSize: 13, color: 'var(--muted)', flex: 1, fontWeight: 600 }}>
+              {selectedTxnIds.length} Selected
+            </div>
+            <button 
+              className="pillBtn" 
+              type="button" 
+              onClick={() => {
+                setBatchAccountId('')
+                setBatchSubcat('')
+                setBatchNote('')
+                setApplyAccount(false)
+                setApplySubcat(false)
+                setApplyNote(false)
+                setShowBatchEditModal(true)
+              }}
+              style={{ padding: '8px 12px', fontSize: 13, background: 'var(--accent)', color: '#fff', border: 'none' }}
+            >
+              Edit
+            </button>
+            <button 
+              className="pillBtn danger" 
+              type="button" 
+              onClick={() => {
+                if (confirm(`Delete ${selectedTxnIds.length} selected transactions?`)) {
+                  selectedTxnIds.forEach(id => delTxn(id))
+                  setSelectedTxnIds([])
+                  setIsSelectMode(false)
+                }
+              }}
+              style={{ padding: '8px 12px', fontSize: 13 }}
+            >
+              Delete
+            </button>
+            <button 
+              className="pillBtn" 
+              type="button" 
+              onClick={() => {
+                setIsSelectMode(false)
+                setSelectedTxnIds([])
+              }}
+              style={{ padding: '8px 12px', fontSize: 13, background: '#f1f5f9', color: '#44546a', border: 'none' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {showBatchEditModal && (
+          <div className="modalBackdrop" onClick={() => setShowBatchEditModal(false)} style={{ zIndex: 999 }}>
+            <div className="modalCard" onClick={e => e.stopPropagation()} style={{ width: '95%', maxWidth: 450 }}>
+              <div className="modalTitle">Edit {selectedTxnIds.length} Transactions</div>
+              
+              <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="field">
+                  <label>Account</label>
+                  <select value={batchAccountId} onChange={e => setBatchAccountId(e.target.value)}>
+                    <option value="">Leave unchanged</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Subcategory</label>
+                  <select value={batchSubcat} onChange={e => setBatchSubcat(e.target.value)}>
+                    <option value="">Leave unchanged</option>
+                    {subcats.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Note</label>
+                  <input 
+                    type="text" 
+                    placeholder="Leave unchanged" 
+                    value={batchNote} 
+                    onChange={e => setBatchNote(e.target.value)} 
+                  />
+                </div>
+              </div>
+
+              <div className="modalActions" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
+                <button className="pillBtn" type="button" onClick={() => setShowBatchEditModal(false)}>Cancel</button>
+                <button 
+                  className="pillBtn" 
+                  type="button" 
+                  disabled={!batchAccountId && !batchSubcat && !batchNote.trim()}
+                  onClick={() => {
+                    let nextAccounts = [...allAccounts]
+                    
+                    const nextTxns = activeLedger.txns.map(t => {
+                      if (selectedTxnIds.includes(t.id)) {
+                        let updated = { ...t }
+                        const oldAccountId = t.accountId
+                        
+                        if (batchAccountId && batchAccountId !== oldAccountId) {
+                          updated.accountId = batchAccountId
+                          const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0)
+                          
+                          // 1. Subtract from old account
+                          const oldAcct = findAccountByIdOrName(oldAccountId)
+                          if (oldAcct) {
+                            nextAccounts = nextAccounts.map(a => {
+                              if (a.id !== oldAcct.id) return a
+                              const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+                              if (!subs.length) return { ...a, balance: Number(a.balance || 0) - delta }
+                              const targetSubId = subs[0]?.id
+                              return { ...a, subAccounts: subs.map(s => s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) - delta } : s) }
+                            })
+                          }
+                          
+                          // 2. Add to new account
+                          const newAcct = findAccountByIdOrName(batchAccountId)
+                          if (newAcct) {
+                            nextAccounts = nextAccounts.map(a => {
+                              if (a.id !== newAcct.id) return a
+                              const subs = Array.isArray(a.subAccounts) ? a.subAccounts : []
+                              if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta }
+                              const targetSubId = subs[0]?.id
+                              return { ...a, subAccounts: subs.map(s => s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s) }
+                            })
+                          }
+                        }
+
+                        if (batchSubcat) updated.subCategory = batchSubcat
+                        if (batchNote.trim()) updated.note = batchNote
+                        return updated
+                      }
+                      return t
+                    })
+
+                    // Recalculate allAccountTxns entries so Accounts Tab updates correctly
+                    const nonTxnEntries = allAccountTxns.filter(t => t.kind !== 'txn')
+                    const otherTxnEntries = allAccountTxns.filter(
+                      t => t.kind === 'txn' && !ledgerAccountIds.has(t.accountId)
+                    )
+                    const txnEntries = nextTxns
+                      .filter(t => t.accountId)
+                      .map(t => {
+                        const acct = findAccountByIdOrName(t.accountId)
+                        if (!acct) return null
+                        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+                        const targetSubId = subs.length ? subs[0]?.id : null
+                        return {
+                          id: `txn-${t.id}`,
+                          accountId: acct.id,
+                          subAccountId: targetSubId,
+                          amount: Number(t.amount || 0),
+                          direction: t.type === 'income' ? 'in' : 'out',
+                          kind: 'txn',
+                          relatedAccountId: null,
+                          note: t.note || t.category,
+                          date: t.date || todayISO(),
+                          clientId: t.clientId || t.raw?.clientId || ''
+                        }
+                      })
+                      .filter(Boolean)
+
+                    persistLedgerAndAccounts({
+                      nextLedger: { ...activeLedger, txns: nextTxns },
+                      nextAccounts,
+                      nextAccountTxns: [...txnEntries, ...otherTxnEntries, ...nonTxnEntries]
+                    })
+
+                    setSelectedTxnIds([])
+                    setIsSelectMode(false)
+                    setShowBatchEditModal(false)
+                  }}
+                  style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {
           showEditModal && (
             <div className="modalBackdrop" onClick={() => setShowEditModal(false)}>
               <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-                <div className="modalTitle">Edit Category</div>
+                <div className="modalTitle">Edit Category Card</div>
                 <div className="field">
                   <label>Name</label>
                   <input value={editName} onChange={e => setEditName(e.target.value)} />
@@ -3494,13 +3765,18 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <div className="modalActions">
-                  <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
-                    Cancel
+                <div className="modalActions" style={{ display: 'flex', gap: 10, justifyContent: 'space-between', width: '100%', marginTop: 24, alignItems: 'center' }}>
+                  <button className="pillBtn danger" type="button" onClick={deleteCategory} style={{ padding: '8px 16px' }}>
+                    Delete
                   </button>
-                  <button className="btn primary" type="button" onClick={saveCategoryEdit}>
-                    Save
-                  </button>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <button className="btn" type="button" onClick={() => setShowEditModal(false)}>
+                      Cancel
+                    </button>
+                    <button className="btn primary" type="button" onClick={saveCategoryEdit}>
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3660,7 +3936,7 @@ export default function App() {
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
-    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab || 'cashflow')
+    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab || 'analysis')
     const [infoModal, setInfoModal] = useState(null)
     const groups = activeLedger.groups || []
     const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -4811,7 +5087,7 @@ export default function App() {
       };
 
       if (selectedCategory) {
-        return <CategoryDetail category={selectedCategory} />;
+        return <CategoryDetail category={selectedCategory} highlightId={highlightId} setHighlightId={setHighlightId} />;
       }
 
       return (
@@ -5052,7 +5328,7 @@ export default function App() {
 
         <div className="txList">
           <div className="viewTabs">
-            {(settings.insightTabOrder || ['cashflow', 'capital', 'analysis']).map(id => (
+            {(settings.insightTabOrder || ['cashflow', 'analysis', 'capital']).map(id => (
               <button
                 key={id}
                 className={`viewTab ${insightTab === id ? 'active' : ''}`}
@@ -5379,6 +5655,7 @@ export default function App() {
                   type="file"
                   accept=".json,application/json"
                   style={{ display: 'none' }}
+                  onClick={e => { e.target.value = null }}
                   onChange={e => {
                     const file = e.target.files?.[0]
                     if (file) handleImportLoad(file)
@@ -5680,10 +5957,10 @@ export default function App() {
   }
 
   function VisibilitySettings() {
-    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['cashflow', 'capital', 'analysis'])
+    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['cashflow', 'analysis', 'capital'])
     const [appTabOrder, setAppTabOrder] = useState(settings.appTabOrder || ['insights', 'tx', 'accounts', 'settings'])
     const [defaultTab, setDefaultTab] = useState(settings.defaultAppTab || 'tx')
-    const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'cashflow')
+    const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'analysis')
 
     function moveInsight(index, delta) {
       const newOrder = [...insightTabOrder]
@@ -6068,6 +6345,7 @@ export default function App() {
 
       {/* Bottom tabs */}
       <BottomNav tab={tab} setTab={setTab} variant="light" />
+      <GlobalToast />
     </div>
   )
 }

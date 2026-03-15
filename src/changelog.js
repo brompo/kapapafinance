@@ -1,4 +1,12 @@
 export const CHANGELOG = [
+  {
+    version: '0.1.6',
+    date: new Date().toISOString().split('T')[0],
+    changes: [
+      'Implemented Batch Edit Mode for transactions with a floating Action Bar for mass account, subcategory, and note updates.',
+      'Added Sticky Header top-bar floating smoothly on scroll inside Category Detail view layouts.'
+    ]
+  },
     {
         version: '0.1.5',
         date: new Date().toISOString().split('T')[0],

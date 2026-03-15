@@ -143,8 +143,13 @@ export function resetPlainVault(){
 export function exportEncryptedBackup(){
   const meta = localStorage.getItem(LS_META)
   const vault = localStorage.getItem(LS_VAULT)
+  const plain = localStorage.getItem(LS_VAULT_PLAIN)
   return JSON.stringify(
-    { meta: meta ? JSON.parse(meta) : null, vault: vault ? JSON.parse(vault) : null },
+    { 
+      meta: meta ? JSON.parse(meta) : null, 
+      vault: vault ? JSON.parse(vault) : null,
+      plain: plain ? JSON.parse(plain) : null
+    },
     null,
     2
   )
@@ -153,9 +158,17 @@ export function exportEncryptedBackup(){
 export function importEncryptedBackup(jsonText){
   const obj = JSON.parse(jsonText)
   if (!obj || typeof obj !== 'object') throw new Error('Invalid backup file.')
-  if (!obj.meta || !obj.vault) throw new Error('Backup missing meta or vault.')
-  localStorage.setItem(LS_META, JSON.stringify(obj.meta))
-  localStorage.setItem(LS_VAULT, JSON.stringify(obj.vault))
+  const hasEncrypted = obj.meta && obj.vault;
+  const hasPlain = obj.plain;
+  if (!hasEncrypted && !hasPlain) throw new Error('Backup missing required data.')
+  
+  if (hasEncrypted) {
+    localStorage.setItem(LS_META, JSON.stringify(obj.meta))
+    localStorage.setItem(LS_VAULT, JSON.stringify(obj.vault))
+  }
+  if (hasPlain) {
+    localStorage.setItem(LS_VAULT_PLAIN, JSON.stringify(obj.plain))
+  }
 }
 
 export async function resetAll(){

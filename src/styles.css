@@ -274,13 +274,34 @@ label {
 }
 
 .toast {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: #f7f8fc;
-  font-size: 13px;
-  color: var(--muted);
+  position: fixed;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  background: rgba(11, 15, 30, .92);
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  z-index: 1200;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  animation: toastSlideUp 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes toastSlideUp {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .pinWrap {
@@ -1621,17 +1642,11 @@ label {
 }
 
 .txnDetailFooter {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 16px 20px 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
   display: flex;
   gap: 12px;
-  z-index: 1000;
+  margin-top: 24px;
+  border-top: 1px solid #f0f2f8;
+  padding-top: 16px;
 }
 
 /* =========================
@@ -2018,7 +2033,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 10px 2px 80px;
+  /* Kept side padding for content standard index list! */
 }
 
 .catDetailHeader {
@@ -2026,6 +2041,14 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  position: sticky;
+  top: 0;
+  background: #f5f6fc;
+  z-index: 102;
+  padding: 16px 20px;
+  margin: 0 -16px;
+  /* negative margin flush with screen edges securely */
+  border-bottom: 1px solid var(--border);
 }
 
 .catDetailActions {
@@ -2224,6 +2247,45 @@ label {
   border-bottom: none
 }
 
+.catHistoryRow.highlightRow {
+  background: #fff9c4 !important;
+  box-shadow: 0 4px 12px rgba(253, 224, 71, 0.35);
+  animation: fadeOutHighlight 3s forwards;
+}
+
+@keyframes fadeOutHighlight {
+  0% {
+    transform: scale(1);
+    background: #fff9c4;
+  }
+
+  10% {
+    transform: scale(1.03);
+  }
+
+  20% {
+    transform: scale(1);
+  }
+
+  75% {
+    background: #fff9c4;
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+.catHistoryArrow {
+  font-size: 17px;
+  color: var(--muted);
+  opacity: 0.5;
+  margin-left: 6px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
 .catHistoryRow:hover {
   background: #f2f4ff;
   box-shadow: 0 4px 12px rgba(72, 84, 165, .08)
@@ -2410,7 +2472,7 @@ label {
   justify-content: space-around;
   gap: 10px;
   backdrop-filter: blur(12px);
-  z-index: 100;
+  z-index: 1005;
 }
 
 .bottomNav.light {

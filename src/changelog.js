@@ -4,7 +4,7 @@ export const CHANGELOG = [
         version: '1.4.0',
         date: '2026-03-15',
         changes: [
-            'Implimented'
+            'Implimented a new transaction tab in the insights page, to provide day to day transaction summary'
         ]
     },
     {

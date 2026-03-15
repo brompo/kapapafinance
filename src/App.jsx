@@ -391,12 +391,12 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
 
         <div className="txnDetailFooter">
           {onDelete && isEditable && (
-            <button 
-              className="pillBtn danger" 
-              type="button" 
+            <button
+              className="pillBtn danger"
+              type="button"
               onClick={() => {
                 if (confirm('Delete this transaction?')) onDelete()
-              }} 
+              }}
               style={{ padding: '8px 16px', fontSize: 13, flex: 1, justifyContent: 'center', display: 'flex' }}
             >
               Delete
@@ -665,7 +665,7 @@ function normalizeVault(data) {
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
         defaultInsightTab: 'analysis',
-        insightTabOrder: ['cashflow', 'analysis', 'capital']
+        insightTabOrder: ['transactions', 'summary', 'analysis']
       },
       clients: []
     }
@@ -682,7 +682,7 @@ function normalizeVault(data) {
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
         defaultInsightTab: 'analysis',
-        insightTabOrder: ['cashflow', 'analysis', 'capital']
+        insightTabOrder: ['transactions', 'summary', 'analysis']
       },
       clients: []
     }
@@ -702,7 +702,7 @@ function normalizeVault(data) {
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         defaultAppTab: data.settings?.defaultAppTab || 'tx',
         defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
-        insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'analysis', 'capital'],
+        insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
         appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
       },
       clients: Array.isArray(data.clients) ? data.clients : []
@@ -726,7 +726,7 @@ function normalizeVault(data) {
       requireAccountForTxns: !!data.settings?.requireAccountForTxns,
       defaultAppTab: data.settings?.defaultAppTab || 'tx',
       defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
-      insightTabOrder: data.settings?.insightTabOrder || ['cashflow', 'analysis', 'capital'],
+      insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
       appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
     },
     clients: Array.isArray(data.clients) ? data.clients : []
@@ -767,7 +767,7 @@ export default function App() {
   })
   const [selectedCategory, setSelectedCategory] = useState(null) // { type, name }
   const [showAddForm, setShowAddForm] = useState(true)
-  
+
   useEffect(() => {
     if (selectedCategory) {
       setShowAddForm(true);
@@ -3255,17 +3255,17 @@ export default function App() {
                 <button className="iconBtn" onClick={onClose} type="button" style={{ marginTop: 2 }}>✕</button>
                 <div>
                   <div className="catDetailTitle" style={{ fontSize: 17, fontWeight: 700, lineHeight: '1.2' }}>{category.name}</div>
-                    <button 
-                      type="button" 
-                      onClick={openEditModal} 
-                      style={{ 
-                        background: 'none', border: 'none', padding: 0, 
-                        color: '#4b5563', fontSize: 11, textDecoration: 'underline', 
-                        cursor: 'pointer', display: 'block', marginTop: 2 
-                      }}
-                    >
-                      Edit Card
-                    </button>
+                  <button
+                    type="button"
+                    onClick={openEditModal}
+                    style={{
+                      background: 'none', border: 'none', padding: 0,
+                      color: '#4b5563', fontSize: 11, textDecoration: 'underline',
+                      cursor: 'pointer', display: 'block', marginTop: 2
+                    }}
+                  >
+                    Edit Card
+                  </button>
                 </div>
               </div>
               {!showAddForm && (
@@ -3273,9 +3273,9 @@ export default function App() {
               )}
               {showAddForm && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowAddForm(false)} 
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
                     style={{ background: '#eef2ff', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6366f1', fontSize: 16 }}
                   >
                     📋
@@ -3310,254 +3310,254 @@ export default function App() {
         )}
 
         {showAddForm && (
-        <div className="catDetailForm">
-          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* Huge Number Display */}
-          <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            {prevValue && operator ? (
-              <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2, fontWeight: 500 }}>
-                {formatCommas(prevValue)} {operator}
+          <div className="catDetailForm">
+            <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 0, display: 'flex', flexDirection: 'column' }}>
+              {/* Huge Number Display */}
+              <div style={{ textAlign: 'center', margin: '10px 0 6px', fontWeight: 700, color: '#111827', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                {prevValue && operator ? (
+                  <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2, fontWeight: 500 }}>
+                    {formatCommas(prevValue)} {operator}
+                  </div>
+                ) : null}
+
+                {/* TSh at the top */}
+                <div style={{ fontSize: 28, color: '#111827', marginBottom: 2, fontWeight: 800 }}>TSh</div>
+
+                {/* Fixed Sized Amount 35px */}
+                <div style={{ fontSize: 35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {formatCommas(amount || '0')}
+                </div>
               </div>
-            ) : null}
-            
-            {/* TSh at the top */}
-            <div style={{ fontSize: 28, color: '#111827', marginBottom: 2, fontWeight: 800 }}>TSh</div>
-            
-            {/* Fixed Sized Amount 35px */}
-            <div style={{ fontSize: 35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {formatCommas(amount || '0')}
-            </div>
-          </div>
 
 
 
-          {/* Inner Subcategory Chips */}
-          {subcats.length > 0 && (
-            <div className="catDetailChips" style={{ marginBottom: 15, padding: 0 }}>
-              {subcats.map(s => (
+              {/* Inner Subcategory Chips */}
+              {subcats.length > 0 && (
+                <div className="catDetailChips" style={{ marginBottom: 15, padding: 0 }}>
+                  {subcats.map(s => (
+                    <button
+                      className={`catChip ${selectedSub === s ? 'active' : ''}`}
+                      key={s}
+                      type="button"
+                      onClick={() => setSelectedSub(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  <button className="catChip gear" type="button" onClick={addSubcategory}>⚙</button>
+                </div>
+              )}
+
+              {/* 4-Item Action Grid Above Keypad */}
+              <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 0 }}>
+
+                {/* 1. Account */}
+                <div style={{ position: 'relative' }}>
+                  <select value={accountId} onChange={e => { setAccountId(e.target.value); if (e.target.value) setAccountError(false); }} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }}>
+                    <option value="">Account</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                  <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 16 }}>🏦</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}</span>
+                  </div>
+                </div>
+
+                {/* 2. Date */}
+                <div style={{ position: 'relative' }}>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} />
+                  <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 16 }}>📅</span> <span style={{ fontWeight: 600 }}>{date === todayISO() ? 'Today' : date.split('-').slice(1).join('/')}</span>
+                  </div>
+                </div>
+
+                {/* 3. Note */}
+                <div style={{ position: 'relative' }}>
+                  <input value={note} onChange={e => setNote(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} placeholder="Note" />
+                  <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: note ? '#ffedd5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 16 }}>📝</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{note || 'Note'}</span>
+                  </div>
+                </div>
+
+                {/* 4. Repeat */}
                 <button
-                  className={`catChip ${selectedSub === s ? 'active' : ''}`}
-                  key={s}
                   type="button"
-                  onClick={() => setSelectedSub(s)}
+                  className={`RciconBtn ${isRecurring ? 'active' : ''}`}
+                  style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: isRecurring ? '#a5eba5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: '#1f2937', cursor: 'pointer', justifyContent: 'center', height: '100%' }}
+                  onClick={() => setIsRecurring(!isRecurring)}
                 >
-                  {s}
+                  <span style={{ fontSize: 16 }}>⟳</span> <span style={{ fontWeight: 600 }}>Repeat</span>
                 </button>
-              ))}
-              <button className="catChip gear" type="button" onClick={addSubcategory}>⚙</button>
-            </div>
-          )}
-
-          {/* 4-Item Action Grid Above Keypad */}
-          <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 0 }}>
-
-            {/* 1. Account */}
-            <div style={{ position: 'relative' }}>
-              <select value={accountId} onChange={e => { setAccountId(e.target.value); if (e.target.value) setAccountError(false); }} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }}>
-                <option value="">Account</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
-                <span style={{ fontSize: 16 }}>🏦</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}</span>
               </div>
-            </div>
 
-            {/* 2. Date */}
-            <div style={{ position: 'relative' }}>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} />
-              <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
-                <span style={{ fontSize: 16 }}>📅</span> <span style={{ fontWeight: 600 }}>{date === todayISO() ? 'Today' : date.split('-').slice(1).join('/')}</span>
+              {showSubAccountSelect && accountId && accounts.find(a => a.id === accountId) && (
+                <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', background: '#fafafa', padding: '6px 12px', borderRadius: 8 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Sub-account:</span>
+                  <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)} style={{ flex: 1, padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #e4e4e9' }}>
+                    <option value="">Select sub-account</option>
+                    {accounts.find(a => a.id === accountId).subAccounts.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                {category.type === 'income' && activeLedger && activeLedger.type === 'business' && (
+                  <select
+                    value={clientId}
+                    onChange={e => {
+                      if (e.target.value === 'new') {
+                        const name = prompt('New client name?');
+                        if (name && name.trim()) {
+                          const newClient = { id: uid(), name: name.trim() };
+                          setPendingClient(newClient);
+                          setClientId(newClient.id);
+                        }
+                      } else {
+                        setClientId(e.target.value)
+                      }
+                    }}
+                    style={{ padding: '6px', fontSize: 11, borderRadius: 8, flex: 1, height: 'auto', border: '1px solid #eef2ff' }}
+                  >
+                    <option value="">Client (optional)</option>
+                    {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="new">+ Add Client</option>
+                  </select>
+                )}
               </div>
+
+              {isRecurring && (
+                <div className="recurringSunkenBox" style={{ display: 'flex', gap: 8, background: '#f8f9fc', padding: '6px 10px', borderRadius: 10, marginBottom: 6, border: '1px solid #eef2ff' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Frequency</label>
+                    <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }}>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Count</label>
+                    <input type="number" min="2" max="60" value={recurringCount} onChange={e => setRecurringCount(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }} />
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            {/* 3. Note */}
-            <div style={{ position: 'relative' }}>
-              <input value={note} onChange={e => setNote(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 10 }} placeholder="Note" />
-              <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: note ? '#ffedd5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'center' }}>
-                <span style={{ fontSize: 16 }}>📝</span> <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>{note || 'Note'}</span>
-              </div>
-            </div>
+            <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '6px 16px 12px', background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+              {[
+                '+', '-', '×', '÷',
+                '7', '8', '9', '=',
+                '4', '5', '6', 'C',
+                '1', '2', '3', '⌫',
+                '.', '0', 'Save'
+              ].map((key, idx) => {
+                const isOperator = ['+', '-', '×', '÷'].includes(key);
 
-            {/* 4. Repeat */}
-            <button
-              type="button"
-              className={`RciconBtn ${isRecurring ? 'active' : ''}`}
-              style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: isRecurring ? '#a5eba5' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: '#1f2937', cursor: 'pointer', justifyContent: 'center', height: '100%' }}
-              onClick={() => setIsRecurring(!isRecurring)}
-            >
-              <span style={{ fontSize: 16 }}>⟳</span> <span style={{ fontWeight: 600 }}>Repeat</span>
-            </button>
-          </div>
-
-          {showSubAccountSelect && accountId && accounts.find(a => a.id === accountId) && (
-            <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', background: '#fafafa', padding: '6px 12px', borderRadius: 8 }}>
-              <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Sub-account:</span>
-              <select value={subAccountId} onChange={e => setSubAccountId(e.target.value)} style={{ flex: 1, padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #e4e4e9' }}>
-                <option value="">Select sub-account</option>
-                {accounts.find(a => a.id === accountId).subAccounts.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
-            {category.type === 'income' && activeLedger && activeLedger.type === 'business' && (
-              <select
-                value={clientId}
-                onChange={e => {
-                  if (e.target.value === 'new') {
-                    const name = prompt('New client name?');
-                    if (name && name.trim()) {
-                      const newClient = { id: uid(), name: name.trim() };
-                      setPendingClient(newClient);
-                      setClientId(newClient.id);
-                    }
+                const handleCalculate = (nextOp) => {
+                  let res = Number(amount || '0');
+                  if (prevValue && operator) {
+                    const a = Number(prevValue);
+                    const b = Number(amount || '0');
+                    if (operator === '+') res = a + b;
+                    else if (operator === '-') res = a - b;
+                    else if (operator === '×') res = a * b;
+                    else if (operator === '÷') res = b !== 0 ? a / b : 0;
                   } else {
-                    setClientId(e.target.value)
+                    res = Number(amount || '0');
                   }
-                }}
-                style={{ padding: '6px', fontSize: 11, borderRadius: 8, flex: 1, height: 'auto', border: '1px solid #eef2ff' }}
-              >
-                <option value="">Client (optional)</option>
-                {activeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="new">+ Add Client</option>
-              </select>
-            )}
-          </div>
+                  setAmount(String(res));
+                  if (nextOp) {
+                    setPrevValue(String(res));
+                    setOperator(nextOp);
+                    setAmount('');
+                  } else {
+                    setPrevValue('');
+                    setOperator('');
+                  }
+                };
 
-          {isRecurring && (
-            <div className="recurringSunkenBox" style={{ display: 'flex', gap: 8, background: '#f8f9fc', padding: '6px 10px', borderRadius: 10, marginBottom: 6, border: '1px solid #eef2ff' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Frequency</label>
-                <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }}>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 8, marginBottom: 0, color: '#6b7280', display: 'block' }}>Count</label>
-                <input type="number" min="2" max="60" value={recurringCount} onChange={e => setRecurringCount(e.target.value)} style={{ padding: '3px 4px', fontSize: 12, height: 'auto', width: '100%' }} />
-              </div>
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`keypadBtn ${isOperator ? 'action' : key === 'Save' ? 'submit' : ''}`}
+                    style={{
+                      background: key === 'Save' ? '#ffd76a' : ['+', '-', '×', '÷', '='].includes(key) ? '#f3f4f6' : '#fff',
+                      color: key === 'Save' ? '#575866' : key === 'C' || key === '⌫' ? '#ff5b5b' : '#1f2937',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 12,
+                      padding: '16px',
+                      fontWeight: 700,
+                      fontSize: 20,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gridColumn: key === 'Save' ? 'span 2' : 'auto'
+                    }}
+                    disabled={key === 'Save' && isSaving}
+                    onClick={async () => {
+                      if (key === '⌫') {
+                        setAmount(prev => (prev.length <= 1 ? '' : prev.slice(0, -1)));
+                      } else if (key === '.') {
+                        if (!amount.includes('.')) setAmount(prev => prev + '.');
+                      } else if (key === 'C') {
+                        setAmount('');
+                        setPrevValue('');
+                        setOperator('');
+                      } else if (['+', '-', '×', '÷'].includes(key)) {
+                        handleCalculate(key);
+                      } else if (key === '=') {
+                        handleCalculate('');
+                      } else if (key === 'Save') {
+                        // Submit transaction logic
+                        let finalAmt = amount;
+                        if (prevValue && operator) {
+                          const a = Number(prevValue);
+                          const b = Number(amount || '0');
+                          let res = b;
+                          if (operator === '+') res = a + b;
+                          else if (operator === '-') res = a - b;
+                          else if (operator === '×') res = a * b;
+                          else if (operator === '÷') res = b !== 0 ? a / b : 0;
+                          finalAmt = String(res);
+                        }
+
+                        const amtVal = Number(finalAmt || '0');
+                        if (!amtVal || amtVal <= 0) {
+                          setAmountError(true);
+                          show('Enter a valid amount.');
+                          return;
+                        }
+                        if (settings.requireAccountForTxns && !accountId) {
+                          setAccountError(true);
+                          show('Please select an account.');
+                          return;
+                        }
+                        setIsSaving(true);
+                        const finalCount = parseInt(recurringCount, 10) || 12;
+                        const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note;
+                        const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient, true);
+                        setIsSaving(false);
+                        if (success) {
+                          setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
+                          if (success.id) { setHighlightId(success.id); setTimeout(() => setHighlightId(null), 3000); }
+                        }
+                      } else {
+                        setAmount(prev => (prev === '0' || prev === '' ? key : prev + key));
+                        setAmountError(false);
+                      }
+                    }}
+                  >
+                    {key}
+                  </button>
+                );
+              })}
             </div>
-          )}
-
           </div>
-
-          <div className="customKeypad" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '6px 16px 12px', background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
-            {[
-              '+', '-', '×', '÷',
-              '7', '8', '9', '=',
-              '4', '5', '6', 'C',
-              '1', '2', '3', '⌫',
-              '.', '0', 'Save'
-            ].map((key, idx) => {
-              const isOperator = ['+', '-', '×', '÷'].includes(key);
-              
-              const handleCalculate = (nextOp) => {
-                 let res = Number(amount || '0');
-                 if (prevValue && operator) {
-                     const a = Number(prevValue);
-                     const b = Number(amount || '0');
-                     if (operator === '+') res = a + b;
-                     else if (operator === '-') res = a - b;
-                     else if (operator === '×') res = a * b;
-                     else if (operator === '÷') res = b !== 0 ? a / b : 0;
-                 } else {
-                     res = Number(amount || '0');
-                 }
-                 setAmount(String(res));
-                 if (nextOp) {
-                     setPrevValue(String(res));
-                     setOperator(nextOp);
-                     setAmount('');
-                 } else {
-                     setPrevValue('');
-                     setOperator('');
-                 }
-              };
-
-              return (
-                <button 
-                  key={idx} 
-                  type="button" 
-                  className={`keypadBtn ${isOperator ? 'action' : key === 'Save' ? 'submit' : ''}`}
-                  style={{ 
-                    background: key === 'Save' ? '#ffd76a' : ['+', '-', '×', '÷', '='].includes(key) ? '#f3f4f6' : '#fff', 
-                    color: key === 'Save' ? '#575866' : key === 'C' || key === '⌫' ? '#ff5b5b' : '#1f2937', 
-                    border: '1px solid #e5e7eb', 
-                    borderRadius: 12, 
-                    padding: '16px', 
-                    fontWeight: 700, 
-                    fontSize: 20, 
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gridColumn: key === 'Save' ? 'span 2' : 'auto'
-                  }}
-                  disabled={key === 'Save' && isSaving}
-                  onClick={async () => {
-                    if (key === '⌫') { 
-                      setAmount(prev => (prev.length <= 1 ? '' : prev.slice(0, -1))); 
-                    } else if (key === '.') { 
-                      if (!amount.includes('.')) setAmount(prev => prev + '.'); 
-                    } else if (key === 'C') {
-                      setAmount('');
-                      setPrevValue('');
-                      setOperator('');
-                    } else if (['+', '-', '×', '÷'].includes(key)) {
-                      handleCalculate(key);
-                    } else if (key === '=') {
-                      handleCalculate('');
-                    } else if (key === 'Save') { 
-                      // Submit transaction logic
-                      let finalAmt = amount;
-                      if (prevValue && operator) {
-                         const a = Number(prevValue);
-                         const b = Number(amount || '0');
-                         let res = b;
-                         if (operator === '+') res = a + b;
-                         else if (operator === '-') res = a - b;
-                         else if (operator === '×') res = a * b;
-                         else if (operator === '÷') res = b !== 0 ? a / b : 0;
-                         finalAmt = String(res);
-                      }
-
-                      const amtVal = Number(finalAmt || '0');
-                      if (!amtVal || amtVal <= 0) {
-                        setAmountError(true);
-                        show('Enter a valid amount.');
-                        return;
-                      }
-                      if (settings.requireAccountForTxns && !accountId) {
-                        setAccountError(true);
-                        show('Please select an account.');
-                        return;
-                      }
-                      setIsSaving(true);
-                      const finalCount = parseInt(recurringCount, 10) || 12;
-                      const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note;
-                      const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient, true);
-                      setIsSaving(false);
-                      if (success) {
-                        setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
-                        if (success.id) { setHighlightId(success.id); setTimeout(() => setHighlightId(null), 3000); }
-                      }
-                    } else { 
-                      setAmount(prev => (prev === '0' || prev === '' ? key : prev + key)); 
-                      setAmountError(false); 
-                    }
-                  }}
-                >
-                  {key}
-                </button>
-              );
-            })}
-          </div>
-        </div>
         )}
 
         {!showAddForm && (
@@ -3565,10 +3565,10 @@ export default function App() {
             <button
               className="btn"
               type="button"
-              style={{ 
-                width: '100%', borderRadius: 14, padding: '12px', 
-                background: '#ffd76a', color: '#575866', border: '1px solid #ffd1d1', 
-                fontWeight: 600, cursor: 'pointer' 
+              style={{
+                width: '100%', borderRadius: 14, padding: '12px',
+                background: '#ffd76a', color: '#575866', border: '1px solid #ffd1d1',
+                fontWeight: 600, cursor: 'pointer'
               }}
               onClick={() => setShowAddForm(true)}
             >
@@ -3578,118 +3578,118 @@ export default function App() {
         )}
 
         {!showAddForm && (
-        <div className="catDetailHistory">
-          <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>
-            <span>Recent {category.name}</span>
-            <button 
-              type="button" 
-              onClick={() => {
-                setIsSelectMode(!isSelectMode)
-                setSelectedTxnIds([])
-              }}
-              style={{
-                background: isSelectMode ? '#e2e8f0' : '#fafafa', 
-                border: '1px solid #e2e8f0', 
-                color: '#64748b', 
-                borderRadius: 14, 
-                padding: '4px 12px', 
-                fontSize: 12, 
-                fontWeight: 600, 
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-              }}
-            >
-              {isSelectMode ? 'Cancel' : 'Select'}
-            </button>
-          </div>
-          {groupedRecent.length === 0 ? (
-            <div className="emptyRow">No transactions yet.</div>
-          ) : (
-            groupedRecent.map(([date, items]) => {
-              const total = items.reduce((s, t) => s + Number(t.amount || 0), 0)
-              return (
-                <div className="catDetailHistoryCard" key={date}>
-                  <div className="catHistoryHead">
-                    <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
-                    <div className="catHistoryTotals">
-                      <span className={category.type === 'income' ? 'in' : 'out'}>
-                        {category.type === 'income' ? 'IN' : 'OUT'} {fmtTZS(total)}
-                      </span>
+          <div className="catDetailHistory">
+            <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>
+              <span>Recent {category.name}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSelectMode(!isSelectMode)
+                  setSelectedTxnIds([])
+                }}
+                style={{
+                  background: isSelectMode ? '#e2e8f0' : '#fafafa',
+                  border: '1px solid #e2e8f0',
+                  color: '#64748b',
+                  borderRadius: 14,
+                  padding: '4px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                }}
+              >
+                {isSelectMode ? 'Cancel' : 'Select'}
+              </button>
+            </div>
+            {groupedRecent.length === 0 ? (
+              <div className="emptyRow">No transactions yet.</div>
+            ) : (
+              groupedRecent.map(([date, items]) => {
+                const total = items.reduce((s, t) => s + Number(t.amount || 0), 0)
+                return (
+                  <div className="catDetailHistoryCard" key={date}>
+                    <div className="catHistoryHead">
+                      <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                      <div className="catHistoryTotals">
+                        <span className={category.type === 'income' ? 'in' : 'out'}>
+                          {category.type === 'income' ? 'IN' : 'OUT'} {fmtTZS(total)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="catHistoryBody">
-                    {items.map(t => {
-                      const acct = t.accountId && accounts.find(a => a.id === t.accountId)
-                      const clientName = t.clientId ? clients.find(c => c.id === t.clientId)?.name : null;
-                      let displayTitle = t.note || category.name;
-                      if (category.type === 'income' && clientName) {
-                        displayTitle = t.note ? `${clientName} • ${t.note}` : clientName;
-                      }
+                    <div className="catHistoryBody">
+                      {items.map(t => {
+                        const acct = t.accountId && accounts.find(a => a.id === t.accountId)
+                        const clientName = t.clientId ? clients.find(c => c.id === t.clientId)?.name : null;
+                        let displayTitle = t.note || category.name;
+                        if (category.type === 'income' && clientName) {
+                          displayTitle = t.note ? `${clientName} • ${t.note}` : clientName;
+                        }
 
-                      return (
-                        <div
-                          className={`catHistoryRow ${t.id === highlightId ? 'highlightRow' : ''} ${selectedTxnIds.includes(t.id) ? 'selectedRow' : ''}`}
-                          key={t.id}
-                          onClick={() => {
-                            if (isSelectMode) {
-                              setSelectedTxnIds(prev => 
-                                prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                              )
-                            } else {
-                              openTxnDetail(t)
-                            }
-                          }}
-                          role="button"
-                          style={{ cursor: 'pointer', position: 'relative' }}
-                        >
-                          {isSelectMode && (
-                            <div className="rowCheckbox" style={{ marginRight: 10, display: 'flex', alignItems: 'center' }}>
-                              <input 
-                                type="checkbox" 
-                                checked={selectedTxnIds.includes(t.id)} 
-                                readOnly 
-                                style={{ width: 18, height: 18, cursor: 'pointer', border: '1px solid #dfe3ff' }}
-                              />
-                            </div>
-                          )}
-                          <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
-                          <div className="catHistoryInfo">
-                            <div className="catHistoryTitleRow">{displayTitle}</div>
-                            <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
-                            {category.type === 'expense' && t.reimbursedBy && t.reimbursedBy.length > 0 && (
-                              <div className="reimbursedBadge">
-                                ✓ Reimbursed {fmtTZS(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                        return (
+                          <div
+                            className={`catHistoryRow ${t.id === highlightId ? 'highlightRow' : ''} ${selectedTxnIds.includes(t.id) ? 'selectedRow' : ''}`}
+                            key={t.id}
+                            onClick={() => {
+                              if (isSelectMode) {
+                                setSelectedTxnIds(prev =>
+                                  prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                                )
+                              } else {
+                                openTxnDetail(t)
+                              }
+                            }}
+                            role="button"
+                            style={{ cursor: 'pointer', position: 'relative' }}
+                          >
+                            {isSelectMode && (
+                              <div className="rowCheckbox" style={{ marginRight: 10, display: 'flex', alignItems: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTxnIds.includes(t.id)}
+                                  readOnly
+                                  style={{ width: 18, height: 18, cursor: 'pointer', border: '1px solid #dfe3ff' }}
+                                />
                               </div>
                             )}
+                            <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
+                            <div className="catHistoryInfo">
+                              <div className="catHistoryTitleRow">{displayTitle}</div>
+                              <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
+                              {category.type === 'expense' && t.reimbursedBy && t.reimbursedBy.length > 0 && (
+                                <div className="reimbursedBadge">
+                                  ✓ Reimbursed {fmtTZS(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                                </div>
+                              )}
+                            </div>
+                            <div className={`catHistoryAmount ${category.type === 'income' ? 'pos' : 'neg'}`}>
+                              {category.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
+                            </div>
+                            <div className="catHistoryArrow">›</div>
                           </div>
-                          <div className={`catHistoryAmount ${category.type === 'income' ? 'pos' : 'neg'}`}>
-                            {category.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
-                          </div>
-                          <div className="catHistoryArrow">›</div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            })
-          )}
-        </div>
+                )
+              })
+            )}
+          </div>
         )}
 
         {isSelectMode && selectedTxnIds.length > 0 && (
           <div className="batchActionsBar" style={{
-            position: 'fixed', bottom: 80, left: 16, right: 16, 
-            background: '#e6fbf0', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 16, 
-            padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center', 
+            position: 'fixed', bottom: 80, left: 16, right: 16,
+            background: '#e6fbf0', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 16,
+            padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center',
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 9999
           }}>
             <div style={{ fontSize: 13, color: 'var(--muted)', flex: 1, fontWeight: 600 }}>
               {selectedTxnIds.length} Selected
             </div>
-            <button 
-              className="pillBtn" 
-              type="button" 
+            <button
+              className="pillBtn"
+              type="button"
               onClick={() => {
                 setBatchAccountId('')
                 setBatchSubcat('')
@@ -3703,9 +3703,9 @@ export default function App() {
             >
               Edit
             </button>
-            <button 
-              className="pillBtn danger" 
-              type="button" 
+            <button
+              className="pillBtn danger"
+              type="button"
               onClick={() => {
                 if (confirm(`Delete ${selectedTxnIds.length} selected transactions?`)) {
                   selectedTxnIds.forEach(id => delTxn(id))
@@ -3717,9 +3717,9 @@ export default function App() {
             >
               Delete
             </button>
-            <button 
-              className="pillBtn" 
-              type="button" 
+            <button
+              className="pillBtn"
+              type="button"
               onClick={() => {
                 setIsSelectMode(false)
                 setSelectedTxnIds([])
@@ -3735,7 +3735,7 @@ export default function App() {
           <div className="modalBackdrop" onClick={() => setShowBatchEditModal(false)} style={{ zIndex: 999 }}>
             <div className="modalCard" onClick={e => e.stopPropagation()} style={{ width: '95%', maxWidth: 450 }}>
               <div className="modalTitle">Edit {selectedTxnIds.length} Transactions</div>
-              
+
               <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="field">
                   <label>Account</label>
@@ -3755,33 +3755,33 @@ export default function App() {
 
                 <div className="field">
                   <label>Note</label>
-                  <input 
-                    type="text" 
-                    placeholder="Leave unchanged" 
-                    value={batchNote} 
-                    onChange={e => setBatchNote(e.target.value)} 
+                  <input
+                    type="text"
+                    placeholder="Leave unchanged"
+                    value={batchNote}
+                    onChange={e => setBatchNote(e.target.value)}
                   />
                 </div>
               </div>
 
               <div className="modalActions" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
                 <button className="pillBtn" type="button" onClick={() => setShowBatchEditModal(false)}>Cancel</button>
-                <button 
-                  className="pillBtn" 
-                  type="button" 
+                <button
+                  className="pillBtn"
+                  type="button"
                   disabled={!batchAccountId && !batchSubcat && !batchNote.trim()}
                   onClick={() => {
                     let nextAccounts = [...allAccounts]
-                    
+
                     const nextTxns = activeLedger.txns.map(t => {
                       if (selectedTxnIds.includes(t.id)) {
                         let updated = { ...t }
                         const oldAccountId = t.accountId
-                        
+
                         if (batchAccountId && batchAccountId !== oldAccountId) {
                           updated.accountId = batchAccountId
                           const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0)
-                          
+
                           // 1. Subtract from old account
                           const oldAcct = findAccountByIdOrName(oldAccountId)
                           if (oldAcct) {
@@ -3793,7 +3793,7 @@ export default function App() {
                               return { ...a, subAccounts: subs.map(s => s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) - delta } : s) }
                             })
                           }
-                          
+
                           // 2. Add to new account
                           const newAcct = findAccountByIdOrName(batchAccountId)
                           if (newAcct) {
@@ -4062,7 +4062,7 @@ export default function App() {
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
-    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab || 'analysis')
+    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab === 'cashflow' || settings.defaultInsightTab === 'capital' ? 'summary' : settings.defaultInsightTab || 'summary')
     const [infoModal, setInfoModal] = useState(null)
     const groups = activeLedger.groups || []
     const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -4410,6 +4410,34 @@ export default function App() {
       }
       return Array.from(map.entries())
     }, [combinedTxns])
+
+    const insightFilteredTxns = useMemo(() => {
+      const isMonthView = viewGranularity === 'month'
+      const isWeekView = viewGranularity === 'week'
+
+      return combinedTxns.filter(t => {
+        const date = t.date || todayISO()
+        if (isMonthView) {
+          return date.startsWith(statPeriod)
+        } else if (isWeekView) {
+          const start = new Date(statPeriod)
+          const end = new Date(statPeriod)
+          end.setDate(end.getDate() + 7)
+          return date >= statPeriod && date < end.toISOString().substring(0, 10)
+        } else {
+          return Number(date.substring(0, 4)) === statYear
+        }
+      })
+    }, [combinedTxns, viewGranularity, statPeriod, statYear])
+
+    const groupedInsightsTxns = useMemo(() => {
+      const map = new Map()
+      for (const t of insightFilteredTxns) {
+        if (!map.has(t.date)) map.set(t.date, [])
+        map.get(t.date).push(t)
+      }
+      return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+    }, [insightFilteredTxns])
 
     const monthlyStats = useMemo(() => {
       // Aggregate by month (if year view), by day (if month view), or by day (if week view)
@@ -5215,12 +5243,12 @@ export default function App() {
       if (selectedCategory) {
         const catObj = typeof selectedCategory === 'string' ? { name: selectedCategory, type: breakdownType } : selectedCategory;
         return (
-          <CategoryDetail 
-            category={catObj} 
-            highlightId={highlightId} 
-            setHighlightId={setHighlightId} 
-            showAddForm={showAddForm} 
-            setShowAddForm={setShowAddForm} 
+          <CategoryDetail
+            category={catObj}
+            highlightId={highlightId}
+            setHighlightId={setHighlightId}
+            showAddForm={showAddForm}
+            setShowAddForm={setShowAddForm}
             onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient) => {
               return addQuickTxn({
                 type: catObj.type,
@@ -5477,20 +5505,75 @@ export default function App() {
 
         <div className="txList">
           <div className="viewTabs">
-            {(settings.insightTabOrder || ['cashflow', 'analysis', 'capital']).map(id => (
+            {(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'analysis']).map(id => (
               <button
                 key={id}
                 className={`viewTab ${insightTab === id ? 'active' : ''}`}
                 onClick={() => setInsightTab(id)}
               >
-                {id === 'cashflow' ? 'Cashflow' : id === 'capital' ? 'Capital' : 'Analysis'}
+                {id === 'transactions' ? 'Transactions' : id === 'summary' ? 'Summary' : 'Analysis'}
               </button>
             ))}
           </div>
 
-          {insightTab === 'cashflow' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {insightTab === 'transactions' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
+              {groupedInsightsTxns.length === 0 ? (
+                <div className="card" style={{ margin: 0, padding: 15 }}>
+                  <div className="emptyRow">No transactions for this period.</div>
+                </div>
+              ) : (
+                groupedInsightsTxns.map(([date, items]) => {
+                  const totalIn = items.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0)
+                  const totalOut = items.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0)
+
+                  return (
+                    <div className="catDetailHistoryCard" key={date} style={{ margin: 0 }}>
+                      <div className="catHistoryHead">
+                        <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                        <div className="catHistoryTotals" style={{ display: 'flex', gap: 8, fontSize: 11, fontWeight: 600 }}>
+                          {totalIn > 0 && <span style={{ color: '#10b981' }}>IN {fmtCompact(totalIn)}</span>}
+                          {totalOut > 0 && <span style={{ color: '#ef4444' }}>OUT {fmtCompact(totalOut)}</span>}
+                        </div>
+                      </div>
+                      <div className="catHistoryBody">
+                        {items.map(t => (
+                          <div className="catHistoryRow" key={t.id} style={{ borderBottom: t.id === items[items.length - 1].id ? 'none' : '1px solid var(--border)' }}>
+                            <div className="catHistoryIcon" style={{ background: 'var(--bg-2)', color: 'var(--primary)', fontWeight: 700, borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, marginRight: 10 }}>
+                              {t.title.slice(0, 1).toUpperCase()}
+                            </div>
+                            <div className="catHistoryInfo" style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)' }}>{t.title}</span>
+                                <span style={{ fontSize: 11, color: '#6b7280' }}>{t.sub || t.note}</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: t.direction === 'in' ? '#10b981' : '#ef4444' }}>
+                                  {t.direction === 'in' ? '+' : '-'}{fmtCompact(t.amount)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+
+          {insightTab === 'summary' && (
+            <div style={{ paddingBottom: 24 }}>
+              <CategoryBreakdown />
+            </div>
+          )}
+
+          {insightTab === 'analysis' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
               <CashflowChart />
+
+              {/* Revenue by Customer */}
               <div className="card" style={{ margin: 0, padding: 15 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Customer</div>
@@ -5520,152 +5603,116 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* Capital Allocation & Metrics */}
+              {(() => {
+                const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook
+                const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0
+                const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0
+                const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0
+                const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
+
+                return (
+                  <>
+                    <div className="intelSection" style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
+                      </div>
+                      <div className="allocationBarWrap">
+                        <div className="allocationBar">
+                          {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
+                          {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
+                          {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
+                          {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
+                        </div>
+                        <div className="allocationLegend">
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#16A34A' }} />
+                            <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
+                          </div>
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#6366F1' }} />
+                            <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
+                          </div>
+                          <div className="allocLegendItem">
+                            <span className="allocDot" style={{ background: '#F59E0B' }} />
+                            <span>Cash / Idle Asset {deployablePct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
+                          </div>
+                          <div className="allocLegendItem" style={{ color: '#DC2626' }}>
+                            <span className="allocDot" style={{ background: '#DC2626' }} />
+                            <span>At-Risk / Loans {atRiskPct.toFixed(0)}%</span>
+                            <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="topMetricsRow">
+                      <div className="topMetricCard">
+                        <div className="topMetricLabel">Source of Capital</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                          {(() => {
+                            const selfFunded = Math.max(0, totals.invested - totals.liabilities);
+                            const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
+                            const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
+                            return (
+                              <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span style={{ color: '#6b7280' }}>Self Funded</span>
+                                  <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
+                                </div>
+                                <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                                  <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
+                                  <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span style={{ color: '#6b7280' }}>Credit</span>
+                                  <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
+                                </div>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="topMetricCard">
+                        <div className="topMetricLabel">Capital Efficiency</div>
+                        <div className="topMetricValue" style={{ color: '#16A34A' }}>
+                          {(() => {
+                            const profit = totals.netWorth - totals.capitalDeployed;
+                            const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
+                            return (
+                              <>
+                                {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                                <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div className="topMetricSub">Return on Capital</div>
+                      </div>
+
+                      <div className="topMetricCard">
+                        <div className="topMetricLabel">Capital Coverage</div>
+                        <div className="topMetricValue" style={{
+                          color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
+                        }}>
+                          {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
+                        </div>
+                        <div className="topMetricSub" style={{ marginBottom: 2 }}>
+                          {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           )}
-
-          {insightTab === 'capital' && (() => {
-            // Allocation percentages — 4 buckets
-            const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook
-            const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0
-            const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0
-            const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0
-            const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0
-
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 24 }}>
-                {/* 1. Capital Allocation Bar */}
-                <div className="intelSection" style={{ marginBottom: 12 }} >
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div className="overviewTitle" style={{ marginTop: 0 }}>Capital Allocation</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111' }}>{fmtTZS(totals.invested)}</div>
-                  </div>
-                  <div className="allocationBarWrap">
-                    <div className="allocationBar">
-                      {(() => {
-                        const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
-                        const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
-                        const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
-                        const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
-                        const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
-
-                        return (
-                          <>
-                            {illiquidPct > 0 && <div className="allocSegment" style={{ width: `${illiquidPct}%`, background: '#16A34A' }} />}
-                            {highGrowthPct > 0 && <div className="allocSegment" style={{ width: `${highGrowthPct}%`, background: '#6366F1' }} />}
-                            {deployablePct > 0 && <div className="allocSegment" style={{ width: `${deployablePct}%`, background: '#F59E0B' }} />}
-                            {atRiskPct > 0 && <div className="allocSegment" style={{ width: `${atRiskPct}%`, background: '#DC2626' }} />}
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <div className="allocationLegend">
-                      {(() => {
-                        const totalCap = totals.landCapital + totals.sharesCapital + totals.liquidCash + totals.loanBook;
-                        const illiquidPct = totalCap > 0 ? (totals.landCapital / totalCap) * 100 : 0;
-                        const highGrowthPct = totalCap > 0 ? (totals.sharesCapital / totalCap) * 100 : 0;
-                        const deployablePct = totalCap > 0 ? (totals.liquidCash / totalCap) * 100 : 0;
-                        const atRiskPct = totalCap > 0 ? (totals.loanBook / totalCap) * 100 : 0;
-
-                        return (
-                          <>
-                            <div className="allocLegendItem">
-                              <span className="allocDot" style={{ background: '#16A34A' }} />
-                              <span>Illiquid Assets {illiquidPct.toFixed(0)}%</span>
-                              <span className="allocLegendVal">{fmtTZS(totals.landCapital)}</span>
-                            </div>
-                            <div className="allocLegendItem">
-                              <span className="allocDot" style={{ background: '#6366F1' }} />
-                              <span>High-Growth Assets {highGrowthPct.toFixed(0)}%</span>
-                              <span className="allocLegendVal">{fmtTZS(totals.sharesCapital)}</span>
-                            </div>
-                            <div className="allocLegendItem">
-                              <span className="allocDot" style={{ background: '#F59E0B' }} />
-                              <span>Cash / Idle Asset {deployablePct.toFixed(0)}%</span>
-                              <span className="allocLegendVal">{fmtTZS(totals.liquidCash)}</span>
-                            </div>
-                            <div className="allocLegendItem" style={{ color: '#DC2626' }}>
-                              <span className="allocDot" style={{ background: '#DC2626' }} />
-                              <span>At-Risk / Loans {atRiskPct.toFixed(0)}%</span>
-                              <span className="allocLegendVal">{fmtTZS(totals.loanBook)}</span>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Main Metrics */}
-                <div className="topMetricsRow">
-                  {/* Source of Capital */}
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Source of Capital</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                      {(() => {
-                        const selfFunded = Math.max(0, totals.invested - totals.liabilities);
-                        const selfPct = totals.invested > 0 ? (selfFunded / totals.invested) * 100 : 0;
-                        const creditPct = totals.invested > 0 ? (totals.liabilities / totals.invested) * 100 : 0;
-                        return (
-                          <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                              <span style={{ color: '#6b7280' }}>Self Funded</span>
-                              <span style={{ fontWeight: 600 }}>{selfPct.toFixed(0)}%</span>
-                            </div>
-                            <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-                              <div style={{ width: `${selfPct}%`, background: '#10B981' }} />
-                              <div style={{ width: `${creditPct}%`, background: '#EF4444' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                              <span style={{ color: '#6b7280' }}>Credit</span>
-                              <span style={{ fontWeight: 600 }}>{creditPct.toFixed(0)}%</span>
-                            </div>
-                          </>
-                        )
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Capital Efficiency */}
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Capital Efficiency</div>
-                    <div className="topMetricValue" style={{ color: '#16A34A' }}>
-                      {(() => {
-                        const profit = totals.netWorth - totals.capitalDeployed;
-                        const roi = totals.capitalDeployed > 0 ? (profit / totals.capitalDeployed) * 100 : 0;
-                        return (
-                          <>
-                            {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
-                            <span className="trendIcon">{roi >= 0 ? '↑' : '↓'}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <div className="topMetricSub">
-                      Return on Capital
-                    </div>
-                  </div>
-
-                  {/* Capital Coverage */}
-                  <div className="topMetricCard">
-                    <div className="topMetricLabel">Capital Coverage</div>
-                    <div className="topMetricValue" style={{
-                      color: totals.coverage >= 1.5 ? '#16A34A' : (totals.coverage >= 1 ? '#EAB308' : '#DC2626')
-                    }}>
-                      {totals.coverage > 100 ? '∞' : totals.coverage.toFixed(2) + 'x'}
-                    </div>
-                    <div className="topMetricSub" style={{ marginBottom: 2 }}>
-                      {totals.coverage >= 1.5 ? 'Safe to Leverage' : (totals.coverage >= 1 ? 'Caution' : 'Critical')}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 'auto', display: 'flex', gap: 8 }}>
-                      <span>Ret: {totals.monthlyReturn.toFixed(1)}%</span>
-                      <span>Cost: {totals.costOfCapital.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-          {insightTab === 'analysis' && <CategoryBreakdown />}
         </div>
         {
           infoModal && (
@@ -6110,7 +6157,7 @@ export default function App() {
   }
 
   function VisibilitySettings() {
-    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['cashflow', 'analysis', 'capital'])
+    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['transactions', 'summary', 'analysis'])
     const [appTabOrder, setAppTabOrder] = useState(settings.appTabOrder || ['insights', 'tx', 'accounts', 'settings'])
     const [defaultTab, setDefaultTab] = useState(settings.defaultAppTab || 'tx')
     const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'analysis')

@@ -1,6 +1,7 @@
 export const CHANGELOG = [
+
     {
-        version: '0.1.6',
+        version: '1.3.0',
         date: '2026-03-15',
         changes: [
             'Implemented Batch Edit Mode for transactions with a floating Action Bar for mass account, subcategory, and note updates.',
@@ -8,13 +9,13 @@ export const CHANGELOG = [
         ]
     },
     {
-        version: '0.1.5',
+        version: '1.2.3',
         date: '2026-03-14',
         changes: [
             'Adding Visibility Setting, where you can change the visibility of the accounts and sort them differently']
     },
     {
-        version: '0.1.4',
+        version: '1.2.2',
         date: '2026-03-14',
         changes: [
             'Added "Income Expense Analysis" tab with category-based breakdowns.',
@@ -24,7 +25,7 @@ export const CHANGELOG = [
         ]
     },
     {
-        version: '0.1.3',
+        version: '1.2.1',
         date: '2026-03-13',
         changes: [
             'Differentiated between actual and projected data in Cashflow graphs.',
@@ -35,7 +36,7 @@ export const CHANGELOG = [
         ]
     },
     {
-        version: '0.1.2',
+        version: '1.2.0',
         date: '2026-03-12',
         changes: [
             'Added a dedicated tab system for Financial Insights (Cashflow and Capital).',
@@ -44,7 +45,7 @@ export const CHANGELOG = [
         ]
     },
     {
-        version: '0.1.1',
+        version: '1.1.0',
         date: '2026-03-11',
         changes: [
             'Added Financial Insights dashboards to track cash flow.',
@@ -54,7 +55,7 @@ export const CHANGELOG = [
         ]
     },
     {
-        version: '0.1.0',
+        version: '1.0.0',
         date: '2026-02-28',
         changes: [
             'Initial Kapapa Finance PWA release.',

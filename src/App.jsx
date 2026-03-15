@@ -3260,7 +3260,13 @@ export default function App() {
             <button
               className="btn"
               type="button"
-              style={{ width: '100%', borderRadius: 14, padding: '14px', background: 'rgba(90, 95, 176, 0.08)', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px dashed rgba(90, 95, 176, 0.3)' }}
+              style={{ 
+                width: '100%', borderRadius: 16, padding: '15px', 
+                background: '#ffe6d7', color: '#575866', // Peach background with slate text
+                fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, 
+                border: '1px solid #ffd1d1', boxShadow: '0 2px 8px rgba(255, 230, 215, 0.25)',
+                cursor: 'pointer'
+              }}
               onClick={() => setShowAddForm(true)}
             >
               + Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
@@ -3400,6 +3406,20 @@ export default function App() {
             />
           </div>
           <div className="catDetailActionsRow" style={{ display: 'flex', gap: 10 }}>
+            {showAddForm && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                style={{ 
+                  background: '#eaedf3', color: '#1a1d2d', border: 'none', 
+                  padding: '14px', fontWeight: 700, flex: 1, fontSize: 15,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            )}
             <button
               className="btn addTxnBtn"
               type="button"
@@ -3436,20 +3456,15 @@ export default function App() {
                   }
                 }
               }}
-              style={{ background: '#fde047', color: '#52360b', border: '1px solid #fde047', borderRadius: 24, padding: '14px', fontWeight: 700, flex: 1, fontSize: 15 }}
+              style={{ 
+                background: '#ffd76a', color: '#575866', 
+                border: '1px solid #ffd1d1', 
+                padding: '14px', fontWeight: 700, flex: 2.2, fontSize: 15, 
+                cursor: 'pointer' 
+              }}
             >
               Add {category.type === 'income' ? 'Income' : category.type === 'cos' ? 'Cost of Sales' : category.type === 'opps' ? 'Operating Expense' : 'Expense'}
             </button>
-            {showAddForm && (
-              <button
-                className="btn"
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                style={{ background: '#eaedf3', color: '#1a1d2d', border: '1px solid #eaedf3', padding: '14px', borderRadius: 24, fontWeight: 700, flex: 1, fontSize: 15 }}
-              >
-                Cancel
-              </button>
-            )}
           </div>
         </div>
 

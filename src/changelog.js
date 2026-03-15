@@ -1,5 +1,15 @@
 export const CHANGELOG = [
-
+    {
+        version: "1.4.1",
+        date: "2026-03-15",
+        changes: [
+            'Restructured Insights screen to include Records, Summary, and Analysis sub-tabs.',
+            'Renamed previous "Analysis" views into a dedicated "Summary" sub-page.',
+            'Merged "Cashflow" and "Capital" dash-metrics into a unified consolidated "Analysis" segment.',
+            'Created granular "Records" histories grouped by date with Daily headers and colored circular category icons correctly.',
+            'Ensured full backward-compatible layout stability and initialized defaults protecting user presets overlays.'
+        ]
+    },
     {
         version: '1.4.0',
         date: '2026-03-15',

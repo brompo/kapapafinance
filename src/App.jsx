@@ -701,7 +701,7 @@ function normalizeVault(data) {
         pinLockEnabled: !!data.settings?.pinLockEnabled,
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         defaultAppTab: data.settings?.defaultAppTab || 'tx',
-        defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
+        defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
         insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
         appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
       },
@@ -725,7 +725,7 @@ function normalizeVault(data) {
       pinLockEnabled: !!data.settings?.pinLockEnabled,
       requireAccountForTxns: !!data.settings?.requireAccountForTxns,
       defaultAppTab: data.settings?.defaultAppTab || 'tx',
-      defaultInsightTab: data.settings?.defaultInsightTab || 'analysis',
+      defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
       insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
       appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
     },
@@ -5511,7 +5511,7 @@ export default function App() {
                 className={`viewTab ${insightTab === id ? 'active' : ''}`}
                 onClick={() => setInsightTab(id)}
               >
-                {id === 'transactions' ? 'Transactions' : id === 'summary' ? 'Summary' : 'Analysis'}
+                {id === 'transactions' ? 'Records' : id === 'summary' ? 'Summary' : 'Analysis'}
               </button>
             ))}
           </div>
@@ -5572,37 +5572,6 @@ export default function App() {
           {insightTab === 'analysis' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
               <CashflowChart />
-
-              {/* Revenue by Customer */}
-              <div className="card" style={{ margin: 0, padding: 15 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>Revenue by Customer</div>
-                  {clientRevenue.length > 0 && (
-                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--success)' }}>
-                      {fmtCompact(clientRevenue.reduce((sum, c) => sum + c.total, 0))}
-                    </div>
-                  )}
-                </div>
-                {clientRevenue.length === 0 ? (
-                  <div className="emptyRow">
-                    No client revenue recorded in {viewGranularity === 'year'
-                      ? statYear
-                      : viewGranularity === 'month'
-                        ? new Date(statPeriod + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })
-                        : `Week of ${new Date(statPeriod).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
-                    }.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {clientRevenue.map(c => (
-                      <div key={c.clientId} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ fontWeight: 500 }}>{c.name}</div>
-                        <div style={{ fontWeight: 600, color: 'var(--success)' }}>{fmtCompact(c.total)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {/* Capital Allocation & Metrics */}
               {(() => {
@@ -6157,10 +6126,10 @@ export default function App() {
   }
 
   function VisibilitySettings() {
-    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder || ['transactions', 'summary', 'analysis'])
+    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'analysis'])
     const [appTabOrder, setAppTabOrder] = useState(settings.appTabOrder || ['insights', 'tx', 'accounts', 'settings'])
     const [defaultTab, setDefaultTab] = useState(settings.defaultAppTab || 'tx')
-    const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'analysis')
+    const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'summary')
 
     function moveInsight(index, delta) {
       const newOrder = [...insightTabOrder]
@@ -6198,8 +6167,8 @@ export default function App() {
     }
 
     const tabLabels = {
-      cashflow: 'Cashflow',
-      capital: 'Capital',
+      transactions: 'Records',
+      summary: 'Summary',
       analysis: 'Analysis',
       insights: 'Insights',
       tx: 'Transactions',

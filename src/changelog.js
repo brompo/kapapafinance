@@ -1,21 +1,21 @@
 export const CHANGELOG = [
-  {
-    version: '0.1.6',
-    date: new Date().toISOString().split('T')[0],
-    changes: [
-      'Implemented Batch Edit Mode for transactions with a floating Action Bar for mass account, subcategory, and note updates.',
-      'Added Sticky Header top-bar floating smoothly on scroll inside Category Detail view layouts.'
-    ]
-  },
+    {
+        version: '0.1.6',
+        date: '2026-03-15',
+        changes: [
+            'Implemented Batch Edit Mode for transactions with a floating Action Bar for mass account, subcategory, and note updates.',
+            'Added Sticky Header top-bar floating smoothly on scroll inside Category Detail view layouts.'
+        ]
+    },
     {
         version: '0.1.5',
-        date: new Date().toISOString().split('T')[0],
+        date: '2026-03-14',
         changes: [
             'Adding Visibility Setting, where you can change the visibility of the accounts and sort them differently']
     },
     {
         version: '0.1.4',
-        date: new Date().toISOString().split('T')[0],
+        date: '2026-03-14',
         changes: [
             'Added "Income Expense Analysis" tab with category-based breakdowns.',
             'Implemented interactive SVG Donut Charts for Income and Expense distribution.',
@@ -25,7 +25,7 @@ export const CHANGELOG = [
     },
     {
         version: '0.1.3',
-        date: new Date().toISOString().split('T')[0],
+        date: '2026-03-13',
         changes: [
             'Differentiated between actual and projected data in Cashflow graphs.',
             'Added a dedicated legend for Actual (solid) vs Projected (dashed) graph lines.',
@@ -36,7 +36,7 @@ export const CHANGELOG = [
     },
     {
         version: '0.1.2',
-        date: new Date().toISOString().split('T')[0],
+        date: '2026-03-12',
         changes: [
             'Added a dedicated tab system for Financial Insights (Cashflow and Capital).',
             'Migrated Capital insights metrics and analytics out of Accounts.',

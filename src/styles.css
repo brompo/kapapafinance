@@ -2119,6 +2119,41 @@ label {
   color: #8b90b2;
 }
 
+/* Custom Numeric Keypad */
+.customKeypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  background: #f7f8fc;
+  padding: 16px;
+  border-radius: 16px;
+  margin: 16px 0;
+}
+
+.keypadBtn {
+  background: #fff;
+  color: #1f2332;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.keypadBtn:active {
+  background: #eef2f6;
+  transform: scale(0.97);
+}
+
+.keypadBtn.backspace {
+  color: #ff5b5b; /* soft red for delete absolute */
+}
+
 .catDetailForm {
   background: #fff;
   border: 1px solid #eceef6;

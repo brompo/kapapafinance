@@ -3278,7 +3278,7 @@ export default function App() {
           <div className="field">
             <label>Amount (TZS)</label>
             <input
-              inputMode="decimal"
+              inputMode="none"
               value={amount}
               onChange={e => {
                 setAmount(e.target.value)
@@ -3404,6 +3404,28 @@ export default function App() {
               onChange={e => setNote(e.target.value)}
               placeholder="e.g. Bus fare"
             />
+          </div>
+
+          <div className="customKeypad">
+            {['1','2','3','4','5','6','7','8','9','.', '0','⌫'].map(key => (
+              <button 
+                key={key} 
+                type="button" 
+                className={`keypadBtn ${key === '⌫' ? 'backspace' : ''}`}
+                onClick={() => {
+                  if (key === '⌫') {
+                    setAmount(prev => prev.slice(0, -1));
+                  } else if (key === '.') {
+                    if (!amount.includes('.')) setAmount(prev => prev + '.');
+                  } else {
+                    setAmount(prev => (prev === '0' ? key : prev + key));
+                    setAmountError(false);
+                  }
+                }}
+              >
+                {key}
+              </button>
+            ))}
           </div>
           <div className="catDetailActionsRow" style={{ display: 'flex', gap: 10 }}>
             {showAddForm && (

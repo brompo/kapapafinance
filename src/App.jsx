@@ -2920,6 +2920,13 @@ export default function App() {
     setShowAddForm
   }) {
     const [amount, setAmount] = useState('')
+    const formatCommas = (str) => {
+      if (!str) return '';
+      const parts = str.split('.');
+      // Add commas to the integer part
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return parts.join('.');
+    }
     const [amountError, setAmountError] = useState(false)
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
@@ -3275,9 +3282,9 @@ export default function App() {
             <label style={{ fontSize: 11, marginBottom: 4 }}>Amount (TZS)</label>
             <input
               inputMode="none"
-              value={amount}
+              value={formatCommas(amount)}
               onChange={e => {
-                setAmount(e.target.value)
+                setAmount(e.target.value.replace(/,/g, ''))
                 if (e.target.value && Number(e.target.value) > 0) setAmountError(false)
               }}
               placeholder="e.g. 10000"

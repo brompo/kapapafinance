@@ -48,6 +48,21 @@ const DEFAULT_COS_CATEGORIES = [
   'Transport & Accommodation',
   'Administration'
 ]
+const INSIGHT_TAB_LABELS = {
+  transactions: 'Records',
+  summary: 'Summary',
+  cashflow: 'Cashflow',
+  analysis: 'Analysis',
+  capital: 'Capital'
+};
+
+const APP_TAB_LABELS = {
+  insights: 'Insights',
+  tx: 'Transactions',
+  accounts: 'Accounts',
+  settings: 'Settings'
+};
+
 const DEFAULT_OPPS_CATEGORIES = [
   'Rent',
   'Utilities',
@@ -4062,7 +4077,7 @@ export default function App() {
     const [monthlyViewMode, setMonthlyViewMode] = useState('actual') // actual, projected
     const [selectedTxn, setSelectedTxn] = useState(null)
     const [showMonthLog, setShowMonthLog] = useState(null)
-    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab === 'cashflow' || settings.defaultInsightTab === 'capital' ? 'summary' : settings.defaultInsightTab || 'summary')
+    const [insightTab, setInsightTab] = useState(settings.defaultInsightTab === 'analysis' ? 'cashflow' : (settings.defaultInsightTab || 'summary'))
     const [infoModal, setInfoModal] = useState(null)
     const groups = activeLedger.groups || []
     const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
@@ -5505,13 +5520,13 @@ export default function App() {
 
         <div className="txList">
           <div className="viewTabs">
-            {(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'cashflow']).map(id => (
+            {(settings.insightTabOrder && settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'cashflow']).map(id => (
               <button
                 key={id}
                 className={`viewTab ${insightTab === id ? 'active' : ''}`}
-                onClick={() => setInsightTab(id)}
+                onClick={() => setInsightTab(id === 'analysis' ? 'cashflow' : id)}
               >
-                {id === 'transactions' ? 'Records' : id === 'summary' ? 'Summary' : 'Cashflow'}
+                {INSIGHT_TAB_LABELS[id] || id}
               </button>
             ))}
           </div>
@@ -6166,16 +6181,7 @@ export default function App() {
       show('Visibility settings saved.')
     }
 
-    const tabLabels = {
-      transactions: 'Records',
-      summary: 'Summary',
-      analysis: 'Analysis',
-      cashflow: 'Cashflow',
-      insights: 'Insights',
-      tx: 'Transactions',
-      accounts: 'Accounts',
-      settings: 'Settings'
-    }
+    const tabLabels = { ...INSIGHT_TAB_LABELS, ...APP_TAB_LABELS }
 
     return (
       <div className="modalBackdrop" onClick={() => setShowVisibilitySettings(false)}>

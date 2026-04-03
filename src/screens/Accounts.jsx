@@ -1157,6 +1157,7 @@ function AccountDetail({
   const [editingSubAccountId, setEditingSubAccountId] = useState(null)
   const [subEditName, setSubEditName] = useState("")
   const [subEditLedgerId, setSubEditLedgerId] = useState("")
+  const [activeTab, setActiveTab] = useState("activity") // activity | future
 
   function handleOpenTxnEdit(t) {
     setSelectedTxn(t);
@@ -1222,13 +1223,20 @@ function AccountDetail({
   }, [selectedTxn]);
 
   const entries = useMemo(() => {
-    let filtered = accountTxns
-      .filter((t) => t.accountId === account.id)
+    let filtered = accountTxns.filter((t) => t.accountId === account.id);
     if (filterSubAccountId) {
-      filtered = filtered.filter((t) => t.subAccountId === filterSubAccountId)
+      filtered = filtered.filter((t) => t.subAccountId === filterSubAccountId);
     }
-    return filtered.sort((a, b) => (a.date > b.date ? -1 : (a.date < b.date ? 1 : 0)));
-  }, [accountTxns, account.id, filterSubAccountId]);
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (activeTab === "future") {
+      filtered = filtered.filter((t) => t.date > today);
+    } else {
+      filtered = filtered.filter((t) => t.date <= today);
+    }
+
+    return filtered.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
+  }, [accountTxns, account.id, filterSubAccountId, activeTab]);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -2890,7 +2898,7 @@ function AccountDetail({
           <span>
             {filterSubAccountId
               ? `${account.subAccounts?.find(s => s.id === filterSubAccountId)?.name || 'Sub-account'} activity`
-              : 'Recent activity'
+              : activeTab === 'future' ? 'Future Expenses' : 'Recent activity'
             }
           </span>
 
@@ -2956,8 +2964,31 @@ function AccountDetail({
             )}
           </div>
         </div>
+
+        <div className="accTabs">
+          <div
+            className={`accTab ${activeTab === 'activity' ? 'active' : ''}`}
+            onClick={() => setActiveTab('activity')}
+          >
+            Activity
+          </div>
+          <div
+            className={`accTab ${activeTab === 'future' ? 'active' : ''}`}
+            onClick={() => setActiveTab('future')}
+          >
+            Future
+            {(() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const count = accountTxns.filter(t => t.accountId === account.id && t.date > today).length;
+              return count > 0 ? <span className="accTabBadge">{count}</span> : null;
+            })()}
+          </div>
+        </div>
+
         {grouped.length === 0 ? (
-          <div className="emptyRow">No activity yet.</div>
+          <div className="emptyRow">
+            {activeTab === 'future' ? 'No future expenses planned.' : 'No activity yet.'}
+          </div>
         ) : (
           grouped.map(([date, items]) => {
             const totals = items.reduce(

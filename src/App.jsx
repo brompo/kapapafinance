@@ -664,8 +664,8 @@ function normalizeVault(data) {
         pinLockEnabled: false,
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
-        defaultInsightTab: 'analysis',
-        insightTabOrder: ['transactions', 'summary', 'analysis']
+        defaultInsightTab: 'cashflow',
+        insightTabOrder: ['transactions', 'summary', 'cashflow']
       },
       clients: []
     }
@@ -681,8 +681,8 @@ function normalizeVault(data) {
         pinLockEnabled: false,
         requireAccountForTxns: false,
         defaultAppTab: 'tx',
-        defaultInsightTab: 'analysis',
-        insightTabOrder: ['transactions', 'summary', 'analysis']
+        defaultInsightTab: 'cashflow',
+        insightTabOrder: ['transactions', 'summary', 'cashflow']
       },
       clients: []
     }
@@ -702,7 +702,7 @@ function normalizeVault(data) {
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         defaultAppTab: data.settings?.defaultAppTab || 'tx',
         defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
-        insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
+        insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'cashflow'],
         appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
       },
       clients: Array.isArray(data.clients) ? data.clients : []
@@ -726,7 +726,7 @@ function normalizeVault(data) {
       requireAccountForTxns: !!data.settings?.requireAccountForTxns,
       defaultAppTab: data.settings?.defaultAppTab || 'tx',
       defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
-      insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'analysis'],
+      insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'cashflow'],
       appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
     },
     clients: Array.isArray(data.clients) ? data.clients : []
@@ -5505,13 +5505,13 @@ export default function App() {
 
         <div className="txList">
           <div className="viewTabs">
-            {(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'analysis']).map(id => (
+            {(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'cashflow']).map(id => (
               <button
                 key={id}
                 className={`viewTab ${insightTab === id ? 'active' : ''}`}
                 onClick={() => setInsightTab(id)}
               >
-                {id === 'transactions' ? 'Records' : id === 'summary' ? 'Summary' : 'Analysis'}
+                {id === 'transactions' ? 'Records' : id === 'summary' ? 'Summary' : 'Cashflow'}
               </button>
             ))}
           </div>
@@ -5569,7 +5569,7 @@ export default function App() {
             </div>
           )}
 
-          {insightTab === 'analysis' && (
+          {insightTab === 'cashflow' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
               <CashflowChart />
 
@@ -6126,7 +6126,7 @@ export default function App() {
   }
 
   function VisibilitySettings() {
-    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder && !settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'analysis'])
+    const [insightTabOrder, setInsightTabOrder] = useState(settings.insightTabOrder && settings.insightTabOrder.includes('cashflow') ? settings.insightTabOrder : ['transactions', 'summary', 'cashflow'])
     const [appTabOrder, setAppTabOrder] = useState(settings.appTabOrder || ['insights', 'tx', 'accounts', 'settings'])
     const [defaultTab, setDefaultTab] = useState(settings.defaultAppTab || 'tx')
     const [defaultInsightTab, setDefaultInsightTab] = useState(settings.defaultInsightTab || 'summary')
@@ -6170,6 +6170,7 @@ export default function App() {
       transactions: 'Records',
       summary: 'Summary',
       analysis: 'Analysis',
+      cashflow: 'Cashflow',
       insights: 'Insights',
       tx: 'Transactions',
       accounts: 'Accounts',

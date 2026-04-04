@@ -232,7 +232,23 @@ export default function Accounts({
       }, 0)
       : getBaseBalance(account);
 
-    const groupType = account.accountType || groupById.get(account.groupId)?.type;
+    const group = groupById.get(account.groupId);
+    const groupType = account.accountType || group?.type;
+
+    // Fixed: Savings accounts should sum their transactions (Allocations, etc)
+    if (group?.metaCategory === 'savings') {
+      if (subs.length > 0) return base;
+      let cleanBase = 0;
+      const txns = accountTxns.filter(t => t.accountId === account.id);
+      for (const t of txns) {
+        if (balanceType === 'current' && t.date > today) continue;
+        const amt = Number(t.amount || 0);
+        if (t.direction === 'in') cleanBase += amt;
+        if (t.direction === 'out') cleanBase -= amt;
+      }
+      return cleanBase;
+    }
+
     if (groupType === "credit") return base + computeAccruedForAccount(account, balanceType);
 
     if (groupType === "asset") {

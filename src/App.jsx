@@ -3337,6 +3337,7 @@ export default function App() {
       else if (category.type === 'income') list = incomeCats
       else if (category.type === 'cos') list = cosCats
       else if (category.type === 'opps') list = oppsCats
+      else if (category.type === 'allocation') list = allocationCats
       if (
         trimmed !== category.name &&
         list.some(c => c.toLowerCase() === trimmed.toLowerCase())
@@ -3386,6 +3387,7 @@ export default function App() {
       else if (category.type === 'income') list = incomeCats
       else if (category.type === 'cos') list = cosCats
       else if (category.type === 'opps') list = oppsCats
+      else if (category.type === 'allocation') list = allocationCats
       const nextList = list.filter(c => c !== category.name)
       const nextCategories = {
         ...categories,

@@ -2058,7 +2058,7 @@ label {
   font-weight: 600;
   color: #1e1b4b;
   line-height: 1.2;
-  font-size: 13.5px;
+  font-size: 12.5px;
   height: 34px;
   margin-bottom: 6px;
   display: flex;
@@ -2084,7 +2084,7 @@ label {
 .ledgerCardValue {
   font-weight: 600;
   color: #1e1b4b;
-  font-size: 14.5px;
+  font-size: 12.5px;
   margin-top: auto;
 }
 

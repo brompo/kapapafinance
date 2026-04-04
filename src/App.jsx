@@ -3910,7 +3910,9 @@ export default function App() {
                             <div className="catHistoryIcon">{category.name.slice(0, 1).toUpperCase()}</div>
                             <div className="catHistoryInfo">
                               <div className="catHistoryTitleRow">{displayTitle}</div>
-                              <div className="catHistoryMeta">{acct ? acct.name : 'No account'}</div>
+                              <div className="catHistoryMeta">
+                                {new Date(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} • {acct ? acct.name : 'No account'}
+                              </div>
                               {category.type === 'expense' && t.reimbursedBy && t.reimbursedBy.length > 0 && (
                                 <div className="reimbursedBadge">
                                   ✓ Reimbursed {fmtTZS(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
@@ -5838,7 +5840,9 @@ export default function App() {
                             <div className="catHistoryInfo" style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)' }}>{t.title}</span>
-                                <span style={{ fontSize: 11, color: '#6b7280' }}>{t.sub || t.note}</span>
+                                <span style={{ fontSize: 11, color: '#6b7280' }}>
+                                  {new Date(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} • {t.sub || t.note}
+                                </span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                                 <span style={{ fontWeight: 700, fontSize: 13, color: t.direction === 'in' ? '#10b981' : '#ef4444' }}>

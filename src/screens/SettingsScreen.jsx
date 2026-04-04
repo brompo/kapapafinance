@@ -4,6 +4,7 @@ import GeneralSettings from './GeneralSettings'
 import FinanceSettings from './FinanceSettings'
 import BackupSettings from './BackupSettings'
 import VisibilitySettings from './VisibilitySettings'
+import ChangelogScreen from './ChangelogScreen'
 import pkg from '../../package.json'
 
 export function SettingsScreen() {
@@ -61,7 +62,7 @@ export function SettingsScreen() {
       <div className="stgSection">
         <div className="stgSectionTitle">ABOUT</div>
         <div className="stgGroup">
-          <button className="stgRow" onClick={() => show('What\'s New click')}>
+          <button className="stgRow" onClick={() => setActiveSub('changelog')}>
             <div className="stgRowIcon">📜</div>
             <div className="stgRowBody">
               <div className="stgRowText">What's New</div>
@@ -80,6 +81,7 @@ export function SettingsScreen() {
       {activeSub === 'finance' && <FinanceSettings onClose={() => setActiveSub(null)} />}
       {activeSub === 'visibility' && <VisibilitySettings onClose={() => setActiveSub(null)} />}
       {activeSub === 'backup' && <BackupSettings onClose={() => setActiveSub(null)} />}
+      {activeSub === 'changelog' && <ChangelogScreen onClose={() => setActiveSub(null)} />}
     </div>
   )
 }

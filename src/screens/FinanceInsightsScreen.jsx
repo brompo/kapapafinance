@@ -281,23 +281,90 @@ export function FinanceInsightsScreen() {
       })
       return Array.from(g.entries())
     }, [insightFilteredTxns])
+
     return (
-      <div style={{ padding: '0 10px 30px 10px' }}>
-        <div className="modeSegmented" style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12, marginBottom: 15, marginTop: 10 }}>
-          <button onClick={() => setTxnsMainTab('activity')} style={{ flex: 1, padding: '10px 8px', borderRadius: 10, background: txnsMainTab === 'activity' ? '#fff' : 'transparent', border: 'none', fontWeight: 700, fontSize: 13, color: txnsMainTab === 'activity' ? '#5a5fb0' : '#64748b', boxShadow: txnsMainTab === 'activity' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}>Activity</button>
-          <button onClick={() => setTxnsMainTab('future')} style={{ flex: 1, padding: '10px 8px', borderRadius: 10, background: txnsMainTab === 'future' ? '#fff' : 'transparent', border: 'none', fontWeight: 700, fontSize: 13, color: txnsMainTab === 'future' ? '#5a5fb0' : '#64748b', boxShadow: txnsMainTab === 'future' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}>Future</button>
+      <div style={{ padding: '0 12px 100px' }}>
+        <div className="modeSegmented" style={{ 
+          display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12, 
+          marginBottom: 16, marginTop: 12 
+        }}>
+          <button 
+            onClick={() => setTxnsMainTab('activity')} 
+            style={{ 
+              flex: 1, padding: '10px 8px', borderRadius: 10, 
+              background: txnsMainTab === 'activity' ? '#fff' : 'transparent', 
+              border: 'none', fontWeight: 700, fontSize: 13, 
+              color: txnsMainTab === 'activity' ? '#5a5fb0' : '#64748b', boxDecorationBreak: 'clone',
+              boxShadow: txnsMainTab === 'activity' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none' 
+            }}
+          >Activity</button>
+          <button 
+            onClick={() => setTxnsMainTab('future')} 
+            style={{ 
+              flex: 1, padding: '10px 8px', borderRadius: 10, 
+              background: txnsMainTab === 'future' ? '#fff' : 'transparent', 
+              border: 'none', fontWeight: 700, fontSize: 13, 
+              color: txnsMainTab === 'future' ? '#5a5fb0' : '#64748b',
+              boxShadow: txnsMainTab === 'future' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none' 
+            }}
+          >Future</button>
         </div>
+
         {grouped.map(([month, data]) => (
-          <div key={month} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}><div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b' }}>{month}</div><div style={{ fontWeight: 800, fontSize: 11, color: data.totalOut > 0 ? '#ef4444' : '#22c55e' }}>{data.totalOut > 0 ? `OUT ${fmtCompact(data.totalOut)}` : `IN ${fmtCompact(data.totalIn)}`}</div></div>
-            {data.items.map((t, i) => (
-              <div key={t.id} onClick={() => setSelectedTxn(t)} style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderBottom: i === data.items.length - 1 ? 'none' : '1px solid #f8fafc' }}>
-                 <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}><div style={{ width: 44, height: 44, borderRadius: 22, background: '#fff', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 500, fontSize: 15 }}>{t.title.slice(0,1).toUpperCase()}</div><div><div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{t.title}</div><div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(t.date).getDate()} {new Date(t.date).toLocaleString('default',{month:'short'})} {t.raw?.recurring && `• (${t.raw.recurring.current} of ${t.raw.recurring.total})`}{!t.raw?.recurring && t.sub && `• ${t.sub}`}</div></div></div>
-                 <div style={{ fontWeight: 800, fontSize: 15, color: t.direction === 'in' ? '#22c55e' : '#ef4444' }}>{t.direction === 'in' ? '' : '-'}{fmtCompact(t.amount)}</div>
+          <div key={month} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16, borderRadius: 18 }}>
+            {/* Group Header */}
+            <div style={{ 
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+              padding: '10px 16px', borderBottom: '1px solid #f8fafc', background: '#fcfdfe'
+            }}>
+              <div style={{ fontWeight: 700, fontSize: 12.5, color: '#1e293b' }}>{month}</div>
+              <div style={{ fontWeight: 700, fontSize: 9.5, letterSpacing: '0.01em', color: data.totalOut > 0 ? '#ef4444' : '#10b981' }}>
+                {data.totalOut > 0 ? `OUT ${fmtCompact(data.totalOut)}` : `IN ${fmtCompact(data.totalIn)}`}
               </div>
-            ))}
+            </div>
+
+            {/* List Items */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {data.items.map((t, i) => (
+                <div key={t.id} onClick={() => setSelectedTxn(t)} style={{ 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 16px', borderBottom: i === data.items.length - 1 ? 'none' : '1px solid #f8fafc',
+                  cursor: 'pointer'
+                }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {/* Circle Icon */}
+                    <div style={{ 
+                      width: 36, height: 36, borderRadius: 18, 
+                      background: '#fff', border: '1px solid #f1f5f9', 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      fontWeight: 700, fontSize: 13, color: '#64748b'
+                    }}>
+                      {t.title.slice(0,1).toUpperCase()}
+                    </div>
+                    {/* Labels */}
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 12.5, color: '#1e293b' }}>{t.title}</div>
+                      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>
+                        {new Date(t.date).getDate()} {new Date(t.date).toLocaleString('default',{month:'short'})} 
+                        {t.raw?.recurring && ` • (${t.raw.recurring.current} of ${t.raw.recurring.total})`}
+                        {!t.raw?.recurring && t.sub && ` • ${t.sub}`}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Amount */}
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: t.direction === 'in' ? '#10b981' : '#ef4444' }}>
+                    {t.direction === 'in' ? '' : '-'}{fmtCompact(t.amount)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
+        {grouped.length === 0 && (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+            No {txnsMainTab} transactions found for this period.
+          </div>
+        )}
       </div>
     )
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useAppContext } from '../context/AppContext'
-import { todayISO, fmtTZS, calculateAssetMetrics, uid } from '../money'
+import { todayISO, fmtTZS, fmtCompact, calculateAssetMetrics, uid } from '../money'
 import { CATEGORY_SUBS } from '../constants'
 import { TransactionDetail } from '../components/TransactionDetail'
 
@@ -113,7 +113,7 @@ export function CategoryDetail({
     return [...regular, ...gains].sort((a, b) => b._sortDate.localeCompare(a._sortDate)).slice(0, 50)
   }, [txns, category.name, accounts, activeLedger.groups, accountTxns, txnTab])
 
-  const groupedRecent = useMemo(() => {
+  const groupedTxns = useMemo(() => {
     const map = new Map()
     for (const t of recentTxns) {
       const m = t.date.slice(0, 7)
@@ -321,26 +321,97 @@ export function CategoryDetail({
            </div>
         </div>
       ) : (
-        <div className="catDetailHistory" style={{ padding: 16 }}>
-           <button className="btn" style={{ width: '100%', marginBottom: 20, background: '#ffd76a' }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : 'Expense'}</button>
-           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontWeight: 600 }}>Recent {category.name}</span>
-              <button onClick={() => setIsSelectMode(!isSelectMode)} style={{ fontSize: 12, color: '#6366f1' }}>{isSelectMode ? 'Cancel' : 'Select'}</button>
+        <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
+           <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : 'Expense'}</button>
+           
+           <div className="modeSegmented" style={{ 
+              display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12, 
+              marginBottom: 16
+            }}>
+             <button 
+               onClick={() => setTxnTab('activity')} 
+               style={{ 
+                 flex: 1, padding: '8px', borderRadius: 10, 
+                 background: txnTab === 'activity' ? '#fff' : 'transparent', 
+                 border: 'none', fontWeight: 700, fontSize: 12, 
+                 color: txnTab === 'activity' ? '#5a5fb0' : '#64748b',
+                 boxShadow: txnTab === 'activity' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' 
+               }}
+             >Activity</button>
+             <button 
+               onClick={() => setTxnTab('future')} 
+               style={{ 
+                 flex: 1, padding: '8px', borderRadius: 10, 
+                 background: txnTab === 'future' ? '#fff' : 'transparent', 
+                 border: 'none', fontWeight: 700, fontSize: 12, 
+                 color: txnTab === 'future' ? '#5a5fb0' : '#64748b',
+                 boxShadow: txnTab === 'future' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' 
+               }}
+             >Future</button>
            </div>
-           {groupedRecent.map(([m, items]) => (
-              <div key={m} style={{ marginBottom: 15 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 5 }}>{m}</div>
-                {items.map(t => (
-                  <div key={t.id} className="catHistoryRow" onClick={() => openTxnDetail(t)} style={{ padding: '10px 0', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontWeight: 500 }}>{t.note || category.name}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{t.date}</div>
+           
+           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{txnTab === 'activity' ? 'Recent' : 'Upcoming'} {category.name}</span>
+              <button onClick={() => setIsSelectMode(!isSelectMode)} style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>{isSelectMode ? 'Cancel' : 'Select'}</button>
+           </div>
+
+           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+             {groupedTxns.map(([m, items]) => {
+                const monthName = new Date(m + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })
+                const totalOut = items.reduce((s,t) => s + (t.type !== 'income' ? Number(t.amount || 0) : 0), 0)
+                const totalIn = items.reduce((s,t) => s + (t.type === 'income' ? Number(t.amount || 0) : 0), 0)
+                return (
+                  <div key={m} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ 
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                      padding: '8px 4px', borderBottom: '1px solid #f8fafc' 
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#4b5563' }}>{monthName}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: totalOut > 0 ? '#ef4444' : '#10b981' }}>
+                        {totalOut > 0 ? `OUT ${fmtCompact(totalOut)}` : `IN ${fmtCompact(totalIn)}`}
+                      </div>
                     </div>
-                    <div className={t.type === 'income' ? 'pos' : 'neg'} style={{ fontWeight: 600 }}>{t.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}</div>
+                    {items.map(t => (
+                      <div key={t.id} className="catHistoryRow" onClick={() => openTxnDetail(t)} style={{ 
+                        padding: '10px 12px', 
+                        borderRadius: 16,
+                        background: '#fff',
+                        border: '0.5px solid #eef2ff',
+                        display: 'flex', 
+                        alignItems: 'center',
+                        gap: 12,
+                        transition: 'all 0.2s ease'
+                      }}>
+                        <div style={{ 
+                          width: 32, height: 32, borderRadius: 16, 
+                          background: '#fff', border: '1px solid #f1f5f9', 
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                          fontWeight: 700, fontSize: 13, color: '#64748b'
+                        }}>
+                          {category.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="catHistoryInfo">
+                          <div className="catHistoryTitleRow" style={{ fontSize: 13, fontWeight: 700 }}>{t.note || category.name}</div>
+                          <div className="catHistoryMeta" style={{ fontSize: 11 }}>
+                            {new Date(t.date).getDate()} {new Date(t.date).toLocaleString('default',{month:'short'})}
+                            {t.accountId && ` • ${accounts.find(a => a.id === t.accountId)?.name}`}
+                          </div>
+                        </div>
+                        <div className={`catHistoryAmount ${t.type === 'income' ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
+                          {t.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-           ))}
+                )
+             })}
+           </div>
+           
+           {groupedTxns.length === 0 && (
+             <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+               No {txnTab} transactions found.
+             </div>
+           )}
         </div>
       )}
     </div>

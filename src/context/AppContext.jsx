@@ -31,12 +31,18 @@ export function AppProvider({ children }) {
     setTimeout(() => setToast(''), 3000)
   }
 
+  // Wrapper to reset category detail tab to "Adding" when a category is selected
+  const handleSelectCategory = (cat) => {
+    if (cat) setShowAddForm(true);
+    setSelectedCategory(cat);
+  }
+
   // Hook integrations
   const vaultControls = useVault({
     setStage,
     setTab,
     show,
-    setSelectedCategory,
+    setSelectedCategory: handleSelectCategory,
     setFocusAccountId,
     isVaultEmpty,
     normalizeVault,
@@ -597,7 +603,7 @@ export function AppProvider({ children }) {
     settings: vault.settings || {},
 
     // UI State
-    selectedCategory, setSelectedCategory,
+    selectedCategory, setSelectedCategory: handleSelectCategory,
     showAddForm, setShowAddForm,
     highlightId, setHighlightId,
     focusAccountId, setFocusAccountId,

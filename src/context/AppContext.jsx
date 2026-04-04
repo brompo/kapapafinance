@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react'
-import { 
-  uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty, 
-  normalizeAccountsWithGroups 
+import {
+  uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
+  normalizeAccountsWithGroups
 } from '../utils/ledger.js'
 import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, fmtTZS } from '../money.js'
-import { 
-  SEED_KEY, PIN_FLOW_KEY, DEFAULT_TAB 
+import {
+  SEED_KEY, PIN_FLOW_KEY, DEFAULT_TAB
 } from '../constants.js'
 import { useVault } from '../hooks/useVault.js'
 import { useGoogleDrive } from '../hooks/useGoogleDrive.js'
@@ -18,7 +18,7 @@ export function AppProvider({ children }) {
   const [tab, setTab] = useState(DEFAULT_TAB)
   const [month, setMonth] = useState(() => todayISO().slice(0, 7))
   const [vault, setVaultState] = useState(() => normalizeVault(null))
-  
+
   // UI States
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [showAddForm, setShowAddForm] = useState(true)
@@ -45,12 +45,7 @@ export function AppProvider({ children }) {
     setVaultState
   })
 
-  const cloudGoogleControls = useGoogleDrive({
-    vault,
-    setVaultState,
-    show,
-    normalizeVault
-  })
+
 
   // Initialization
   useEffect(() => {
@@ -59,15 +54,15 @@ export function AppProvider({ children }) {
       try {
         const isPinned = localStorage.getItem(PIN_FLOW_KEY) === 'true'
         console.log('AppContext: isPinned?', isPinned, 'hasPin?', hasPin())
-        
+
         if (isPinned && hasPin()) {
           setStage('unlock')
           return
         }
-        
+
         const plain = loadVaultPlain()
         console.log('AppContext: plain exists?', !!plain)
-        
+
         if (plain) {
           const v = normalizeVault(plain)
           setVaultState(v)
@@ -76,7 +71,7 @@ export function AppProvider({ children }) {
           console.log('AppContext: Set stage to app')
           return
         }
-        
+
         console.log('AppContext: Set stage to landing')
         setStage('landing')
       } catch (e) {
@@ -110,6 +105,19 @@ export function AppProvider({ children }) {
     addLedgerName, setAddLedgerName
   } = vaultControls
 
+  const cloudGoogleControls = useGoogleDrive({
+    vault,
+    setVaultState,
+    show,
+    normalizeVault,
+    settings: vault.settings || {},
+    updateSettings,
+    persist,
+    setTab,
+    DEFAULT_TAB,
+    setStage
+  })
+
   function handleReset() {
     if (window.confirm('Wipe all data and reset?')) {
       resetAll()
@@ -122,7 +130,7 @@ export function AppProvider({ children }) {
     if (!activeLedger?.id) return []
     return allAccounts.filter(a => a.ledgerId === activeLedger.id)
   }, [allAccounts, activeLedger?.id])
-  
+
   const accountTxns = useMemo(() => {
     if (!activeLedger?.id) return []
     return allAccountTxns.filter(t => {
@@ -132,8 +140,8 @@ export function AppProvider({ children }) {
   }, [allAccountTxns, allAccounts, activeLedger?.id])
 
   const txns = activeLedger?.txns || []
-  const filteredTxns = useMemo(() => 
-    txns.filter(t => t.date && t.date.startsWith(month)), 
+  const filteredTxns = useMemo(() =>
+    txns.filter(t => t.date && t.date.startsWith(month)),
     [txns, month]
   )
 
@@ -146,7 +154,7 @@ export function AppProvider({ children }) {
   const kpis = useMemo(() => {
     let inc = 0, exp = 0
     if (!activeLedger) return { inc: 0, exp: 0, balance: 0 }
-    
+
     for (const t of filteredTxns) {
       if (t.type === 'income' && !t.reimbursementOf) inc += Number(t.amount || 0)
       if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
@@ -185,7 +193,7 @@ export function AppProvider({ children }) {
       }
       return s + (a.type === 'credit' ? -val : val)
     }, 0)
-    
+
     return { inc, exp, balance: bal, monthlyBalance, monthlyAlloc }
   }, [filteredTxns, accounts, allAccountTxns, activeLedger, month])
 
@@ -234,113 +242,113 @@ export function AppProvider({ children }) {
     let totalDelta = 0;
 
     for (let i = 0; i < count; i++) {
-        const iterId = uid();
-        let iterDate = new Date(baseDate.getTime());
+      const iterId = uid();
+      let iterDate = new Date(baseDate.getTime());
 
-        if (i > 0) {
-            if (freq === 'daily') iterDate.setDate(iterDate.getDate() + i);
-            else if (freq === 'weekly') iterDate.setDate(iterDate.getDate() + (i * 7));
-            else if (freq === 'monthly') iterDate.setMonth(iterDate.getMonth() + i);
-            else if (freq === 'yearly') iterDate.setFullYear(iterDate.getFullYear() + i);
-        }
+      if (i > 0) {
+        if (freq === 'daily') iterDate.setDate(iterDate.getDate() + i);
+        else if (freq === 'weekly') iterDate.setDate(iterDate.getDate() + (i * 7));
+        else if (freq === 'monthly') iterDate.setMonth(iterDate.getMonth() + i);
+        else if (freq === 'yearly') iterDate.setFullYear(iterDate.getFullYear() + i);
+      }
 
-        const iterDateStr = iterDate.toISOString().slice(0, 10);
-        const iterNote = isRecurring
-            ? `${note ? note.trim() + ' ' : ''}(${i + 1} of ${count})`
-            : (note ? note.trim() : '');
+      const iterDateStr = iterDate.toISOString().slice(0, 10);
+      const iterNote = isRecurring
+        ? `${note ? note.trim() + ' ' : ''}(${i + 1} of ${count})`
+        : (note ? note.trim() : '');
 
-        const t = {
-            id: iterId,
-            type,
+      const t = {
+        id: iterId,
+        type,
+        amount: amt,
+        category,
+        note: iterNote,
+        date: iterDateStr,
+        accountId: accountId || '',
+        toAccountId: toAccountId || '',
+        subAccountId: subAccountId || '',
+        clientId: clientId || ''
+      };
+
+      newTxns.push(t);
+      totalDelta += (t.type === 'income' ? amt : -amt);
+
+      if (t.accountId) {
+        const acct = allAccounts.find(a => String(a.id) === String(t.accountId) || a.name === t.accountId);
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
+          const targetSubId = subs.length
+            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            : null;
+
+          const entry = {
+            id: `txn-${t.id}`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
             amount: amt,
-            category,
-            note: iterNote,
-            date: iterDateStr,
-            accountId: accountId || '',
-            toAccountId: toAccountId || '',
-            subAccountId: subAccountId || '',
-            clientId: clientId || ''
-        };
-
-        newTxns.push(t);
-        totalDelta += (t.type === 'income' ? amt : -amt);
-
-        if (t.accountId) {
-            const acct = allAccounts.find(a => String(a.id) === String(t.accountId) || a.name === t.accountId);
-            if (acct) {
-                const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
-                const targetSubId = subs.length
-                    ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
-                    : null;
-
-                const entry = {
-                    id: `txn-${t.id}`,
-                    accountId: acct.id,
-                    subAccountId: targetSubId,
-                    amount: amt,
-                    direction: t.type === 'income' ? 'in' : 'out',
-                    kind: 'txn',
-                    relatedAccountId: t.toAccountId || null,
-                    note: t.note || t.category,
-                    date: t.date,
-                    clientId: t.clientId || ''
-                };
-                newAcctTxns.push(entry);
-            }
+            direction: t.type === 'income' ? 'in' : 'out',
+            kind: 'txn',
+            relatedAccountId: t.toAccountId || null,
+            note: t.note || t.category,
+            date: t.date,
+            clientId: t.clientId || ''
+          };
+          newAcctTxns.push(entry);
         }
+      }
 
-        if (t.toAccountId) {
-            const acct = allAccounts.find(a => String(a.id) === String(t.toAccountId) || a.name === t.toAccountId);
-            if (acct) {
-                const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
-                const targetSubId = subs.length
-                    ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
-                    : null;
+      if (t.toAccountId) {
+        const acct = allAccounts.find(a => String(a.id) === String(t.toAccountId) || a.name === t.toAccountId);
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
+          const targetSubId = subs.length
+            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            : null;
 
-                const entry = {
-                    id: `txn-${t.id}-to`,
-                    accountId: acct.id,
-                    subAccountId: targetSubId,
-                    amount: amt,
-                    direction: 'in',
-                    kind: 'txn',
-                    relatedAccountId: t.accountId || null,
-                    note: t.note || t.category,
-                    date: t.date,
-                    clientId: t.clientId || ''
-                };
-                newAcctTxns.push(entry);
-            }
+          const entry = {
+            id: `txn-${t.id}-to`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
+            amount: amt,
+            direction: 'in',
+            kind: 'txn',
+            relatedAccountId: t.accountId || null,
+            note: t.note || t.category,
+            date: t.date,
+            clientId: t.clientId || ''
+          };
+          newAcctTxns.push(entry);
         }
+      }
     }
 
     let nextAccounts = allAccounts
     let nextAccountTxns = allAccountTxns
 
     if (newAcctTxns.length > 0) {
-        const activeTxnIds = new Set(newAcctTxns.map(e => String(e.accountId)));
-        // Update account balances
-        nextAccounts = allAccounts.map(a => {
-            let delta = 0;
-            if (activeTxnIds.has(String(a.id)) || activeTxnIds.has(a.name)) {
-                // This account was involved in at least one of the new transactions
-                const relatedEntries = newAcctTxns.filter(e => String(e.accountId) === String(a.id) || e.accountName === a.name);
-                delta = relatedEntries.reduce((s, e) => s + (e.direction === 'in' ? e.amount : -e.amount), 0);
-            }
-            if (!delta) return a;
+      const activeTxnIds = new Set(newAcctTxns.map(e => String(e.accountId)));
+      // Update account balances
+      nextAccounts = allAccounts.map(a => {
+        let delta = 0;
+        if (activeTxnIds.has(String(a.id)) || activeTxnIds.has(a.name)) {
+          // This account was involved in at least one of the new transactions
+          const relatedEntries = newAcctTxns.filter(e => String(e.accountId) === String(a.id) || e.accountName === a.name);
+          delta = relatedEntries.reduce((s, e) => s + (e.direction === 'in' ? e.amount : -e.amount), 0);
+        }
+        if (!delta) return a;
 
-            const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
-            if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta };
-            
-            // For simplicity, apply to first sub if not specified, otherwise specific sub
-            const targetSubId = subAccountId || subs[0]?.id;
-            const nextSubs = subs.map(s => (
-                s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
-            ));
-            return { ...a, subAccounts: nextSubs };
-        });
+        const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
+        if (!subs.length) return { ...a, balance: Number(a.balance || 0) + delta };
 
-        nextAccountTxns = [...newAcctTxns.reverse(), ...allAccountTxns];
+        // For simplicity, apply to first sub if not specified, otherwise specific sub
+        const targetSubId = subAccountId || subs[0]?.id;
+        const nextSubs = subs.map(s => (
+          s.id === targetSubId ? { ...s, balance: Number(s.balance || 0) + delta } : s
+        ));
+        return { ...a, subAccounts: nextSubs };
+      });
+
+      nextAccountTxns = [...newAcctTxns.reverse(), ...allAccountTxns];
     }
 
     const nextClients = pendingClient ? [...(vault.clients || []), pendingClient] : undefined;
@@ -360,16 +368,16 @@ export function AppProvider({ children }) {
     }
 
     persistLedgerAndAccounts({
-        nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns], categoryMeta: nextMetaData },
-        nextAccounts,
-        nextAccountTxns,
-        nextClients
+      nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns], categoryMeta: nextMetaData },
+      nextAccounts,
+      nextAccountTxns,
+      nextClients
     })
 
     if (isRecurring) {
-        show(`Saved ${count} recurring transactions.`);
+      show(`Saved ${count} recurring transactions.`);
     } else {
-        show(`${type === 'income' ? 'Income' : 'Expense'} Added`);
+      show(`${type === 'income' ? 'Income' : 'Expense'} Added`);
     }
     return newTxns[0];
   }
@@ -594,25 +602,25 @@ export function AppProvider({ children }) {
     highlightId, setHighlightId,
     focusAccountId, setFocusAccountId,
     toast, show,
-    
+
     // Controls
     ...vaultControls,
     ...cloudGoogleControls,
     shiftMonth,
     formatMonthLabel,
-    
+
     // Transaction Helpers
     addQuickTxn,
     updateTxn,
     delTxn,
     addReimbursement,
     updateAccountGroups,
-    
+
     // Persistence
     persist,
     persistActiveLedger,
     persistLedgerAndAccounts,
-    
+
     // Auth & Security
     pin, setPin, pin2, setPin2,
     handleSetPin, handleUnlock, handleReset,

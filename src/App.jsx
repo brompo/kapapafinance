@@ -37,6 +37,13 @@ const DEFAULT_INCOME_CATEGORIES = [
   'Refunds',
   'Gifts'
 ]
+const DEFAULT_ALLOCATION_CATEGORIES = [
+  'Emergency Fund',
+  'Sinking Funds',
+  'Investment Pot',
+  'Buffer',
+  'Debt Paydown'
+]
 const DEFAULT_BUSINESS_INCOME_CATEGORIES = [
   'Sales',
   'Services',
@@ -115,6 +122,13 @@ const GROUP_IDS = {
   businessCapital: 'group-business-cap',
   businessDebt: 'group-business-debt'
 }
+
+const META_CATEGORIES = {
+  WALLET: 'wallet',
+  ASSET: 'asset',
+  DEBT: 'debt',
+  SAVINGS: 'savings'
+}
 const DEFAULT_TAB = 'tx' // insights | accounts | tx | settings
 
 const ALL_LEDGERS_ID = 'all'
@@ -124,23 +138,25 @@ const ALL_LEDGERS_TEMPLATE = {
   name: 'All Ledgers',
   type: 'personal',
   groups: [
-    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
-    { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', collapsed: false },
-    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
-    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
+    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.DEBT, collapsed: false },
+    { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
   ],
   categories: {
     expense: [...DEFAULT_EXPENSE_CATEGORIES],
     income: [...DEFAULT_INCOME_CATEGORIES],
     cos: [...DEFAULT_COS_CATEGORIES],
     opps: [...DEFAULT_OPPS_CATEGORIES],
+    allocation: [...DEFAULT_ALLOCATION_CATEGORIES],
   },
   categoryMeta: {
     expense: {},
     income: {},
     cos: {},
-    opps: {}
+    opps: {},
+    allocation: {}
   },
   txns: []
 }
@@ -149,13 +165,14 @@ function uid() {
   return Math.random().toString(16).slice(2) + '-' + Date.now().toString(16)
 }
 
-function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
+function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], allocationCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
   const isEditable = !txn.kind || txn.kind === 'txn'
   const [type, setType] = useState(txn.type || 'expense')
   const [amount, setAmount] = useState(String(txn.amount || ''))
   const [amountError, setAmountError] = useState(false)
   const [category, setCategory] = useState(txn.category || '')
   const [accountId, setAccountId] = useState(txn.accountId || '')
+  const [toAccountId, setToAccountId] = useState(txn.toAccountId || '')
   const [accountError, setAccountError] = useState(false)
   const [clientId, setClientId] = useState(txn.raw?.clientId || '')
   const [pendingClient, setPendingClient] = useState(null)
@@ -184,10 +201,12 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
 
   const labelType = type === 'income' ? 'Income' :
     type === 'cos' ? 'Cost of Sales' :
-      type === 'opps' ? 'Operating Expenses' : 'Expense'
+      type === 'opps' ? 'Operating Expenses' :
+        type === 'allocation' ? 'Allocation' : 'Expense'
   const categoryOptions = type === 'income' ? incomeCats :
     type === 'cos' ? cosCats :
-      type === 'opps' ? oppsCats : expenseCats
+      type === 'opps' ? oppsCats :
+        type === 'allocation' ? allocationCats : expenseCats
 
   const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
 
@@ -218,6 +237,7 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
       note: combinedNote || '', // Use combined format for display compatibility
       rawNote: note || '', // Storing raw note separately for future use
       accountId: accountId || '',
+      toAccountId: toAccountId || '',
       clientId: clientId || '',
       date: date || todayISO()
     }, pendingClient)
@@ -273,6 +293,7 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
                 <option value="expense">Expense</option>
                 {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
                 {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
+                <option value="allocation">Allocation</option>
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>
@@ -316,7 +337,7 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
           </div>
 
           <div className="txnDetailRow">
-            <div className="txnDetailLabel">Account</div>
+            <div className="txnDetailLabel">{type === 'allocation' ? 'Source Account' : 'Account'}</div>
             {isEditable ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <select
@@ -337,6 +358,26 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
               <div className="txnDetailValue">{accountName || 'None'}</div>
             )}
           </div>
+
+          {type === 'allocation' && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Destination Account</div>
+              {isEditable ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <select
+                    className="txnDetailSelect"
+                    value={toAccountId}
+                    onChange={e => setToAccountId(e.target.value)}
+                  >
+                    <option value="">None</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="txnDetailValue">{accounts.find(a => a.id === toAccountId)?.name || 'None'}</div>
+              )}
+            </div>
+          )}
 
           {type === 'income' && (
             <div className="txnDetailRow">
@@ -505,11 +546,11 @@ function createLedger({
   groups
 } = {}) {
   const fallbackGroups = [
-    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', collapsed: false },
-    { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', collapsed: false },
-    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', collapsed: false },
-    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', collapsed: false }
+    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.DEBT, collapsed: false },
+    { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
   ]
 
   const normalizedGroups = Array.isArray(groups) && groups.length
@@ -522,10 +563,20 @@ function createLedger({
       else if (normalizedName === 'investment' || normalizedName === 'invest') id = GROUP_IDS.investment
       else if (normalizedName === 'shares') id = GROUP_IDS.shares
       else if (normalizedName === 'real estate') id = GROUP_IDS.realEstate
+
+      const type = g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit'))
+      let metaCategory = g.metaCategory
+      if (!metaCategory) {
+        if (type === 'credit') metaCategory = META_CATEGORIES.DEBT
+        else if (type === 'asset' || type === 'loan') metaCategory = META_CATEGORIES.ASSET
+        else metaCategory = META_CATEGORIES.WALLET
+      }
+
       return {
         id,
         name,
-        type: g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit')),
+        type,
+        metaCategory,
         collapsed: !!g.collapsed
       }
     })
@@ -534,19 +585,22 @@ function createLedger({
   const defaultExpenseKey = type === 'business' ? 'cos' : 'expense'
   const expenseDefaults = type === 'business' ? [] : [...DEFAULT_EXPENSE_CATEGORIES]
   const incomeDefaults = type === 'business' ? [...DEFAULT_BUSINESS_INCOME_CATEGORIES] : [...DEFAULT_INCOME_CATEGORIES]
+  const allocationDefaults = [...DEFAULT_ALLOCATION_CATEGORIES]
 
   const resolvedCategories = {
     expense: Array.isArray(categories?.expense) ? categories.expense : expenseDefaults,
     income: Array.isArray(categories?.income) ? categories.income : incomeDefaults,
     cos: Array.isArray(categories?.cos) ? categories.cos : (type === 'business' ? [...DEFAULT_COS_CATEGORIES] : []),
-    opps: Array.isArray(categories?.opps) ? categories.opps : (type === 'business' ? [...DEFAULT_OPPS_CATEGORIES] : [])
+    opps: Array.isArray(categories?.opps) ? categories.opps : (type === 'business' ? [...DEFAULT_OPPS_CATEGORIES] : []),
+    allocation: Array.isArray(categories?.allocation) ? categories.allocation : allocationDefaults
   }
 
   const resolvedMeta = {
     expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object' ? categoryMeta.expense : (type === 'business' ? {} : Object.fromEntries(Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }]))),
     income: categoryMeta?.income && typeof categoryMeta.income === 'object' ? categoryMeta.income : {},
     cos: categoryMeta?.cos && typeof categoryMeta.cos === 'object' ? categoryMeta.cos : {},
-    opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {}
+    opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {},
+    allocation: categoryMeta?.allocation && typeof categoryMeta.allocation === 'object' ? categoryMeta.allocation : {}
   }
 
   return {
@@ -1372,7 +1426,7 @@ export default function App() {
   }, [accountTxns, month])
 
   const kpis = useMemo(() => {
-    let inc = 0, exp = 0
+    let inc = 0, exp = 0, alloc = 0
     for (const t of filteredTxns) {
       const amt = Number(t.amount || 0)
       if (t.type === 'income') {
@@ -1380,6 +1434,8 @@ export default function App() {
       } else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
         const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
         exp += amt - reimbursed
+      } else if (t.type === 'allocation') {
+        alloc += amt
       }
     }
 
@@ -1401,7 +1457,7 @@ export default function App() {
     }
     inc += totalGains;
 
-    return { inc, exp, bal: inc - exp }
+    return { inc, exp, alloc, balance: inc - exp - alloc }
   }, [filteredTxns, accounts, activeLedger.groups, accountTxns, month])
 
   const cloudLastBackup = cloudGoogle.lastBackupAt ? new Date(cloudGoogle.lastBackupAt) : null
@@ -1607,7 +1663,7 @@ export default function App() {
     show('Saved.')
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (settings.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -1645,6 +1701,7 @@ export default function App() {
         note: iterNote,
         date: iterDateStr,
         accountId: accountId || '',
+        toAccountId: toAccountId || '',
         subAccountId: subAccountId || '',
         clientId: clientId || ''
       };
@@ -1667,7 +1724,31 @@ export default function App() {
             amount: amt,
             direction: t.type === 'income' ? 'in' : 'out',
             kind: 'txn',
-            relatedAccountId: null,
+            relatedAccountId: t.toAccountId || null,
+            note: t.note || t.category,
+            date: t.date,
+            clientId: t.clientId || t.raw?.clientId || ''
+          };
+          newAcctTxns.push(entry);
+        }
+      }
+
+      if (t.toAccountId) {
+        const acct = allAccounts.find(a => String(a.id) === String(t.toAccountId) || a.name === t.toAccountId);
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
+          const targetSubId = subs.length
+            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            : null;
+
+          const entry = {
+            id: `txn-${t.id}-to`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
+            amount: amt,
+            direction: 'in',
+            kind: 'txn',
+            relatedAccountId: t.accountId || null,
             note: t.note || t.category,
             date: t.date,
             clientId: t.clientId || t.raw?.clientId || ''
@@ -1849,27 +1930,47 @@ export default function App() {
     const otherTxnEntries = allAccountTxns.filter(
       t => t.kind === 'txn' && !ledgerAccountIds.has(t.accountId)
     )
-    const txnEntries = nextTxns
-      .filter(t => t.accountId)
-      .map(t => {
+    const txnEntries = []
+    nextTxns.forEach(t => {
+      if (t.accountId) {
         const acct = findAccountByIdOrName(t.accountId)
-        if (!acct) return null
-        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-        const targetSubId = subs.length ? subs[0]?.id : null
-        return {
-          id: `txn-${t.id}`,
-          accountId: acct.id,
-          subAccountId: targetSubId,
-          amount: Number(t.amount || 0),
-          direction: t.type === 'income' ? 'in' : 'out',
-          kind: 'txn',
-          relatedAccountId: null,
-          note: t.note || t.category,
-          date: t.date || todayISO(),
-          clientId: t.clientId || t.raw?.clientId || ''
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+          const targetSubId = subs.length ? subs[0]?.id : null
+          txnEntries.push({
+            id: `txn-${t.id}`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
+            amount: Number(t.amount || 0),
+            direction: t.type === 'income' ? 'in' : 'out',
+            kind: 'txn',
+            relatedAccountId: t.toAccountId || null,
+            note: t.note || t.category,
+            date: t.date || todayISO(),
+            clientId: t.clientId || t.raw?.clientId || ''
+          })
         }
-      })
-      .filter(Boolean)
+      }
+      if (t.toAccountId) {
+        const acct = findAccountByIdOrName(t.toAccountId)
+        if (acct) {
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+          const targetSubId = subs.length ? subs[0]?.id : null
+          txnEntries.push({
+            id: `txn-${t.id}-to`,
+            accountId: acct.id,
+            subAccountId: targetSubId,
+            amount: Number(t.amount || 0),
+            direction: 'in',
+            kind: 'txn',
+            relatedAccountId: t.accountId || null,
+            note: t.note || t.category,
+            date: t.date || todayISO(),
+            clientId: t.clientId || t.raw?.clientId || ''
+          })
+        }
+      }
+    })
 
     persistLedgerAndAccounts({
       nextLedger: { ...activeLedger, txns: nextTxns },
@@ -1893,6 +1994,21 @@ export default function App() {
         const entry = allAccountTxns.find(at => at.id === entryId)
 
         const delta = t.type === 'income' ? -Number(t.amount || 0) : Number(t.amount || 0)
+        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+        const subId = (entry && entry.subAccountId) || t.subAccountId || (subs.length ? subs[0].id : null)
+        nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
+
+        nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+      }
+    }
+
+    if (t.toAccountId) {
+      const acct = findAccountByIdOrName(t.toAccountId)
+      if (acct) {
+        const entryId = `txn-${t.id}-to`
+        const entry = allAccountTxns.find(at => at.id === entryId)
+
+        const delta = -Number(t.amount || 0) // Reverse 'in'
         const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
         const subId = (entry && entry.subAccountId) || t.subAccountId || (subs.length ? subs[0].id : null)
         nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
@@ -2357,6 +2473,9 @@ export default function App() {
     const [collapseExpense, setCollapseExpense] = useState(() => {
       try { return localStorage.getItem('collapse_expense') === 'true' } catch { return false }
     })
+    const [collapseAllocation, setCollapseAllocation] = useState(() => {
+      try { return localStorage.getItem('collapse_allocation') === 'true' } catch { return false }
+    })
     const [collapseIncome, setCollapseIncome] = useState(() => {
       try { return localStorage.getItem('collapse_income') === 'true' } catch { return false }
     })
@@ -2367,8 +2486,20 @@ export default function App() {
       try { return localStorage.getItem('collapse_opps') === 'true' } catch { return false }
     })
 
+    const allocationCats = categories.allocation || []
     const cosCats = categories.cos || []
     const oppsCats = categories.opps || []
+
+    const allocationTotals = useMemo(() => {
+      const map = new Map()
+      for (const c of allocationCats) map.set(c, 0)
+      for (const t of filteredTxns) {
+        if (t.type !== 'allocation') continue
+        const key = t.category || 'Other'
+        map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
+      }
+      return map
+    }, [filteredTxns, allocationCats])
 
     const expenseTotals = useMemo(() => {
       const map = new Map()
@@ -2436,6 +2567,9 @@ export default function App() {
     }, [filteredTxns, incomeCats, accounts, activeLedger.groups, accountTxns, month])
 
     useEffect(() => {
+      try { localStorage.setItem('collapse_allocation', String(collapseAllocation)) } catch { }
+    }, [collapseAllocation])
+    useEffect(() => {
       try { localStorage.setItem('collapse_income', String(collapseIncome)) } catch { }
     }, [collapseIncome])
     useEffect(() => {
@@ -2470,6 +2604,7 @@ export default function App() {
       else if (type === 'income') list = incomeCats
       else if (type === 'cos') list = cosCats
       else if (type === 'opps') list = oppsCats
+      else if (type === 'allocation') list = allocationCats
 
       const fromIndex = list.indexOf(draggingCat.name)
       const toIndex = list.indexOf(targetName)
@@ -2508,6 +2643,7 @@ export default function App() {
       else if (type === 'income') list = incomeCats
       else if (type === 'cos') list = cosCats
       else if (type === 'opps') list = oppsCats
+      else if (type === 'allocation') list = allocationCats
 
       if (list.some(c => c.toLowerCase() === trimmed.toLowerCase())) return
       const next = [...list, trimmed]
@@ -2531,6 +2667,7 @@ export default function App() {
       else if (type === 'income') { list = incomeCats; displayName = 'income'; }
       else if (type === 'cos') { list = cosCats; displayName = 'cost of sales'; }
       else if (type === 'opps') { list = oppsCats; displayName = 'operating expenses'; }
+      else if (type === 'allocation') { list = allocationCats; displayName = 'allocation'; }
 
       if (!list.length) return
       const from = prompt(`Rename which ${displayName} category?\n${list.join(', ')}`)
@@ -2580,13 +2717,14 @@ export default function App() {
           setHighlightId={setHighlightId}
           showAddForm={showAddForm}
           setShowAddForm={setShowAddForm}
-          onAdd={(amount, note, accountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount) => {
+          onAdd={(amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount) => {
             return addQuickTxn({
               type: selectedCategory.type,
               amount,
               category: selectedCategory.name,
               note,
               accountId,
+              toAccountId,
               date,
               subAccountId,
               clientId,
@@ -2600,12 +2738,14 @@ export default function App() {
             selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
               selectedCategory.type === 'income' ? (incomeTotals.get(selectedCategory.name) || 0) :
                 selectedCategory.type === 'cos' ? (cosTotals.get(selectedCategory.name) || 0) :
-                  (oppsTotals.get(selectedCategory.name) || 0)
+                  selectedCategory.type === 'opps' ? (oppsTotals.get(selectedCategory.name) || 0) :
+                    (allocationTotals.get(selectedCategory.name) || 0)
           }
           cosCats={cosCats}
           oppsCats={oppsCats}
           expenseCats={expenseCats}
           incomeCats={incomeCats}
+          allocationCats={allocationCats}
           meta={categoryMeta[selectedCategory.type]?.[selectedCategory.name]}
           onUpdateMeta={(next) => {
             const nextMeta = {
@@ -2642,9 +2782,9 @@ export default function App() {
           </div>
         </div>
 
-        <div className={`ledgerSummary ${kpis.inc - kpis.exp < 0 ? 'neg' : 'pos'}`}>
+        <div className={`ledgerSummary ${kpis.balance < 0 ? 'neg' : 'pos'}`}>
           <div className="ledgerSummaryLabel">Balance</div>
-          <div className="ledgerSummaryValue">{fmtTZS(kpis.inc - kpis.exp)}</div>
+          <div className="ledgerSummaryValue">{fmtTZS(kpis.balance)}</div>
           <span className="ledgerSummaryCaret">▾</span>
         </div>
 
@@ -2937,6 +3077,57 @@ export default function App() {
             </div>
           </>
         )}
+
+        <div className="ledgerSection">
+          <div className="ledgerSectionHead">
+            <div className="ledgerSectionTitle">
+              Allocations <span className="ledgerSectionTotal">{fmtTZS(Array.from(allocationTotals.values()).reduce((a, b) => a + b, 0))}</span>
+            </div>
+            <div className="ledgerSectionActions">
+              <button className="ledgerAddBtn" onClick={() => addCategory('allocation')} type="button">
+                + Add
+              </button>
+              <button
+                className="ledgerCollapseBtn"
+                type="button"
+                onClick={() => setCollapseAllocation(v => !v)}
+              >
+                {collapseAllocation ? '▸' : '▾'}
+              </button>
+            </div>
+          </div>
+          {!collapseAllocation && (
+            <div className="ledgerGrid">
+              {allocationCats.map((c, i) => {
+                const val = allocationTotals.get(c) || 0
+                return (
+                  <div
+                    className={`ledgerCard theme-${(i % 7) + 3} ${draggingCat?.name === c ? 'dragging' : ''} ${dragOverCat === c ? 'dragOver' : ''}`}
+                    key={c}
+                    draggable
+                    onDragStart={() => handleDragStart('allocation', c)}
+                    onDragOver={(e) => handleDragOver(e, 'allocation', c)}
+                    onDrop={() => handleDrop('allocation', c)}
+                    onDragEnd={() => { setDraggingCat(null); setDragOverCat(null); }}
+                    style={categoryMeta.allocation?.[c]?.color ? { background: categoryMeta.allocation[c].color } : undefined}
+                    onClick={() => setSelectedCategory({ type: 'allocation', name: c, theme: `theme-${(i % 7) + 3}` })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setSelectedCategory({ type: 'allocation', name: c, theme: `theme-${(i % 7) + 3}` })
+                      }
+                    }}
+                  >
+                    <div className="ledgerCardTitle">{c}</div>
+                    <div className="ledgerCardIcon">{c.slice(0, 1).toUpperCase()}</div>
+                    <div className="ledgerCardValue">{fmtTZS(val)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -2952,6 +3143,7 @@ export default function App() {
     incomeCats = [],
     cosCats = [],
     oppsCats = [],
+    allocationCats = [],
     clients = [],
     showAddForm,
     setShowAddForm
@@ -2970,6 +3162,7 @@ export default function App() {
     const [note, setNote] = useState('')
     const [date, setDate] = useState(todayISO())
     const [accountId, setAccountId] = useState(meta?.defaultAccountId || '')
+    const [toAccountId, setToAccountId] = useState('')
     const [accountError, setAccountError] = useState(false)
     const [clientId, setClientId] = useState('')
     const [pendingClient, setPendingClient] = useState(null)
@@ -3235,6 +3428,7 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={cosCats}
           oppsCats={oppsCats}
+          allocationCats={allocationCats}
           settings={settings}
           show={show}
           categoryMeta={activeLedger.categoryMeta || {}}
@@ -3404,6 +3598,22 @@ export default function App() {
                 </button>
               </div>
 
+              {category.type === 'allocation' && (
+                <div style={{ marginBottom: 12, marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>To Account (Destination)</span>
+                    <select
+                      value={toAccountId}
+                      onChange={e => setToAccountId(e.target.value)}
+                      style={{ padding: '6px 8px', fontSize: 13, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', width: '100%' }}
+                    >
+                      <option value="">Select destination</option>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               {showSubAccountSelect && accountId && accounts.find(a => a.id === accountId) && (
                 <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', background: '#fafafa', padding: '6px 12px', borderRadius: 8 }}>
                   <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Sub-account:</span>
@@ -3555,10 +3765,10 @@ export default function App() {
                         setIsSaving(true);
                         const finalCount = parseInt(recurringCount, 10) || 12;
                         const combinedNote = selectedSub ? `${selectedSub} • ${note}` : note;
-                        const success = await onAdd(finalAmt, combinedNote, accountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient, true);
+                        const success = await onAdd(finalAmt, combinedNote, accountId, toAccountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: finalCount } : null, pendingClient, true);
                         setIsSaving(false);
                         if (success) {
-                          setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
+                          setAmount(''); setNote(''); setDate(todayISO()); setAccountId(''); setToAccountId(''); setSubAccountId(''); setIsRecurring(false); setShowAddForm(false); setPrevValue(''); setOperator('');
                           if (success.id) { setHighlightId(success.id); setTimeout(() => setHighlightId(null), 3000); }
                         }
                       } else {
@@ -5358,6 +5568,7 @@ export default function App() {
           incomeCats={incomeCats}
           cosCats={activeLedger.categories?.cos || []}
           oppsCats={activeLedger.categories?.opps || []}
+          allocationCats={activeLedger.categories?.allocation || []}
           settings={settings}
           show={show}
           categoryMeta={activeLedger.categoryMeta || {}}

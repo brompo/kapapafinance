@@ -51,7 +51,6 @@ export default function Accounts({
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [editTargetValue, setEditTargetValue] = useState("");
   const [editTargetYear, setEditTargetYear] = useState("");
-  const [filter, setFilter] = useState("all"); // all | debit | credit | loan | asset
   const [selectedId, setSelectedId] = useState(null);
   const [draggingGroupId, setDraggingGroupId] = useState(null);
   const [draggingAccountId, setDraggingAccountId] = useState(null);
@@ -60,6 +59,7 @@ export default function Accounts({
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupType, setNewGroupType] = useState('debit');
+  const [newGroupMetaCategory, setNewGroupMetaCategory] = useState('wallet');
   const [showOverview, setShowOverview] = useState(true);
   const [showImportantNumbers, setShowImportantNumbers] = useState(true);
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
@@ -69,6 +69,81 @@ export default function Accounts({
   const [editGroupName, setEditGroupName] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountBalance, setNewAccountBalance] = useState("");
+  const [editMetaCategory, setEditMetaCategory] = useState("");
+
+  function renderMetaSection(label, type, total, groups) {
+    return (
+      <div className="metaSection" key={type}>
+        <div className="metaHeader">
+          <div className="metaInfo">
+            <span className="metaLabel">{label}</span>
+            <span className="metaDesc">
+              {type === 'wallet' && 'The "Now" Money'}
+              {type === 'asset' && 'The "Growth" Engine'}
+              {type === 'debt' && 'The "Negative" Value'}
+              {type === 'savings' && 'The "Purpose" Money'}
+            </span>
+          </div>
+          <div className={`metaTotal ${type === 'debt' ? 'neg' : ''}`}>
+            {fmtTZS(total)}
+          </div>
+        </div>
+
+        <div className="metaBody">
+          {groups.map(group => {
+            const items = visibleAccounts.filter((a) => a.groupId === group.id);
+            const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
+            const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
+            return (
+              <Section
+                key={group.id}
+                group={group}
+                metaCategory={type}
+                accountTxns={accountTxns}
+                right={right}
+                total={total}
+                items={items}
+                onDeleteAccount={onDeleteAccount}
+                onSelectAccount={(id) => setSelectedId(id)}
+                onToggleCollapse={() => toggleGroupCollapse(group)}
+                onEditGroup={() => {
+                  setEditingGroup(group);
+                  setEditGroupName(group.name);
+                  setEditMetaCategory(group.metaCategory || type);
+                }}
+                onAddAccount={() => handleAddAccount(group)}
+                onMoveGroupUp={() => handleMoveGroupUp(group.id)}
+                onMoveGroupDown={() => handleMoveGroupDown(group.id)}
+                isDragging={draggingGroupId === group.id}
+                dragOver={dragOverGroupId === group.id}
+                onDragStart={() => handleGroupDragStart(group.id)}
+                onDragEnd={() => {
+                  setDraggingGroupId(null);
+                  setDragOverGroupId(null);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggingGroupId) setDragOverGroupId(group.id);
+                }}
+                onDrop={() => handleGroupDrop(group.id)}
+                onAccountDragStart={handleAccountDragStart}
+                onAccountDragOver={(id) => setDragOverAccountId(id)}
+                onAccountDrop={handleAccountDrop}
+                onAccountDropToGroup={handleAccountDropToGroup}
+                draggingAccountId={draggingAccountId}
+                dragOverAccountId={dragOverAccountId}
+                getAccountBalance={getAccountBalance}
+                expandedAccounts={expandedAccounts}
+                onToggleAccountExpand={toggleAccountExpand}
+                activeLedgerId={activeLedgerId}
+                categories={categories}
+              />
+            )
+          })}
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     setSelectedId(null);
@@ -351,35 +426,44 @@ export default function Accounts({
       friendLoanExposure,
       totalDebt,
       totalRealizedGains,
-      roc,
-      robc,
-      capitalTurns,
-      landCapital,
-      landValue,
-      landRealizedGains,
-      sharesCapital,
       sharesValue,
       sharesRealizedGains,
-      profitYTD
+      profitYTD,
+      walletsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'wallet')).reduce((s, a) => s + getAccountBalance(a), 0),
+      assetsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'asset')).reduce((s, a) => s + getAccountBalance(a), 0),
+      debtBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'debt')).reduce((s, a) => s + getAccountBalance(a), 0),
+      savingsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'savings')).reduce((s, a) => s + getAccountBalance(a), 0),
     };
   }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
-  const shownGroups = useMemo(() => {
-    if (filter === "all") return groups;
-    return groups.filter((g) => g.type === filter);
-  }, [groups, filter]);
+  const metaGroups = useMemo(() => {
+    const map = { wallet: [], asset: [], debt: [], savings: [] };
+    groups.forEach(g => {
+      const cat = g.metaCategory || (g.type === 'credit' ? 'debt' : (g.type === 'asset' || g.type === 'loan' ? 'asset' : 'wallet'));
+      if (map[cat]) map[cat].push(g);
+      else map.wallet.push(g); // Fallback
+    });
+    return map;
+  }, [groups]);
 
   function handleAddGroup() {
     const trimmed = newGroupName.trim();
     if (!trimmed) return;
     const next = [
       ...groups,
-      { id: crypto.randomUUID(), name: trimmed, type: newGroupType, collapsed: false },
+      {
+        id: crypto.randomUUID(),
+        name: trimmed,
+        type: newGroupType,
+        metaCategory: newGroupMetaCategory,
+        collapsed: false
+      },
     ];
     onUpdateGroups?.(next);
     setNewGroupName('');
     setNewGroupType('debit');
+    setNewGroupMetaCategory('wallet');
     setShowAddGroupModal(false);
   }
 
@@ -407,7 +491,10 @@ export default function Accounts({
   function handleSaveEditGroup() {
     const trimmed = editGroupName.trim();
     if (!trimmed || !editingGroup) return;
-    const next = groups.map((g) => (g.id === editingGroup.id ? { ...g, name: trimmed } : g));
+    const next = groups.map((g) => (g.id === editingGroup.id
+      ? { ...g, name: trimmed, metaCategory: editMetaCategory }
+      : g
+    ));
     onUpdateGroups?.(next);
     setEditingGroup(null);
   }
@@ -641,6 +728,18 @@ export default function Accounts({
                   autoFocus
                 />
               </div>
+              <div className="field">
+                <label>Meta Category (Section)</label>
+                <select
+                  value={editMetaCategory}
+                  onChange={(e) => setEditMetaCategory(e.target.value)}
+                >
+                  <option value="wallet">WALLETS (Operational)</option>
+                  <option value="asset">ASSETS (Growth)</option>
+                  <option value="debt">DEBT (Liability)</option>
+                  <option value="savings">SAVINGS (Purpose)</option>
+                </select>
+              </div>
               <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
                 <button
                   className="btn danger"
@@ -752,62 +851,28 @@ export default function Accounts({
       )}
 
       {/* Accounts View */}
-      {viewMode === 'accounts' && shownGroups.map((group) => {
-        const items = visibleAccounts.filter((a) => a.groupId === group.id);
-        const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
-        const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
-        const handleEditGroup = () => {
-          setEditingGroup(group);
-          setEditGroupName(group.name);
-        };
-        return (
-          <Section
-            key={group.id}
-            group={group}
-            accountTxns={accountTxns}
-            right={right}
-            total={total}
-            items={items}
-            onDeleteAccount={onDeleteAccount}
-            onSelectAccount={(id) => setSelectedId(id)}
-            onToggleCollapse={() => toggleGroupCollapse(group)}
-            onEditGroup={handleEditGroup}
-            onAddAccount={() => handleAddAccount(group)}
-            onMoveGroupUp={() => handleMoveGroupUp(group.id)}
-            onMoveGroupDown={() => handleMoveGroupDown(group.id)}
-            isDragging={draggingGroupId === group.id}
-            dragOver={dragOverGroupId === group.id}
-            onDragStart={() => handleGroupDragStart(group.id)}
-            onDragEnd={() => {
-              setDraggingGroupId(null);
-              setDragOverGroupId(null);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (draggingGroupId) setDragOverGroupId(group.id);
-            }}
-            onDrop={() => handleGroupDrop(group.id)}
-            onAccountDragStart={handleAccountDragStart}
-            onAccountDragOver={(id) => setDragOverAccountId(id)}
-            onAccountDrop={handleAccountDrop}
-            onAccountDropToGroup={handleAccountDropToGroup}
-            draggingAccountId={draggingAccountId}
-            dragOverAccountId={dragOverAccountId}
-            getAccountBalance={getAccountBalance}
-            expandedAccounts={expandedAccounts}
-            onToggleAccountExpand={toggleAccountExpand}
-            activeLedgerId={activeLedgerId}
-            categories={categories}
-          />
-        );
-      })}
+      {viewMode === 'accounts' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+          {/* Wallets */}
+          {renderMetaSection('WALLETS', 'wallet', totals.walletsBal, metaGroups.wallet)}
+
+          {/* Assets */}
+          {renderMetaSection('ASSETS', 'asset', totals.assetsBal, metaGroups.asset)}
+
+          {/* Debt */}
+          {renderMetaSection('DEBT', 'debt', totals.debtBal, metaGroups.debt)}
+
+          {/* Savings */}
+          {renderMetaSection('SAVINGS', 'savings', totals.savingsBal, metaGroups.savings)}
+        </div>
+      )}
 
       {viewMode === 'accounts' && (
         <>
           <button
             className="btn"
             type="button"
-            style={{ width: '100%', marginTop: 12, background: '#f5f5fa', border: '1px dashed #c5c5d3', color: '#6b7280', fontSize: 13 }}
+            style={{ width: '100%', marginTop: 12, marginBottom: 24, background: '#f5f5fa', border: '1px dashed #c5c5d3', color: '#6b7280', fontSize: 13 }}
             onClick={() => setShowAddGroupModal(true)}
           >
             + Add Group
@@ -827,12 +892,22 @@ export default function Accounts({
                     />
                   </div>
                   <div className="field">
-                    <label>Type</label>
-                    <select value={newGroupType} onChange={(e) => setNewGroupType(e.target.value)}>
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                      <option value="loan">Loan</option>
-                      <option value="asset">Asset</option>
+                    <label>Meta Category (Section)</label>
+                    <select
+                      value={newGroupMetaCategory}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewGroupMetaCategory(val);
+                        if (val === 'wallet') setNewGroupType('debit');
+                        else if (val === 'asset') setNewGroupType('asset');
+                        else if (val === 'debt') setNewGroupType('credit');
+                        else if (val === 'savings') setNewGroupType('debit');
+                      }}
+                    >
+                      <option value="wallet">WALLETS (Operational)</option>
+                      <option value="asset">ASSETS (Growth)</option>
+                      <option value="debt">DEBT (Liability)</option>
+                      <option value="savings">SAVINGS (Purpose)</option>
                     </select>
                   </div>
                   <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
@@ -878,6 +953,7 @@ function Section({
   expandedAccounts,
   onToggleAccountExpand,
   activeLedgerId,
+  metaCategory,
 }) {
   return (
     <div
@@ -971,6 +1047,15 @@ function Section({
                         <div style={{ fontSize: '0.65rem', color: '#666', marginTop: 2 }}>
                           Invested: {fmtTZS(calculateAssetMetrics(a, accountTxns, group.type).costBasis)}
                         </div>
+                        {metaCategory === 'asset' && (
+                          <div className="quickActions" style={{ marginTop: 6 }}>
+                            <button className="qaBtn yellow" onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectAccount?.(a.id);
+                              // In a real app, we'd trigger the "Valuation" tab specifically
+                            }}>UPDATE</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -982,12 +1067,30 @@ function Section({
                         <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
                       </div>
                       <div className="stdRight">
-                        <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
-                        <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>{fmtTZS(bal)}</div>
-                        <button className="stdActionBtn" onClick={(e) => {
-                          e.stopPropagation()
-                          onSelectAccount?.(a.id)
-                        }}>+</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
+                            <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>{fmtTZS(bal)}</div>
+                          </div>
+
+                          <div className="quickActions">
+                            {metaCategory === 'wallet' && (
+                              <>
+                                <button className="qaBtn green" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>+</button>
+                                <button className="qaBtn red" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>-</button>
+                              </>
+                            )}
+                            {metaCategory === 'debt' && (
+                              <>
+                                <button className="qaBtn green" title="Repay" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>↓</button>
+                                <button className="qaBtn red" title="Borrow" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>↑</button>
+                              </>
+                            )}
+                            {metaCategory === 'savings' && (
+                              <button className="qaBtn green" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>+</button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3031,6 +3134,13 @@ function AccountDetail({
                     const kindLabel = t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "";
 
                     let meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
+                    if (t.relatedAccountId) {
+                      const relatedAcct = accounts.find(a => a.id === t.relatedAccountId);
+                      if (relatedAcct) {
+                        const directionSymbol = t.direction === 'in' ? 'From' : 'To';
+                        meta = subName ? `${directionSymbol} ${relatedAcct.name} • ${subName}` : `${directionSymbol} ${relatedAcct.name}`;
+                      }
+                    }
                     if (t.kind === 'txn' && t.clientId) {
                       const clientName = clients.find(c => c.id === t.clientId)?.name;
                       if (clientName) {

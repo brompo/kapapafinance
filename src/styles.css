@@ -330,7 +330,91 @@ label {
   border-radius: 22px;
   padding: 6px;
   color: #1f2332;
-  box-shadow: 0 10px 30px rgba(16, 18, 30, .08);
+}
+
+.metaSection {
+  margin-bottom: 16px;
+}
+
+.metaHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 12px 6px;
+  border-bottom: 2px solid rgba(0,0,0,0.05);
+  margin-bottom: 8px;
+}
+
+.metaInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #8b90b2;
+  text-transform: uppercase;
+}
+
+.metaDesc {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1d33;
+}
+
+.metaTotal {
+  font-size: 16px;
+  font-weight: 800;
+  color: #30335b;
+}
+
+.metaTotal.neg {
+  color: #e24b4b;
+}
+
+/* Quick Action Buttons */
+.quickActions {
+  display: flex;
+  gap: 8px;
+}
+
+.qaBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s;
+}
+
+.qaBtn:active {
+  transform: scale(0.92);
+}
+
+.qaBtn.green {
+  background: #e7f7ed;
+  color: #2fbf71;
+}
+
+.qaBtn.red {
+  background: #fdeeee;
+  color: #e24b4b;
+}
+
+.qaBtn.yellow {
+  background: #fff8e6;
+  color: #f59e0b;
+  font-size: 10px;
+  width: auto;
+  padding: 0 8px;
 }
 
 .accountsScreen .row {
@@ -462,10 +546,10 @@ label {
 .sectionCard {
   background: #fff;
   border: 1px solid #eceef6;
-  border-radius: 18px;
-  margin-bottom: 14px;
+  border-radius: 12px;
+  margin-bottom: 10px;
   overflow: hidden;
-  box-shadow: 0 6px 18px rgba(27, 33, 62, .06);
+  box-shadow: 0 4px 12px rgba(27, 33, 62, .04);
 }
 
 .sectionCard.dragging {
@@ -482,7 +566,7 @@ label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid #f1f2f8;
 }
 
@@ -551,14 +635,14 @@ label {
 }
 
 .list {
-  padding: 6px 10px 10px
+  padding: 4px 8px 8px
 }
 
 .rowItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid #f0f1f7;
 }
 
@@ -978,9 +1062,6 @@ label {
 /* =========================
    Account detail screen
    ========================= */
-.accountDetail {
-  /*padding: 18px*/
-}
 
 .accDetailHeader {
   display: flex;

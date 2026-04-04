@@ -2019,7 +2019,7 @@ label {
 .ledgerGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 @media(max-width:700px) {
@@ -2031,7 +2031,7 @@ label {
 .ledgerCard {
   border-radius: 24px;
   padding: 16px 8px;
-  height: 148px;
+  height: 140px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -2652,7 +2652,7 @@ label {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  /*padding: 10px 10px calc(10px + env(safe-area-inset-bottom));*/
   background: rgba(11, 18, 32, .92);
   border-top: 1px solid var(--border);
   display: flex;
@@ -2673,8 +2673,10 @@ label {
   border: none;
   background: transparent;
   color: var(--muted);
-  padding: 8px 6px;
-  border-radius: 14px;
+  padding: 6px 4px;
+  /* Reduced padding from 8px */
+  border-radius: 12px;
+  /* Slightly tighter radius */
   cursor: pointer;
 }
 

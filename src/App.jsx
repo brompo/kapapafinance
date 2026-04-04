@@ -4684,7 +4684,7 @@ export default function App() {
         }
         const key = (isMonthView || isWeekView) ? date : date.slice(0, 7)
 
-        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 })
+        if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, all: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0, actualAll: 0 })
         const entry = stats.get(key)
 
         const amt = Number(t.amount || 0)
@@ -4707,6 +4707,9 @@ export default function App() {
             entry.opps += netExp;
             if (isActual) entry.actualOpps += netExp;
           }
+        } else if (t.type === 'allocation') {
+          entry.all += amt;
+          if (isActual) entry.actualAll += amt;
         }
       })
 
@@ -4733,7 +4736,7 @@ export default function App() {
 
           const isActual = date <= todayISO();
           const key = (isMonthView || isWeekView) ? date : date.slice(0, 7);
-          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0 });
+          if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, cos: 0, opps: 0, all: 0, actualInc: 0, actualExp: 0, actualCos: 0, actualOpps: 0, actualAll: 0 });
           const entry = stats.get(key);
           entry.inc += g.amount;
           if (isActual) entry.actualInc += g.amount;
@@ -4753,8 +4756,8 @@ export default function App() {
             key: dateKey,
             label: String(d),
             ...data,
-            bal: data.inc - data.exp,
-            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+            bal: data.inc - data.exp - data.all,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0) - (data.actualAll || 0)
           })
         }
       } else if (isWeekView) {
@@ -4768,8 +4771,8 @@ export default function App() {
             key: dateKey,
             label: d.toLocaleDateString('default', { weekday: 'short', day: 'numeric' }),
             ...data,
-            bal: data.inc - data.exp,
-            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+            bal: data.inc - data.exp - data.all,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0) - (data.actualAll || 0)
           })
         }
       } else {
@@ -4783,8 +4786,8 @@ export default function App() {
             key,
             label: monthName,
             ...data,
-            bal: data.inc - data.exp,
-            actualBal: (data.actualInc || 0) - (data.actualExp || 0)
+            bal: data.inc - data.exp - data.all,
+            actualBal: (data.actualInc || 0) - (data.actualExp || 0) - (data.actualAll || 0)
           })
         }
       }
@@ -4877,7 +4880,7 @@ export default function App() {
 
     const CashflowChart = () => {
       const data = [...monthlyStats].reverse(); // Chronological: Jan to Dec OR 1 to 31
-      const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp)), 1);
+      const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp, m.all || 0)), 1);
       const isMonthView = viewGranularity === 'month'
       const isWeekView = viewGranularity === 'week'
 
@@ -5108,6 +5111,7 @@ export default function App() {
                     ) : (
                       <th style={{ textAlign: 'right', padding: '6px 4px' }}>Expenses</th>
                     )}
+                    <th style={{ textAlign: 'right', padding: '6px 4px' }}>Allocations</th>
                     <th style={{ textAlign: 'right', padding: '6px 4px' }}>Total</th>
                   </tr>
                 </thead>
@@ -5115,13 +5119,15 @@ export default function App() {
                   {data.filter(m => {
                     const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
                     const exp = monthlyViewMode === 'actual' ? m.actualExp : m.exp;
-                    return inc > 0 || exp > 0;
+                    const all = monthlyViewMode === 'actual' ? (m.actualAll || 0) : (m.all || 0);
+                    return inc > 0 || exp > 0 || all > 0;
                   }).map(m => {
                     const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
                     const exp = monthlyViewMode === 'actual' ? m.actualExp : m.exp;
                     const cos = monthlyViewMode === 'actual' ? (m.actualCos || 0) : (m.cos || 0);
                     const opps = monthlyViewMode === 'actual' ? (m.actualOpps || 0) : (m.opps || 0);
-                    const net = inc - exp;
+                    const all = monthlyViewMode === 'actual' ? (m.actualAll || 0) : (m.all || 0);
+                    const net = inc - exp - all;
                     return (
                       <tr
                         key={m.key}
@@ -5162,6 +5168,12 @@ export default function App() {
                             {fmtCompact(exp)}
                           </td>
                         )}
+                        <td
+                          style={{ textAlign: 'right', padding: '8px 4px', color: '#6366f1', cursor: 'pointer' }}
+                          onClick={() => setShowMonthLog({ key: m.key, type: 'allocation', label: `${m.label} Allocations` })}
+                        >
+                          {fmtCompact(all)}
+                        </td>
                         <td
                           style={{ textAlign: 'right', padding: '8px 4px', fontWeight: 600, color: net >= 0 ? 'var(--ok)' : 'var(--danger)', cursor: 'pointer' }}
                           onClick={() => setShowMonthLog({ key: m.key, type: 'all', label: `${m.label} Net` })}

@@ -60,6 +60,7 @@ export default function Accounts({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupType, setNewGroupType] = useState('debit');
   const [newGroupMetaCategory, setNewGroupMetaCategory] = useState('wallet');
+  const [collapsedMetaSections, setCollapsedMetaSections] = useState({});
   const [showOverview, setShowOverview] = useState(true);
   const [showImportantNumbers, setShowImportantNumbers] = useState(true);
   const [viewMode, setViewMode] = useState("accounts"); // accounts | growth
@@ -72,9 +73,14 @@ export default function Accounts({
   const [editMetaCategory, setEditMetaCategory] = useState("");
 
   function renderMetaSection(label, type, total, groups) {
+    const isCollapsed = !!collapsedMetaSections[type];
+    const toggleCollapse = () => {
+      setCollapsedMetaSections(prev => ({ ...prev, [type]: !prev[type] }));
+    };
+
     return (
-      <div className="metaSection" key={type}>
-        <div className="metaHeader">
+      <div className={`metaSection ${isCollapsed ? 'collapsed' : ''}`} key={type}>
+        <div className="metaHeader" onClick={toggleCollapse} style={{ cursor: 'pointer' }}>
           <div className="metaInfo">
             <span className="metaLabel">{label}</span>
             <span className="metaDesc">
@@ -84,63 +90,70 @@ export default function Accounts({
               {type === 'savings' && 'The "Purpose" Money'}
             </span>
           </div>
-          <div className={`metaTotal ${type === 'debt' ? 'neg' : ''}`}>
-            {fmtTZS(total)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className={`metaTotal ${type === 'debt' ? 'neg' : ''}`}>
+              {fmtTZS(total)}
+            </div>
+            <div className="metaChevron" style={{ fontSize: 16, opacity: 0.6, transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }}>
+              ▾
+            </div>
           </div>
         </div>
 
-        <div className="metaBody">
-          {groups.map(group => {
-            const items = visibleAccounts.filter((a) => a.groupId === group.id);
-            const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
-            const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
-            return (
-              <Section
-                key={group.id}
-                group={group}
-                metaCategory={type}
-                accountTxns={accountTxns}
-                right={right}
-                total={total}
-                items={items}
-                onDeleteAccount={onDeleteAccount}
-                onSelectAccount={(id) => setSelectedId(id)}
-                onToggleCollapse={() => toggleGroupCollapse(group)}
-                onEditGroup={() => {
-                  setEditingGroup(group);
-                  setEditGroupName(group.name);
-                  setEditMetaCategory(group.metaCategory || type);
-                }}
-                onAddAccount={() => handleAddAccount(group)}
-                onMoveGroupUp={() => handleMoveGroupUp(group.id)}
-                onMoveGroupDown={() => handleMoveGroupDown(group.id)}
-                isDragging={draggingGroupId === group.id}
-                dragOver={dragOverGroupId === group.id}
-                onDragStart={() => handleGroupDragStart(group.id)}
-                onDragEnd={() => {
-                  setDraggingGroupId(null);
-                  setDragOverGroupId(null);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (draggingGroupId) setDragOverGroupId(group.id);
-                }}
-                onDrop={() => handleGroupDrop(group.id)}
-                onAccountDragStart={handleAccountDragStart}
-                onAccountDragOver={(id) => setDragOverAccountId(id)}
-                onAccountDrop={handleAccountDrop}
-                onAccountDropToGroup={handleAccountDropToGroup}
-                draggingAccountId={draggingAccountId}
-                dragOverAccountId={dragOverAccountId}
-                getAccountBalance={getAccountBalance}
-                expandedAccounts={expandedAccounts}
-                onToggleAccountExpand={toggleAccountExpand}
-                activeLedgerId={activeLedgerId}
-                categories={categories}
-              />
-            )
-          })}
-        </div>
+        {!isCollapsed && (
+          <div className="metaBody">
+            {groups.map(group => {
+              const items = visibleAccounts.filter((a) => a.groupId === group.id);
+              const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
+              const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
+              return (
+                <Section
+                  key={group.id}
+                  group={group}
+                  metaCategory={type}
+                  accountTxns={accountTxns}
+                  right={right}
+                  total={total}
+                  items={items}
+                  onDeleteAccount={onDeleteAccount}
+                  onSelectAccount={(id) => setSelectedId(id)}
+                  onToggleCollapse={() => toggleGroupCollapse(group)}
+                  onEditGroup={() => {
+                    setEditingGroup(group);
+                    setEditGroupName(group.name);
+                    setEditMetaCategory(group.metaCategory || type);
+                  }}
+                  onAddAccount={() => handleAddAccount(group)}
+                  onMoveGroupUp={() => handleMoveGroupUp(group.id)}
+                  onMoveGroupDown={() => handleMoveGroupDown(group.id)}
+                  isDragging={draggingGroupId === group.id}
+                  dragOver={dragOverGroupId === group.id}
+                  onDragStart={() => handleGroupDragStart(group.id)}
+                  onDragEnd={() => {
+                    setDraggingGroupId(null);
+                    setDragOverGroupId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggingGroupId) setDragOverGroupId(group.id);
+                  }}
+                  onDrop={() => handleGroupDrop(group.id)}
+                  onAccountDragStart={handleAccountDragStart}
+                  onAccountDragOver={(id) => setDragOverAccountId(id)}
+                  onAccountDrop={handleAccountDrop}
+                  onAccountDropToGroup={handleAccountDropToGroup}
+                  draggingAccountId={draggingAccountId}
+                  dragOverAccountId={dragOverAccountId}
+                  getAccountBalance={getAccountBalance}
+                  expandedAccounts={expandedAccounts}
+                  onToggleAccountExpand={toggleAccountExpand}
+                  activeLedgerId={activeLedgerId}
+                  categories={categories}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -852,7 +865,7 @@ export default function Accounts({
 
       {/* Accounts View */}
       {viewMode === 'accounts' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24 }}>
           {/* Wallets */}
           {renderMetaSection('WALLETS', 'wallet', totals.walletsBal, metaGroups.wallet)}
 

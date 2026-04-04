@@ -190,7 +190,17 @@ export function CategoryDetail({
 
   return (
     <div className="catDetailScreen">
-      <div className={`catDetailHeader ${!meta?.color ? category.theme || '' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: meta?.color || 'transparent', borderBottom: meta?.color || showAddForm ? 'none' : '1px solid #dcfce7' }}>
+      <div className={`catDetailHeader ${!meta?.color ? category.theme || '' : ''}`} style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        padding: '24px 16px 12px', /* Standardized header padding */
+        background: meta?.color || '#fff', 
+        borderBottom: meta?.color || showAddForm ? 'none' : '1px solid #dcfce7',
+        position: 'sticky',
+        top: 0,
+        zIndex: 105
+      }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <button className="iconBtn" onClick={onClose} type="button" style={{ marginTop: 2 }}>✕</button>
           <div>

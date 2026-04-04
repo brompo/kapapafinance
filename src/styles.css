@@ -328,7 +328,7 @@ label {
 .accountsScreen {
   background: #f5f6fb;
   border-radius: 22px;
-  padding: 6px;
+  padding: 15px;
   color: #1f2332;
 }
 
@@ -1781,7 +1781,10 @@ label {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 15px 16px 100px;
+  padding: 15px 15px 140px;
+  /* Enhanced side padding */
+  background: #ffffff;
+  min-height: 100vh;
 }
 
 .ledgerHeader {
@@ -2038,11 +2041,11 @@ label {
   align-items: center;
   text-align: center;
   background: #fff;
-  box-shadow: 0 16px 45px rgba(27, 33, 62, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 30px rgba(18, 22, 45, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   cursor: pointer;
   position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(230, 232, 242, 0.7);
   box-sizing: border-box;
 }
 
@@ -2086,7 +2089,8 @@ label {
 }
 
 .ledgerCard.theme-1 {
-  background: #fff9e6;
+  background: #fff8e1;
+  border: 0.5px solid #feeebb;
 }
 
 .ledgerCard.theme-1 .ledgerCardIcon {
@@ -2095,7 +2099,8 @@ label {
 }
 
 .ledgerCard.theme-2 {
-  background: #f3f0ff;
+  background: #f5f3ff;
+  border: 0.5px solid #ede9fe;
 }
 
 .ledgerCard.theme-2 .ledgerCardIcon {
@@ -2105,6 +2110,7 @@ label {
 
 .ledgerCard.theme-3 {
   background: #fff1eb;
+  border: 0.5px solid #ffedd5;
 }
 
 .ledgerCard.theme-3 .ledgerCardIcon {
@@ -2114,6 +2120,7 @@ label {
 
 .ledgerCard.theme-4 {
   background: #e0f2fe;
+  border: 0.5px solid #bae6fd;
 }
 
 .ledgerCard.theme-4 .ledgerCardIcon {
@@ -2122,7 +2129,8 @@ label {
 }
 
 .ledgerCard.theme-5 {
-  background: #fdf2f8;
+  background: #fef2f8;
+  border: 0.5px solid #fbcfe8;
 }
 
 .ledgerCard.theme-5 .ledgerCardIcon {
@@ -2132,6 +2140,7 @@ label {
 
 .ledgerCard.theme-6 {
   background: #f0fdf4;
+  border: 0.5px solid #dcfce7;
 }
 
 .ledgerCard.theme-6 .ledgerCardIcon {
@@ -2141,6 +2150,7 @@ label {
 
 .ledgerCard.theme-7 {
   background: #fffbeb;
+  border: 0.5px solid #fef3c7;
 }
 
 .ledgerCard.theme-7 .ledgerCardIcon {
@@ -2149,7 +2159,8 @@ label {
 }
 
 .ledgerCard.theme-8 {
-  background: #fef2f2;
+  background: #fee2e2;
+  border: 0.5px solid #fecaca;
 }
 
 .ledgerCard.theme-8 .ledgerCardIcon {
@@ -2159,6 +2170,7 @@ label {
 
 .ledgerCard.theme-9 {
   background: #f9fafb;
+  border: 0.5px solid #f3f4f6;
 }
 
 .ledgerCard.theme-9 .ledgerCardIcon {
@@ -2181,10 +2193,10 @@ label {
   position: sticky;
   top: 0;
   background: #f5f6fc;
-  z-index: 102;
-  padding: 16px 20px;
-  margin: -16px -16px 0;
-  /* negative margin flush with screen edges and top securely */
+  z-index: 105;
+  /* Consistent top layer */
+  padding: 24px 20px 14px;
+  /* Matches CategoryDetail.jsx standardized spacing */
   border-bottom: 1px solid var(--border);
 }
 
@@ -3102,14 +3114,20 @@ label {
   margin-bottom: 12px;
 }
 
+
 .overviewCard {
-  background: linear-gradient(140deg, #8e8ad0, #1e158e);
-  border-radius: 20px;
-  margin: 0 8px 8px;
-  padding: 16px;
+  background: linear-gradient(135deg, #8e8ad0 0%, #1e158e 100%);
   color: white;
+  padding: 24px 20px;
+  /* Reduced vertical padding */
+  border-radius: 32px;
+  margin: 0 0 16px;
+  /* Adjusted margin to match side padding */
+  box-shadow: 0 20px 45px rgba(30, 21, 142, 0.2), inset 0 0 20px rgba(255, 255, 255, 0.1);
   text-align: center;
-  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .ovMainLabel {
@@ -3119,16 +3137,16 @@ label {
 }
 
 .ovMainValue {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 700;
 }
 
 .ovGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
-  padding-top: 16px;
+  padding-top: 12px;
 }
 
 .ovItemLabel {
@@ -3755,8 +3773,8 @@ label {
 }
 
 .settingsScreen {
-  padding: 10px 10px 40px;
-  background-color: #f8fafc;
+  padding: 0 20px 100px;
+  background: #f8fafc;
   min-height: 100vh;
 }
 

@@ -393,7 +393,8 @@ export function useGoogleDrive({ stage, setStage, settings, updateSettings, vaul
   }
 
   return {
-    cloudBusy, cloudError, cloudStale, cloudLastBackup,
+    cloudBusy, cloudError, cloudStale, cloudLastBackup, cloudWarnDays,
+    cloudBackup, cloudGoogle,
     backupNow, openRestorePicker, restoreFromCloud, startGoogleAuth,
     restoreFiles, setRestoreFiles, selectedRestoreId, setSelectedRestoreId, restorePin, setRestorePin, showRestoreModal, setShowRestoreModal
   }

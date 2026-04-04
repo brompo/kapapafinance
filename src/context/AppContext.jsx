@@ -45,7 +45,7 @@ export function AppProvider({ children }) {
     setVaultState
   })
 
-  const cloudGoogle = useGoogleDrive({
+  const cloudGoogleControls = useGoogleDrive({
     vault,
     setVaultState,
     show,
@@ -597,7 +597,7 @@ export function AppProvider({ children }) {
     
     // Controls
     ...vaultControls,
-    cloudGoogle,
+    ...cloudGoogleControls,
     shiftMonth,
     formatMonthLabel,
     

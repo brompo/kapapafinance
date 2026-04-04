@@ -1,5 +1,14 @@
 export const CHANGELOG = [
     {
+        version: "1.4.2",
+        date: "2026-04-04",
+        changes: [
+            'Added Activity and Future tabs to Category Detail and Transactions view.',
+            'Grouped transactions by month instead of individual days for better scannability.',
+            'Disabled automatic keyboard popup when editing existing transactions.'
+        ]
+    },
+    {
         version: "1.4.1",
         date: "2026-03-15",
         changes: [

@@ -274,7 +274,7 @@ function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], c
               placeholder="0"
               style={{ paddingLeft: 30, fontSize: 20, fontWeight: 700, border: amountError ? '1px solid var(--danger)' : '' }}
               disabled={!isEditable}
-              autoFocus
+              autoFocus={!txn.id || !txn.id.toString().startsWith('txn-')}
             />
           </div>
           {amountError && <div className="small" style={{ color: 'var(--danger)', marginTop: 4 }}>Please enter a valid amount</div>}
@@ -2486,6 +2486,7 @@ export default function App() {
       try { return localStorage.getItem('collapse_opps') === 'true' } catch { return false }
     })
 
+
     const allocationCats = categories.allocation || []
     const cosCats = categories.cos || []
     const oppsCats = categories.opps || []
@@ -3248,16 +3249,24 @@ export default function App() {
     const pct = budget > 0 ? Math.min(ratio * 100, 999).toFixed(1) : '0.0'
     const left = budget > 0 ? Math.max(budget - spent, 0) : 0
     const over = budget > 0 ? Math.max(spent - budget, 0) : 0
+    const [txnTab, setTxnTab] = useState('activity') // 'activity' | 'future'
 
     const recentTxns = useMemo(() => {
+      const today = todayISO();
       // 1. Regular transactions (All-time history)
-      const regular = txns
+      let regular = txns
         .filter(t => t.category === category.name)
         .map(t => ({ ...t, _sortDate: t.date, _isGain: false }))
 
+      if (txnTab === 'activity') {
+        regular = regular.filter(t => t.date <= today)
+      } else {
+        regular = regular.filter(t => t.date > today)
+      }
+
       // 2. Realized Gains (if Income)
       let gains = []
-      if (category.type === 'income') {
+      if (category.type === 'income' && txnTab === 'activity') {
         const assets = accounts.filter(a => {
           const g = activeLedger.groups.find(g => g.id === a.groupId);
           return g && g.type === 'asset';
@@ -3286,15 +3295,16 @@ export default function App() {
       return [...regular, ...gains]
         .sort((a, b) => (a._sortDate < b._sortDate ? 1 : -1))
         .slice(0, 50)
-    }, [txns, category.name, accounts, activeLedger.groups, accountTxns])
+    }, [txns, category.name, accounts, activeLedger.groups, accountTxns, txnTab])
 
     const groupedRecent = useMemo(() => {
       const map = new Map()
       for (const t of recentTxns) {
-        if (!map.has(t.date)) map.set(t.date, [])
-        map.get(t.date).push(t)
+        const month = t.date.slice(0, 7)
+        if (!map.has(month)) map.set(month, [])
+        map.get(month).push(t)
       }
-      return Array.from(map.entries())
+      return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1))
     }, [recentTxns])
 
     function openTxnDetail(t) {
@@ -3806,7 +3816,23 @@ export default function App() {
 
         {!showAddForm && (
           <div className="catDetailHistory">
-            <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4 }}>
+            <div className="viewTabs" style={{ marginBottom: 12, background: '#f3f4f6' }}>
+              <button
+                type="button"
+                className={`viewTab ${txnTab === 'activity' ? 'active' : ''}`}
+                onClick={() => setTxnTab('activity')}
+              >
+                Activity
+              </button>
+              <button
+                type="button"
+                className={`viewTab ${txnTab === 'future' ? 'active' : ''}`}
+                onClick={() => setTxnTab('future')}
+              >
+                Future
+              </button>
+            </div>
+            <div className="catDetailHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 4, marginTop: 4 }}>
               <span>Recent {category.name}</span>
               <button
                 type="button"
@@ -3830,14 +3856,16 @@ export default function App() {
               </button>
             </div>
             {groupedRecent.length === 0 ? (
-              <div className="emptyRow">No transactions yet.</div>
+              <div className="emptyRow">No transactions {txnTab === 'future' ? 'scheduled' : 'recorded'}.</div>
             ) : (
-              groupedRecent.map(([date, items]) => {
+              groupedRecent.map(([monthStr, items]) => {
                 const total = items.reduce((s, t) => s + Number(t.amount || 0), 0)
+                const monthDate = new Date(monthStr + '-01')
+                const formattedMonth = monthDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
                 return (
-                  <div className="catDetailHistoryCard" key={date}>
+                  <div className="catDetailHistoryCard" key={monthStr}>
                     <div className="catHistoryHead">
-                      <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                      <div>{formattedMonth}</div>
                       <div className="catHistoryTotals">
                         <span className={category.type === 'income' ? 'in' : 'out'}>
                           {category.type === 'income' ? 'IN' : 'OUT'} {fmtTZS(total)}
@@ -4236,6 +4264,7 @@ export default function App() {
 
   function FinanceInsightsScreen() {
     console.log("FinanceInsightsScreen render triggered. Tab is:", tab);
+    const [txnsMainTab, setTxnsMainTab] = useState('activity') // 'activity' | 'future'
     const [viewGranularity, setViewGranularity] = useState('year') // 'year' | 'month' | 'week'
     const [statPeriod, setStatPeriod] = useState(() => new Date().toISOString().slice(0, 4))
     const [showGranularityPicker, setShowGranularityPicker] = useState(false)
@@ -4641,9 +4670,14 @@ export default function App() {
     const insightFilteredTxns = useMemo(() => {
       const isMonthView = viewGranularity === 'month'
       const isWeekView = viewGranularity === 'week'
+      const today = todayISO()
 
       return combinedTxns.filter(t => {
         const date = t.date || todayISO()
+
+        if (txnsMainTab === 'activity' && date > today) return false
+        if (txnsMainTab === 'future' && date <= today) return false
+
         if (isMonthView) {
           return date.startsWith(statPeriod)
         } else if (isWeekView) {
@@ -4655,13 +4689,14 @@ export default function App() {
           return Number(date.substring(0, 4)) === statYear
         }
       })
-    }, [combinedTxns, viewGranularity, statPeriod, statYear])
+    }, [combinedTxns, viewGranularity, statPeriod, statYear, txnsMainTab])
 
     const groupedInsightsTxns = useMemo(() => {
       const map = new Map()
       for (const t of insightFilteredTxns) {
-        if (!map.has(t.date)) map.set(t.date, [])
-        map.get(t.date).push(t)
+        const month = t.date.slice(0, 7)
+        if (!map.has(month)) map.set(month, [])
+        map.get(month).push(t)
       }
       return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
     }, [insightFilteredTxns])
@@ -5758,19 +5793,37 @@ export default function App() {
 
           {insightTab === 'transactions' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
+              <div className="viewTabs" style={{ margin: '0 10px', marginTop: 4, background: '#f3f4f6' }}>
+                <button
+                  type="button"
+                  className={`viewTab ${txnsMainTab === 'activity' ? 'active' : ''}`}
+                  onClick={() => setTxnsMainTab('activity')}
+                >
+                  Activity
+                </button>
+                <button
+                  type="button"
+                  className={`viewTab ${txnsMainTab === 'future' ? 'active' : ''}`}
+                  onClick={() => setTxnsMainTab('future')}
+                >
+                  Future
+                </button>
+              </div>
               {groupedInsightsTxns.length === 0 ? (
-                <div className="card" style={{ margin: 0, padding: 15 }}>
-                  <div className="emptyRow">No transactions for this period.</div>
+                <div className="card" style={{ margin: '0 10px', padding: 15 }}>
+                  <div className="emptyRow">No transactions {txnsMainTab === 'future' ? 'scheduled' : 'recorded'}.</div>
                 </div>
               ) : (
-                groupedInsightsTxns.map(([date, items]) => {
+                groupedInsightsTxns.map(([monthStr, items]) => {
                   const totalIn = items.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0)
                   const totalOut = items.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0)
+                  const monthDate = new Date(monthStr + '-01')
+                  const formattedMonth = monthDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
                   return (
-                    <div className="catDetailHistoryCard" key={date} style={{ margin: 0 }}>
+                    <div className="catDetailHistoryCard" key={monthStr} style={{ margin: '0 10px' }}>
                       <div className="catHistoryHead">
-                        <div>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                        <div>{formattedMonth}</div>
                         <div className="catHistoryTotals" style={{ display: 'flex', gap: 8, fontSize: 11, fontWeight: 600 }}>
                           {totalIn > 0 && <span style={{ color: '#10b981' }}>IN {fmtCompact(totalIn)}</span>}
                           {totalOut > 0 && <span style={{ color: '#ef4444' }}>OUT {fmtCompact(totalOut)}</span>}

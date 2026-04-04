@@ -3250,8 +3250,8 @@ export default function App() {
     const over = budget > 0 ? Math.max(spent - budget, 0) : 0
 
     const recentTxns = useMemo(() => {
-      // 1. Regular transactions
-      const regular = filteredTxns
+      // 1. Regular transactions (All-time history)
+      const regular = txns
         .filter(t => t.category === category.name)
         .map(t => ({ ...t, _sortDate: t.date, _isGain: false }))
 
@@ -3286,7 +3286,7 @@ export default function App() {
       return [...regular, ...gains]
         .sort((a, b) => (a._sortDate < b._sortDate ? 1 : -1))
         .slice(0, 50)
-    }, [filteredTxns, category.name, accounts, activeLedger.groups, accountTxns])
+    }, [txns, category.name, accounts, activeLedger.groups, accountTxns])
 
     const groupedRecent = useMemo(() => {
       const map = new Map()

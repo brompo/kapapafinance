@@ -1,3 +1,7 @@
+export function uid() {
+  return Math.random().toString(36).substring(2, 9)
+}
+
 export function fmtTZS(amount) {
   const n = Number(amount || 0)
   try {

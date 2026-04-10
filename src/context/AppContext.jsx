@@ -600,6 +600,16 @@ export function AppProvider({ children }) {
     persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
     show('Account deleted.')
   }
+  async function updateAccounts(nextLedgerAccounts) {
+    if (!Array.isArray(nextLedgerAccounts)) return
+    
+    // Merge Strategy: Keep other ledgers, replace current ledger accounts
+    const otherLedgerAccounts = allAccounts.filter(a => a.ledgerId && a.ledgerId !== activeLedger.id)
+    const nextAccounts = [...otherLedgerAccounts, ...nextLedgerAccounts]
+    
+    persistLedgerAndAccounts({ nextAccounts })
+    show('Accounts reordered.')
+  }
 
   async function addAccountTxn(params) {
     const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice } = params
@@ -733,6 +743,7 @@ export function AppProvider({ children }) {
     delTxn,
     addReimbursement,
     updateAccountGroups,
+    updateAccounts,
 
     // Persistence
     persist,

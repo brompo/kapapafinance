@@ -94,6 +94,23 @@ export default function Accounts({
             <div className={`metaTotal ${type === 'debt' ? 'neg' : ''}`}>
               {fmtTZS(total)}
             </div>
+            <button 
+              className="metaAddBtn" 
+              type="button" 
+              title="Add Group to this Section"
+              onClick={(e) => {
+                e.stopPropagation();
+                setNewGroupMetaCategory(type);
+                if (type === 'wallet') setNewGroupType('debit');
+                else if (type === 'asset') setNewGroupType('asset');
+                else if (type === 'debt') setNewGroupType('credit');
+                else if (type === 'savings') setNewGroupType('debit');
+                setNewGroupName('');
+                setShowAddGroupModal(true);
+              }}
+            >
+              +
+            </button>
             <div className="metaChevron" style={{ fontSize: 16, opacity: 0.6, transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }}>
               ▾
             </div>
@@ -598,7 +615,10 @@ export default function Accounts({
     const sourceGroup = groupById.get(dragged.groupId);
     const targetGroup = groupById.get(groupId);
 
-    if (sourceGroup?.type !== targetGroup?.type) {
+    const sourceMeta = sourceGroup?.metaCategory || sourceGroup?.type;
+    const targetMeta = targetGroup?.metaCategory || targetGroup?.type;
+
+    if (sourceMeta !== targetMeta && sourceGroup?.type !== targetGroup?.type) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
       return;
@@ -632,7 +652,10 @@ export default function Accounts({
     const sourceGroup = groupById.get(dragged.groupId);
     const targetGroup = groupById.get(groupId);
 
-    if (sourceGroup?.type !== targetGroup?.type) {
+    const sourceMeta = sourceGroup?.metaCategory || sourceGroup?.type;
+    const targetMeta = targetGroup?.metaCategory || targetGroup?.type;
+
+    if (sourceMeta !== targetMeta && sourceGroup?.type !== targetGroup?.type) {
       setDraggingAccountId(null);
       setDragOverAccountId(null);
       return;
@@ -988,7 +1011,11 @@ function Section({
     <div
       className={`sectionCard ${isDragging ? "dragging" : ""} ${dragOver ? "dragOver" : ""}`}
       onDragOver={onDragOver}
-      onDrop={onDrop}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop?.();
+        onAccountDropToGroup?.(group.id);
+      }}
     >
       <div className="sectionHead">
         <div className="sectionTitle">
@@ -1709,7 +1736,9 @@ function AccountDetail({
       ...account,
       name,
       ledgerId: nextLedgerId,
-      groupId: (nextLedgerId === activeLedgerId && editGroupId) ? editGroupId : (targetGroup?.id || account.groupId),
+      // Prioritize the explicitly selected editGroupId if we are in the same ledger context, 
+      // otherwise use the targetGroup found in the new ledger.
+      groupId: editGroupId || targetGroup?.id || account.groupId,
       groupType: type,
       accountType: editAccountType || undefined,
       subAccounts: nextSubs

@@ -370,6 +370,34 @@ label {
   color: #30335b;
 }
 
+.metaAddBtn {
+  background: rgba(0, 0, 0, 0.05);
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #8b90b2;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.metaAddBtn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1d33;
+  transform: scale(1.1);
+}
+
+.metaChevron {
+  font-size: 16px;
+  opacity: 0.6;
+}
+
 .metaTotal.neg {
   color: #e24b4b;
 }

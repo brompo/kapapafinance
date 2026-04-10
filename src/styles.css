@@ -574,7 +574,7 @@ label {
   background: #fff;
   border: 1px solid #eceef6;
   border-radius: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(27, 33, 62, .04);
 }
@@ -593,7 +593,7 @@ label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #f1f2f8;
 }
 
@@ -2095,8 +2095,8 @@ label {
 }
 
 .ledgerCardIcon {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3271,8 +3271,8 @@ label {
 /* Standard Account Row Card */
 .stdRowCard {
   background: white;
-  border-radius: 16px;
-  padding: 10px;
+  border-radius: 14px;
+  padding: 8px 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
   display: flex;
   align-items: center;
@@ -3282,12 +3282,12 @@ label {
 .stdRowLeft {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .stdIcon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: #EEF2FF;
   color: #4F46E5;
   border-radius: 10px;
@@ -3295,13 +3295,13 @@ label {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .stdName {
   font-weight: 500;
   color: #374151;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .stdRight {
@@ -3311,7 +3311,7 @@ label {
 }
 
 .stdBalLabel {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #111;
 }

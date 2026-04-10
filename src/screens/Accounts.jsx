@@ -1103,15 +1103,6 @@ function Section({
                         <div style={{ fontSize: '0.65rem', color: '#666', marginTop: 2 }}>
                           Invested: {fmtTZS(calculateAssetMetrics(a, accountTxns, group.type).costBasis)}
                         </div>
-                        {metaCategory === 'asset' && (
-                          <div className="quickActions" style={{ marginTop: 6 }}>
-                            <button className="qaBtn yellow" onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectAccount?.(a.id);
-                              // In a real app, we'd trigger the "Valuation" tab specifically
-                            }}>UPDATE</button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -1129,23 +1120,6 @@ function Section({
                             <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>{fmtTZS(bal)}</div>
                           </div>
 
-                          <div className="quickActions">
-                            {metaCategory === 'wallet' && (
-                              <>
-                                <button className="qaBtn green" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>+</button>
-                                <button className="qaBtn red" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>-</button>
-                              </>
-                            )}
-                            {metaCategory === 'debt' && (
-                              <>
-                                <button className="qaBtn green" title="Repay" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>↓</button>
-                                <button className="qaBtn red" title="Borrow" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>↑</button>
-                              </>
-                            )}
-                            {metaCategory === 'savings' && (
-                              <button className="qaBtn green" onClick={(e) => { e.stopPropagation(); onSelectAccount?.(a.id); }}>+</button>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </div>

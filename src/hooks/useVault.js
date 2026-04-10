@@ -25,7 +25,7 @@ export function useVault({
   const settings = vault.settings || { pinLockEnabled: false };
   const ledgers = vault.ledgers || [];
   const activeLedgerId = vault.activeLedgerId;
-  const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0] || createLedger();
+  const activeLedger = ledgers.filter(Boolean).find(l => l.id === activeLedgerId) || ledgers[0] || createLedger();
   const allAccounts = vault.accounts || [];
   const allAccountTxns = vault.accountTxns || [];
 
@@ -111,6 +111,18 @@ export function useVault({
   }
 
   async function persist(nextVault) {
+    if (!nextVault) return
+
+    // Safety Lock: Prevent overwriting a populated vault with an empty one
+    const currentHasData = (vault?.accounts?.length > 0 || vault?.ledgers?.some(l => l?.txns?.length > 0))
+    const nextIsEmpty = (!nextVault?.accounts?.length && !nextVault?.ledgers?.some(l => l?.txns?.length > 0))
+    
+    if (currentHasData && nextIsEmpty) {
+      console.error('CRITICAL: Attempted to save an empty vault over an existing one. BLOCKED.', { current: vault, next: nextVault })
+      show('Data Safety: Save Blocked (Empty state detected)')
+      return
+    }
+
     setVaultState(nextVault)
     try {
       const pinFlowEnabled = localStorage.getItem(PIN_FLOW_KEY) !== 'false'
@@ -137,14 +149,19 @@ export function useVault({
   }
 
   function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns, nextClients }) {
-    const hasActive = ledgers.some(l => l.id === activeLedger.id)
+    const targetLedger = nextLedger || activeLedger
+    const hasActive = ledgers.some(l => l && l.id === activeLedger.id)
     const nextLedgers = hasActive
-      ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
-      : [...ledgers, nextLedger]
-    const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
+      ? ledgers.map(l => (l && l.id === activeLedger.id ? targetLedger : l))
+      : [...ledgers, targetLedger]
+    
+    // Ensure we don't accidentally insert undefined into ledgers
+    const cleanLedgers = nextLedgers.filter(l => !!l)
+    
+    const nextActiveId = hasActive ? activeLedger.id : (targetLedger?.id || activeLedger.id)
     const vaultUpdate = {
       ...vault,
-      ledgers: nextLedgers,
+      ledgers: cleanLedgers,
       activeLedgerId: nextActiveId,
       accounts: nextAccounts ?? allAccounts,
       accountTxns: nextAccountTxns ?? allAccountTxns

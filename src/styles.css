@@ -2033,7 +2033,7 @@ label {
 .ledgerCard {
   border-radius: 24px;
   padding: 16px 8px;
-  height: 140px;
+  height: 130px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -2087,32 +2087,95 @@ label {
   margin-top: auto;
 }
 
-.ledgerCard.theme-1 { background: #fff8e1; border: 0.5px solid #fde68a; }
-.ledgerCard.theme-1 .ledgerCardIcon { background: #fbbf24; color: #fff; }
+.ledgerCard.theme-1 {
+  background: #fff8e1;
+  border: 0.5px solid #fde68a;
+}
 
-.ledgerCard.theme-2 { background: #f5f3ff; border: 0.5px solid #ddd6fe; }
-.ledgerCard.theme-2 .ledgerCardIcon { background: #a87dfb; color: #fff; }
+.ledgerCard.theme-1 .ledgerCardIcon {
+  background: #fbbf24;
+  color: #fff;
+}
 
-.ledgerCard.theme-3 { background: #fff1eb; border: 0.5px solid #fed7aa; }
-.ledgerCard.theme-3 .ledgerCardIcon { background: #fb923c; color: #fff; }
+.ledgerCard.theme-2 {
+  background: #f5f3ff;
+  border: 0.5px solid #ddd6fe;
+}
 
-.ledgerCard.theme-4 { background: #e0f2fe; border: 0.5px solid #bae6fd; }
-.ledgerCard.theme-4 .ledgerCardIcon { background: #38bdf8; color: #fff; }
+.ledgerCard.theme-2 .ledgerCardIcon {
+  background: #a87dfb;
+  color: #fff;
+}
 
-.ledgerCard.theme-5 { background: #fef2f8; border: 0.5px solid #fbcfe8; }
-.ledgerCard.theme-5 .ledgerCardIcon { background: #f472b6; color: #fff; }
+.ledgerCard.theme-3 {
+  background: #fff1eb;
+  border: 0.5px solid #fed7aa;
+}
 
-.ledgerCard.theme-6 { background: #f0fdf4; border: 0.5px solid #bbf7d0; }
-.ledgerCard.theme-6 .ledgerCardIcon { background: #4ade80; color: #fff; }
+.ledgerCard.theme-3 .ledgerCardIcon {
+  background: #fb923c;
+  color: #fff;
+}
 
-.ledgerCard.theme-7 { background: #fffbeb; border: 0.5px solid #fde68a; }
-.ledgerCard.theme-7 .ledgerCardIcon { background: #fbbf24; color: #fff; }
+.ledgerCard.theme-4 {
+  background: #e0f2fe;
+  border: 0.5px solid #bae6fd;
+}
 
-.ledgerCard.theme-8 { background: #fee2e2; border: 0.5px solid #fecaca; }
-.ledgerCard.theme-8 .ledgerCardIcon { background: #f87171; color: #fff; }
+.ledgerCard.theme-4 .ledgerCardIcon {
+  background: #38bdf8;
+  color: #fff;
+}
 
-.ledgerCard.theme-9 { background: #f9fafb; border: 0.5px solid #e5e7eb; }
-.ledgerCard.theme-9 .ledgerCardIcon { background: #9ca3af; color: #fff; }
+.ledgerCard.theme-5 {
+  background: #fef2f8;
+  border: 0.5px solid #fbcfe8;
+}
+
+.ledgerCard.theme-5 .ledgerCardIcon {
+  background: #f472b6;
+  color: #fff;
+}
+
+.ledgerCard.theme-6 {
+  background: #f0fdf4;
+  border: 0.5px solid #bbf7d0;
+}
+
+.ledgerCard.theme-6 .ledgerCardIcon {
+  background: #4ade80;
+  color: #fff;
+}
+
+.ledgerCard.theme-7 {
+  background: #fffbeb;
+  border: 0.5px solid #fde68a;
+}
+
+.ledgerCard.theme-7 .ledgerCardIcon {
+  background: #fbbf24;
+  color: #fff;
+}
+
+.ledgerCard.theme-8 {
+  background: #fee2e2;
+  border: 0.5px solid #fecaca;
+}
+
+.ledgerCard.theme-8 .ledgerCardIcon {
+  background: #f87171;
+  color: #fff;
+}
+
+.ledgerCard.theme-9 {
+  background: #f9fafb;
+  border: 0.5px solid #e5e7eb;
+}
+
+.ledgerCard.theme-9 .ledgerCardIcon {
+  background: #9ca3af;
+  color: #fff;
+}
 
 .catDetailScreen {
   display: flex;

@@ -35,6 +35,7 @@ export function createLedger({
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
     { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.DEBT, collapsed: false },
+    { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: META_CATEGORIES.SAVINGS, collapsed: false },
     { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
     { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
     { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
@@ -243,10 +244,57 @@ export function normalizeVault(data) {
   if (Array.isArray(data.ledgers)) {
     const ledgers = data.ledgers.length ? data.ledgers.map(l => normalizeLedger(l)) : [createLedger()]
     const activeLedgerId = ledgers.find(l => l.id === data.activeLedgerId)?.id || ledgers[0]?.id || ''
+    
+    // Safety: ensure all accounts have a valid ledgerId and groupId
+    const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0]
+    const ledgerIds = new Set(ledgers.map(l => l.id))
+    const groupIds = new Set(activeLedger.groups.map(g => g.id))
+    
+    const rawAccounts = (Array.isArray(data.accounts) ? data.accounts : [])
+    
+    // Recovery Phase 1: Re-link accounts to the active ledger
+    const migratedAccounts = rawAccounts.map(a => {
+      const isGhostLedger = a.ledgerId && !ledgerIds.has(a.ledgerId)
+      return {
+        ...a,
+        ledgerId: (!a.ledgerId || isGhostLedger) ? activeLedgerId : a.ledgerId
+      }
+    })
+
+    // Recovery Phase 2: Detect orphaned groups and re-create them or merge into existing Savings
+    let savingsGroup = activeLedger.groups.find(g => g.metaCategory === 'savings' || g.name === 'Savings')
+    
+    if (!savingsGroup) {
+      savingsGroup = { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: 'savings', collapsed: false }
+      activeLedger.groups.push(savingsGroup)
+    }
+    
+    const finalMigratedAccounts = migratedAccounts.map(a => {
+      const isFund = a.name.toLowerCase().includes('fund')
+      if (isFund) {
+        return { ...a, groupId: savingsGroup.id, groupType: savingsGroup.type }
+      }
+      return a
+    })
+
+    // Recovery Phase 3: Cleanup duplicate Loans (if they have 0 balance and same name)
+    const seenNames = new Set()
+    const uniqueAccounts = finalMigratedAccounts.filter(a => {
+      if (a.name === 'Loans' && a.balance === 0) {
+        if (seenNames.has('Loans')) return false
+        seenNames.add('Loans')
+        return true
+      }
+      return true
+    })
+
+    // Final Normalization
+    const finalAccounts = normalizeAccountsWithGroups(uniqueAccounts, activeLedger.groups)
+    
     return {
       ledgers,
       activeLedgerId,
-      accounts: Array.isArray(data.accounts) ? data.accounts : [],
+      accounts: finalAccounts,
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
       settings: {
         ...(data.settings || {}),
@@ -264,13 +312,20 @@ export function normalizeVault(data) {
   const legacyLedger = createLedger({
     txns: data.txns,
     categories: data.categories,
-    categoryMeta: data.categoryMeta
+    categoryMeta: data.categoryMeta,
+    groups: data.groups
   })
+
+  // Migration: set ledgerId for all accounts/txns to the new legacyLedger.id
+  const migratedAccounts = (Array.isArray(data.accounts) ? data.accounts : []).map(a => ({
+    ...a,
+    ledgerId: legacyLedger.id
+  }))
 
   return {
     ledgers: [legacyLedger],
     activeLedgerId: legacyLedger.id,
-    accounts: Array.isArray(data.accounts) ? data.accounts : [],
+    accounts: migratedAccounts,
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
     settings: {
       ...(data.settings || {}),

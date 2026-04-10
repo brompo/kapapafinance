@@ -59,22 +59,17 @@ export function AppProvider({ children }) {
     async function init() {
       try {
         const isPinned = localStorage.getItem(PIN_FLOW_KEY) === 'true'
-        console.log('AppContext: isPinned?', isPinned, 'hasPin?', hasPin())
-
         if (isPinned && hasPin()) {
           setStage('unlock')
           return
         }
 
         const plain = loadVaultPlain()
-        console.log('AppContext: plain exists?', !!plain)
-
         if (plain) {
           const v = normalizeVault(plain)
           setVaultState(v)
           setStage('app')
           setTab(v.settings?.defaultAppTab || DEFAULT_TAB)
-          console.log('AppContext: Set stage to app')
           return
         }
 
@@ -134,14 +129,22 @@ export function AppProvider({ children }) {
   // Derived data
   const accounts = useMemo(() => {
     if (!activeLedger?.id) return []
-    return allAccounts.filter(a => a.ledgerId === activeLedger.id)
+    return allAccounts.filter(a => {
+      // Show if account belongs to ledger OR has a sub-account in this ledger
+      const isMain = !a.ledgerId || a.ledgerId === activeLedger.id
+      const hasSub = a.subAccounts?.some(s => s.ledgerId === activeLedger.id)
+      return isMain || hasSub
+    })
   }, [allAccounts, activeLedger?.id])
 
   const accountTxns = useMemo(() => {
     if (!activeLedger?.id) return []
     return allAccountTxns.filter(t => {
       const acct = allAccounts.find(a => a.id === t.accountId)
-      return acct && acct.ledgerId === activeLedger.id
+      if (!acct) return false
+      const isMain = !acct.ledgerId || acct.ledgerId === activeLedger.id
+      const hasSub = acct.subAccounts?.some(s => s.ledgerId === activeLedger.id)
+      return isMain || hasSub
     })
   }, [allAccountTxns, allAccounts, activeLedger?.id])
 
@@ -580,6 +583,106 @@ export function AppProvider({ children }) {
     show('Reimbursement saved.')
   }
 
+  async function upsertAccount(acc) {
+    const exists = allAccounts.find(a => a.id === acc.id)
+    const nextAccounts = exists
+      ? allAccounts.map(a => a.id === acc.id ? acc : a)
+      : [...allAccounts, acc]
+
+    persistLedgerAndAccounts({ nextAccounts })
+    show(exists ? 'Account updated.' : 'Account created.')
+  }
+
+  async function deleteAccount(accountId) {
+    if (!window.confirm('Are you sure? All transactions for this account will be removed.')) return
+    const nextAccounts = allAccounts.filter(a => a.id !== accountId)
+    const nextAccountTxns = allAccountTxns.filter(t => t.accountId !== accountId && t.relatedAccountId !== accountId)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+    show('Account deleted.')
+  }
+
+  async function addAccountTxn(params) {
+    const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice } = params
+    const amt = Number(amount || 0)
+    if (!amt) return show('Enter amount.')
+
+    const entry = {
+      id: `txn-${uid()}`,
+      accountId,
+      subAccountId: subAccountId || null,
+      amount: amt,
+      direction,
+      note: note || (kind === 'purchase' ? `Purchase ${quantity} ${unit}` : 'Adjustment'),
+      date: receiveDate || todayISO(),
+      kind: kind || 'txn',
+      unit,
+      quantity,
+      unitPrice
+    }
+
+    const nextAccounts = applyAccountDelta(allAccounts, accountId, subAccountId, direction === 'in' ? amt : -amt)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [entry, ...allAccountTxns] })
+    show('Transaction added.')
+  }
+
+  async function transferAccount(params) {
+    const { fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date } = params
+    const amt = Number(amount || 0)
+    if (!amt) return show('Enter amount.')
+
+    const tid = uid()
+    const outEntry = {
+      id: `txn-${tid}-out`,
+      accountId: fromId,
+      subAccountId: fromSubAccountId || null,
+      amount: amt,
+      direction: 'out',
+      note: note || 'Transfer',
+      date: date || todayISO(),
+      kind: 'txn',
+      relatedAccountId: toId
+    }
+    const inEntry = {
+      id: `txn-${tid}-in`,
+      accountId: toId,
+      subAccountId: toSubAccountId || null,
+      amount: amt,
+      direction: 'in',
+      note: note || 'Transfer',
+      date: date || todayISO(),
+      kind: 'txn',
+      relatedAccountId: fromId
+    }
+
+    let nextAccounts = applyAccountDelta(allAccounts, fromId, fromSubAccountId, -amt)
+    nextAccounts = applyAccountDelta(nextAccounts, toId, toSubAccountId, amt)
+
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [outEntry, inEntry, ...allAccountTxns] })
+    show('Transfer completed.')
+  }
+
+  async function updateAccountTxn(original, next) {
+    const oldDelta = original.direction === 'in' ? Number(original.amount || 0) : -Number(original.amount || 0)
+    const newDelta = next.direction === 'in' ? Number(next.amount || 0) : -Number(next.amount || 0)
+    
+    let nextAccounts = applyAccountDelta(allAccounts, original.accountId, original.subAccountId, -oldDelta)
+    nextAccounts = applyAccountDelta(nextAccounts, next.accountId, next.subAccountId, newDelta)
+    
+    const nextAccountTxns = allAccountTxns.map(t => t.id === original.id ? next : t)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+    show('Updated.')
+  }
+
+  async function deleteAccountTxn(txnId) {
+    const t = allAccountTxns.find(x => x.id === txnId)
+    if (!t) return
+    const delta = t.direction === 'in' ? -Number(t.amount || 0) : Number(t.amount || 0)
+    const nextAccounts = applyAccountDelta(allAccounts, t.accountId, t.subAccountId, delta)
+    const nextAccountTxns = allAccountTxns.filter(x => x.id !== txnId)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+    show('Deleted.')
+  }
+
   async function updateAccountGroups(nextGroups) {
     await persistActiveLedger({ ...activeLedger, groups: nextGroups })
   }
@@ -615,6 +718,14 @@ export function AppProvider({ children }) {
     ...cloudGoogleControls,
     shiftMonth,
     formatMonthLabel,
+
+    // Account Helpers
+    upsertAccount,
+    deleteAccount,
+    addAccountTxn,
+    transferAccount,
+    updateAccountTxn,
+    deleteAccountTxn,
 
     // Transaction Helpers
     addQuickTxn,

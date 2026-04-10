@@ -53,6 +53,13 @@ function VaultApp() {
             onDeleteAccountTxn={deleteAccountTxn}
             onUpdateGroups={updateAccountGroups}
             onUpdateAccounts={updateAccounts}
+            onUpsertAccount={upsertAccount}
+            onDeleteAccount={deleteAccount}
+            onAddAccountTxn={addAccountTxn}
+            onTransferAccount={transferAccount}
+            onUpdateAccountTxn={updateAccountTxn}
+            onToast={show}
+            onSwitchLedger={handleSwitchLedgerToAccounts}
           />
         )}
         {tab === 'settings' && <SettingsScreen />}

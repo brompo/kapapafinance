@@ -360,14 +360,15 @@ export function AppProvider({ children }) {
     const nextClients = pendingClient ? [...(vault.clients || []), pendingClient] : undefined;
 
     let nextMetaData = activeLedger.categoryMeta || {};
-    if (updateDefaultAccount && accountId) {
+    if (updateDefaultAccount && (accountId || toAccountId)) {
       nextMetaData = {
         ...nextMetaData,
         [type]: {
           ...(nextMetaData[type] || {}),
           [category]: {
             ...(nextMetaData[type]?.[category] || {}),
-            defaultAccountId: accountId
+            defaultAccountId: accountId || (nextMetaData[type]?.[category]?.defaultAccountId),
+            defaultToAccountId: toAccountId || (nextMetaData[type]?.[category]?.defaultToAccountId)
           }
         }
       };

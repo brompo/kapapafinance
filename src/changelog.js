@@ -3,8 +3,8 @@ export const CHANGELOG = [
         version: "2.0.0",
         date: "2026-04-04",
         changes: [
-            'Global Ledger Switcher: Moved the picker to the app root for seamless tab-wide switching.',
-            'Dynamic Monthly Balances: Fixed the static balance issue by calculating net results per month.',
+            'Changed the way the Codebase is designed for Faster Load Speed, and Development',
+            'You should notice faster loads of the Pages and app In general',
             'Breakdown Drill-downs: Every amount in the Insights breakdown table is now clickable for details.',
             'Unified Navigation: Implemented consistent 3-column headers across all main tabs.',
             'Dual-Account Syncing: Overhauled processing to update both source and destination accounts simultaneously.',

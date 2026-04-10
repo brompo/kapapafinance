@@ -37,7 +37,7 @@ export function CategoryDetail({
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayISO())
   const [accountId, setAccountId] = useState(meta?.defaultAccountId || '')
-  const [toAccountId, setToAccountId] = useState('')
+  const [toAccountId, setToAccountId] = useState(meta?.defaultToAccountId || '')
   const [accountError, setAccountError] = useState(false)
   const [clientId, setClientId] = useState('')
   const [pendingClient, setPendingClient] = useState(null)
@@ -270,16 +270,28 @@ export function CategoryDetail({
                 <div style={{ fontSize: 35 }}>{formatCommas(amount || '0')}</div>
               </div>
 
-              <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+              <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: category.type === 'allocation' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 6 }}>
                 <div style={{ position: 'relative' }}>
                   <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
-                    <option value="">Account</option>
+                    <option value="">{category.type === 'allocation' ? 'From' : 'Account'}</option>
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                   <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11 }}>
-                    <span style={{ fontSize: 16 }}>🏦</span> <br/> {accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}
+                    <span style={{ fontSize: 16 }}>🏦</span> <br/> {accountId ? accounts.find(a => a.id === accountId)?.name : (category.type === 'allocation' ? 'From' : 'Account')}
                   </div>
                 </div>
+
+                {category.type === 'allocation' && (
+                  <div style={{ position: 'relative' }}>
+                    <select value={toAccountId} onChange={e => setToAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
+                      <option value="">To Account</option>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                    <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: toAccountId ? '#dcfce7' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11 }}>
+                      <span style={{ fontSize: 16 }}>🎯</span> <br/> {toAccountId ? accounts.find(a => a.id === toAccountId)?.name : 'To'}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ position: 'relative' }}>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }} />

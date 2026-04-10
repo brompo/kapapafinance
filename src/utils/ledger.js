@@ -271,7 +271,11 @@ export function normalizeVault(data) {
     
     const finalMigratedAccounts = migratedAccounts.map(a => {
       const isFund = a.name.toLowerCase().includes('fund')
-      if (isFund) {
+      // Expanded detection: If it's a known savings account name or contains 'fund', 
+      // AND it's currently orphaned (groupId not in current groups), move it to Savings.
+      const isKnownSavings = ['exploration', 'family care', 'children fund', 'emergency fund', 'upkeep fund'].includes(a.name.toLowerCase())
+      
+      if ((isFund || isKnownSavings) && (!a.groupId || !groupIds.has(a.groupId))) {
         return { ...a, groupId: savingsGroup.id, groupType: savingsGroup.type }
       }
       return a

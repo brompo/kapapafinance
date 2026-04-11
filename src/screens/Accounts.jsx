@@ -94,9 +94,9 @@ export default function Accounts({
             <div className={`metaTotal ${total < 0 ? 'neg' : (total > 0 && type === 'obligations' ? 'pos' : '')}`}>
               {fmtTZS(total)}
             </div>
-            <button 
-              className="metaAddBtn" 
-              type="button" 
+            <button
+              className="metaAddBtn"
+              type="button"
               title="Add Group to this Section"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1144,7 +1144,7 @@ function Section({
                         <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
                       </div>
                       <div className="stdRight">
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
                             <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>
@@ -1152,13 +1152,23 @@ function Section({
                             </div>
                           </div>
                           {metaCategory === 'savings' && (
-                            <div style={{ display: 'flex', gap: 6, fontSize: '0.65rem', fontWeight: 600, marginTop: -2 }}>
+                            <div className="savingsMetrics">
                               {(() => {
                                 const metrics = calculateSavingsMetrics(a, accountTxns, accounts, bal);
                                 return (
                                   <>
-                                    <span style={{ color: '#22c55e' }}>Owned: {fmtTZS(metrics.total)}</span>
-                                    {metrics.lent > 0 && <span style={{ color: '#ef4444' }}>Lent: {fmtTZS(metrics.lent)}</span>}
+                                    <div className="metricStack purple">
+                                      <div className="metricLabel">Planned</div>
+                                      <div className="metricValue">0</div>
+                                    </div>
+                                    <div className="metricStack green">
+                                      <div className="metricLabel">Owned</div>
+                                      <div className="metricValue">{fmtTZS(metrics.total)}</div>
+                                    </div>
+                                    <div className="metricStack red">
+                                      <div className="metricLabel">Lent</div>
+                                      <div className="metricValue">{fmtTZS(metrics.lent)}</div>
+                                    </div>
                                   </>
                                 );
                               })()}

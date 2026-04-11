@@ -154,3 +154,33 @@ export function calculateAssetMetrics(account, accountTxns, groupType, dateLimit
     realizedGains // Array of { date, amount }
   };
 }
+
+/**
+ * Calculates current lending metrics for a savings account.
+ * Lent = (Transfers OUT to Loan accounts) - (Transfers IN from Loan accounts)
+ */
+export function calculateSavingsMetrics(account, accountTxns, allAccounts) {
+  const txns = accountTxns.filter(t => t.accountId === account.id && t.kind === 'txn');
+  let netLent = 0;
+
+  for (const t of txns) {
+    if (t.relatedAccountId) {
+      const related = allAccounts.find(a => a.id === t.relatedAccountId);
+      // Check if related account is a loan-type account
+      if (related && related.groupType === 'loan') {
+        const amt = Number(t.amount || 0);
+        if (t.direction === 'out') netLent += amt;
+        else if (t.direction === 'in') netLent -= amt;
+      }
+    }
+  }
+
+  // Savings owned is the current liquid balance
+  const owned = Number(account.balance || 0);
+
+  return {
+    owned,
+    lent: Math.max(0, netLent), // Ensure we don't show negative lending
+    total: owned + Math.max(0, netLent)
+  };
+}

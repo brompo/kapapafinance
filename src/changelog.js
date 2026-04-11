@@ -1,5 +1,17 @@
 export const CHANGELOG = [
     {
+        version: "2.1.0",
+        date: "2026-04-11",
+        changes: [
+            'Global Group Sync: Account groups are now synchronized across all ledgers (Personal, Business, etc.) for a consistent structural experience.',
+            'Advanced Obligations Section: Consolidated Credits and Loans into a new unified "Obligations (Receivables & Payables)" meta-category.',
+            'Savings Breakdown: Implemented "Owned vs Lent" metrics for Savings accounts, separating liquid cash from money loaned out from specific funds.',
+            'Refined Hierarchy: Reorganized the account view order to Wallets -> Obligations -> Assets -> Savings for better logical progression.',
+            'Enhanced Calculator Pad: Upgraded the transaction keypad with full arithmetic calculation support and a "Smart Save" auto-compute feature.',
+            'High-Density UI: Compacted the transaction entry and account list layouts by removing redundant whitespace and standardizing spacing.'
+        ]
+    },
+    {
         version: "2.0.0",
         date: "2026-04-04",
         changes: [

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fmtTZS, fmtCompact, calculateAssetMetrics } from "../money.js";
+import { fmtTZS, fmtCompact, calculateAssetMetrics, calculateSavingsMetrics } from "../money.js";
 
 function daysBetween(a, b) {
   const start = new Date(a);
@@ -86,12 +86,12 @@ export default function Accounts({
             <span className="metaDesc">
               {type === 'wallet' && 'The "Now" Money'}
               {type === 'asset' && 'The "Growth" Engine'}
-              {type === 'debt' && 'The "Negative" Value'}
+              {type === 'obligations' && 'Receivables & Payables'}
               {type === 'savings' && 'The "Purpose" Money'}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className={`metaTotal ${type === 'debt' ? 'neg' : ''}`}>
+            <div className={`metaTotal ${type === 'obligations' ? 'neg' : ''}`}>
               {fmtTZS(total)}
             </div>
             <button 
@@ -103,7 +103,7 @@ export default function Accounts({
                 setNewGroupMetaCategory(type);
                 if (type === 'wallet') setNewGroupType('debit');
                 else if (type === 'asset') setNewGroupType('asset');
-                else if (type === 'debt') setNewGroupType('credit');
+                else if (type === 'obligations') setNewGroupType('credit');
                 else if (type === 'savings') setNewGroupType('debit');
                 setNewGroupName('');
                 setShowAddGroupModal(true);
@@ -121,7 +121,16 @@ export default function Accounts({
           <div className="metaBody">
             {groups.map(group => {
               const items = visibleAccounts.filter((a) => a.groupId === group.id);
-              const total = items.reduce((s, a) => s + getAccountBalance(a), 0);
+              const isSavings = type === 'savings';
+              const total = items.reduce((s, a) => {
+                const bal = getAccountBalance(a);
+                // Group header total: User says "Owned is the Money the Account own"
+                // For the group header, we show the sum of 'Owned' (total portfolio)
+                if (isSavings) {
+                  return s + calculateSavingsMetrics(a, accountTxns, accounts).total;
+                }
+                return s + bal;
+              }, 0);
               const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
               return (
                 <Section
@@ -129,6 +138,7 @@ export default function Accounts({
                   group={group}
                   metaCategory={type}
                   accountTxns={accountTxns}
+                  accounts={accounts}
                   right={right}
                   total={total}
                   items={items}
@@ -477,16 +487,20 @@ export default function Accounts({
       profitYTD,
       walletsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'wallet')).reduce((s, a) => s + getAccountBalance(a), 0),
       assetsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'asset')).reduce((s, a) => s + getAccountBalance(a), 0),
-      debtBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'debt')).reduce((s, a) => s + getAccountBalance(a), 0),
+      debtBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'obligations' || groupById.get(a.groupId)?.metaCategory === 'debt')).reduce((s, a) => s + getAccountBalance(a), 0),
       savingsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'savings')).reduce((s, a) => s + getAccountBalance(a), 0),
     };
   }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
 
 
   const metaGroups = useMemo(() => {
-    const map = { wallet: [], asset: [], debt: [], savings: [] };
+    const map = { wallet: [], obligations: [], asset: [], savings: [] };
     groups.forEach(g => {
-      const cat = g.metaCategory || (g.type === 'credit' ? 'debt' : (g.type === 'asset' || g.type === 'loan' ? 'asset' : 'wallet'));
+      let cat = g.metaCategory;
+      if (cat === 'debt') cat = 'obligations'; // migration
+      if (!cat) {
+        cat = (g.type === 'credit' || g.type === 'loan') ? 'obligations' : (g.type === 'asset' ? 'asset' : 'wallet');
+      }
       if (map[cat]) map[cat].push(g);
       else map.wallet.push(g); // Fallback
     });
@@ -787,8 +801,8 @@ export default function Accounts({
                   onChange={(e) => setEditMetaCategory(e.target.value)}
                 >
                   <option value="wallet">WALLETS (Operational)</option>
+                  <option value="obligations">OBLIGATIONS (Receivables & Payables)</option>
                   <option value="asset">ASSETS (Growth)</option>
-                  <option value="debt">DEBT (Liability)</option>
                   <option value="savings">SAVINGS (Purpose)</option>
                 </select>
               </div>
@@ -911,11 +925,11 @@ export default function Accounts({
           {/* Wallets */}
           {renderMetaSection('WALLETS', 'wallet', totals.walletsBal, metaGroups.wallet)}
 
+          {/* Obligations */}
+          {renderMetaSection('OBLIGATIONS', 'obligations', totals.debtBal, metaGroups.obligations)}
+
           {/* Assets */}
           {renderMetaSection('ASSETS', 'asset', totals.assetsBal, metaGroups.asset)}
-
-          {/* Debt */}
-          {renderMetaSection('DEBT', 'debt', totals.debtBal, metaGroups.debt)}
 
           {/* Savings */}
           {renderMetaSection('SAVINGS', 'savings', totals.savingsBal, metaGroups.savings)}
@@ -960,8 +974,8 @@ export default function Accounts({
                       }}
                     >
                       <option value="wallet">WALLETS (Operational)</option>
+                      <option value="obligations">OBLIGATIONS (Receivables & Payables)</option>
                       <option value="asset">ASSETS (Growth)</option>
-                      <option value="debt">DEBT (Liability)</option>
                       <option value="savings">SAVINGS (Purpose)</option>
                     </select>
                   </div>
@@ -1012,6 +1026,7 @@ function Section({
   onToggleAccountExpand,
   activeLedgerId,
   metaCategory,
+  accounts,
 }) {
   return (
     <div
@@ -1123,8 +1138,23 @@ function Section({
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <div className={`stdBalPrefix ${bal < 0 ? "neg" : ""}`}>Bal.</div>
-                            <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>{fmtTZS(bal)}</div>
+                            <div className={`stdBalLabel ${bal < 0 ? "neg" : ""}`}>
+                              {fmtTZS(bal)}
+                            </div>
                           </div>
+                          {metaCategory === 'savings' && (
+                            <div style={{ display: 'flex', gap: 6, fontSize: '0.65rem', fontWeight: 600, marginTop: -2 }}>
+                              {(() => {
+                                const metrics = calculateSavingsMetrics(a, accountTxns, accounts);
+                                return (
+                                  <>
+                                    <span style={{ color: '#22c55e' }}>Owned: {fmtTZS(metrics.total)}</span>
+                                    {metrics.lent > 0 && <span style={{ color: '#ef4444' }}>Lent: {fmtTZS(metrics.lent)}</span>}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
 
                         </div>
                       </div>

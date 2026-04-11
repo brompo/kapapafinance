@@ -34,7 +34,7 @@ export function createLedger({
 } = {}) {
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.DEBT, collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.OBLIGATIONS, collapsed: false },
     { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: META_CATEGORIES.SAVINGS, collapsed: false },
     { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
     { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
@@ -54,9 +54,11 @@ export function createLedger({
 
       const type = g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit'))
       let metaCategory = g.metaCategory
+      if (metaCategory === 'debt') metaCategory = META_CATEGORIES.OBLIGATIONS // Migration
+      
       if (!metaCategory) {
-        if (type === 'credit') metaCategory = META_CATEGORIES.DEBT
-        else if (type === 'asset' || type === 'loan') metaCategory = META_CATEGORIES.ASSET
+        if (type === 'credit' || type === 'loan') metaCategory = META_CATEGORIES.OBLIGATIONS
+        else if (type === 'asset') metaCategory = META_CATEGORIES.ASSET
         else metaCategory = META_CATEGORIES.WALLET
       }
 

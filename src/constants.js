@@ -106,7 +106,7 @@ export const GROUP_IDS = {
 export const META_CATEGORIES = {
   WALLET: 'wallet',
   ASSET: 'asset',
-  DEBT: 'debt',
+  OBLIGATIONS: 'obligations',
   SAVINGS: 'savings'
 }
 export const DEFAULT_TAB = 'tx' // insights | accounts | tx | settings
@@ -119,7 +119,7 @@ export const ALL_LEDGERS_TEMPLATE = {
   type: 'personal',
   groups: [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.DEBT, collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.OBLIGATIONS, collapsed: false },
     { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
     { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
     { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }

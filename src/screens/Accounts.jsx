@@ -1095,6 +1095,8 @@ function Section({
               const isAsset = group.type === 'asset'
               const bal = getAccountBalance(a)
 
+              const metrics = (metaCategory === 'savings') ? calculateSavingsMetrics(a, accountTxns, accounts, bal) : null;
+
               nodes.push(
                 <div
                   className={`clickable ${draggingAccountId === a.id ? "dragging" : ""
@@ -1137,11 +1139,18 @@ function Section({
                     </div>
                   ) : (
                     <div className={`stdRowCard ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>
-                      <div className="stdRowLeft">
+                      <div className="stdRowLeft" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className={`stdIcon ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>
                           {a.name.slice(0, 1).toUpperCase()}
                         </div>
-                        <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
+                          {metaCategory === 'savings' && (
+                            <div className="metricStack purple" style={{ alignItems: 'flex-start', marginTop: 2 }}>
+                              <div className="metricLabel">PLANNED: 0</div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="stdRight">
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -1153,28 +1162,14 @@ function Section({
                           </div>
                           {metaCategory === 'savings' && (
                             <div className="savingsMetrics">
-                              {(() => {
-                                const metrics = calculateSavingsMetrics(a, accountTxns, accounts, bal);
-                                return (
-                                  <>
-                                    <div className="metricStack purple">
-                                      <div className="metricLabel">P:</div>
-                                      <div className="metricValue">0</div>
-                                    </div>
-                                    <div className="metricStack green">
-                                      <div className="metricLabel">O:</div>
-                                      <div className="metricValue">{fmtTZS(metrics.total)}</div>
-                                    </div>
-                                    <div className="metricStack red">
-                                      <div className="metricLabel">L:</div>
-                                      <div className="metricValue">{fmtTZS(metrics.lent)}</div>
-                                    </div>
-                                  </>
-                                );
-                              })()}
+                              <div className="metricStack green">
+                                <div className="metricLabel">OWNED: {fmtTZS(metrics.total)}</div>
+                              </div>
+                              <div className="metricStack red">
+                                <div className="metricLabel">LENT: {fmtTZS(metrics.lent)}</div>
+                              </div>
                             </div>
                           )}
-
                         </div>
                       </div>
                     </div>

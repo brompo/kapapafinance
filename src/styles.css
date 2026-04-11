@@ -845,6 +845,29 @@ label {
   color: #a855f7 !important;
 }
 
+/* Legend Styling */
+.sectionLegend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-top: 4px;
+}
+
+.legendItem {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendItem.p { color: #a855f7; }
+.legendItem.o { color: #2fbf71; }
+.legendItem.l { color: #e24b4b; }
+
 .avatar.subAvatar {
   width: 28px;
   height: 28px;

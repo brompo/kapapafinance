@@ -159,7 +159,7 @@ export function calculateAssetMetrics(account, accountTxns, groupType, dateLimit
  * Calculates current lending metrics for a savings account.
  * Lent = (Transfers OUT to Loan accounts) - (Transfers IN from Loan accounts)
  */
-export function calculateSavingsMetrics(account, accountTxns, allAccounts) {
+export function calculateSavingsMetrics(account, accountTxns, allAccounts, actualBalance) {
   const txns = accountTxns.filter(t => t.accountId === account.id && t.kind === 'txn');
   let netLent = 0;
 
@@ -167,7 +167,7 @@ export function calculateSavingsMetrics(account, accountTxns, allAccounts) {
     if (t.relatedAccountId) {
       const related = allAccounts.find(a => a.id === t.relatedAccountId);
       // Check if related account is a loan-type account
-      if (related && related.groupType === 'loan') {
+      if (related && (related.groupType === 'loan' || related.type === 'loan')) {
         const amt = Number(t.amount || 0);
         if (t.direction === 'out') netLent += amt;
         else if (t.direction === 'in') netLent -= amt;
@@ -175,8 +175,8 @@ export function calculateSavingsMetrics(account, accountTxns, allAccounts) {
     }
   }
 
-  // Savings owned is the current liquid balance
-  const owned = Number(account.balance || 0);
+  // Use the calculated liquid balance passed from the UI
+  const owned = Number(actualBalance || 0);
 
   return {
     owned,

@@ -127,7 +127,7 @@ export default function Accounts({
                 // Group header total: User says "Owned is the Money the Account own"
                 // For the group header, we show the sum of 'Owned' (total portfolio)
                 if (isSavings) {
-                  return s + calculateSavingsMetrics(a, accountTxns, accounts).total;
+                  return s + calculateSavingsMetrics(a, accountTxns, accounts, bal).total;
                 }
                 return s + bal;
               }, 0);
@@ -1154,7 +1154,7 @@ function Section({
                           {metaCategory === 'savings' && (
                             <div style={{ display: 'flex', gap: 6, fontSize: '0.65rem', fontWeight: 600, marginTop: -2 }}>
                               {(() => {
-                                const metrics = calculateSavingsMetrics(a, accountTxns, accounts);
+                                const metrics = calculateSavingsMetrics(a, accountTxns, accounts, bal);
                                 return (
                                   <>
                                     <span style={{ color: '#22c55e' }}>Owned: {fmtTZS(metrics.total)}</span>

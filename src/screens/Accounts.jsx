@@ -492,9 +492,9 @@ export default function Accounts({
         return mc === 'obligations' || mc === 'debt';
       }).reduce((s, a) => {
         const bal = getAccountBalance(a);
-        // If it's a credit account, it's a liability (negative for net position)
-        if (a.type === 'credit') return s - bal;
-        // If it's a loan or debit in this section, it's a receivable (positive)
+        // Use groupType to ensure we detect credit accounts correctly
+        const type = a.groupType || groupById.get(a.groupId)?.type;
+        if (type === 'credit') return s - bal;
         return s + bal;
       }, 0),
       savingsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'savings')).reduce((s, a) => s + getAccountBalance(a), 0),

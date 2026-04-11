@@ -402,6 +402,10 @@ label {
   color: #e24b4b;
 }
 
+.metaTotal.pos {
+  color: #2fbf71;
+}
+
 /* Quick Action Buttons */
 .quickActions {
   display: flex;

@@ -91,7 +91,7 @@ export default function Accounts({
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className={`metaTotal ${type === 'obligations' ? 'neg' : ''}`}>
+            <div className={`metaTotal ${total < 0 ? 'neg' : (total > 0 && type === 'obligations' ? 'pos' : '')}`}>
               {fmtTZS(total)}
             </div>
             <button 
@@ -487,7 +487,16 @@ export default function Accounts({
       profitYTD,
       walletsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'wallet')).reduce((s, a) => s + getAccountBalance(a), 0),
       assetsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'asset')).reduce((s, a) => s + getAccountBalance(a), 0),
-      debtBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'obligations' || groupById.get(a.groupId)?.metaCategory === 'debt')).reduce((s, a) => s + getAccountBalance(a), 0),
+      debtBal: visibleAccounts.filter(a => {
+        const mc = groupById.get(a.groupId)?.metaCategory;
+        return mc === 'obligations' || mc === 'debt';
+      }).reduce((s, a) => {
+        const bal = getAccountBalance(a);
+        // If it's a credit account, it's a liability (negative for net position)
+        if (a.type === 'credit') return s - bal;
+        // If it's a loan or debit in this section, it's a receivable (positive)
+        return s + bal;
+      }, 0),
       savingsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'savings')).reduce((s, a) => s + getAccountBalance(a), 0),
     };
   }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);

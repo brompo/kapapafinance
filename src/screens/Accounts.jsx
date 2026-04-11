@@ -1158,15 +1158,15 @@ function Section({
                                 return (
                                   <>
                                     <div className="metricStack purple">
-                                      <div className="metricLabel">Planned</div>
+                                      <div className="metricLabel">P:</div>
                                       <div className="metricValue">0</div>
                                     </div>
                                     <div className="metricStack green">
-                                      <div className="metricLabel">Owned</div>
+                                      <div className="metricLabel">O:</div>
                                       <div className="metricValue">{fmtTZS(metrics.total)}</div>
                                     </div>
                                     <div className="metricStack red">
-                                      <div className="metricLabel">Lent</div>
+                                      <div className="metricLabel">L:</div>
                                       <div className="metricValue">{fmtTZS(metrics.lent)}</div>
                                     </div>
                                   </>

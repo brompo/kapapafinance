@@ -805,7 +805,7 @@ label {
 
 /* High-Density Savings Metrics */
 .savingsMetrics {
-  display: flex;
+  display: contents;
   gap: 12px;
   justify-content: flex-end;
   margin-top: 2px;
@@ -864,9 +864,17 @@ label {
   gap: 4px;
 }
 
-.legendItem.p { color: #a855f7; }
-.legendItem.o { color: #2fbf71; }
-.legendItem.l { color: #e24b4b; }
+.legendItem.p {
+  color: #a855f7;
+}
+
+.legendItem.o {
+  color: #2fbf71;
+}
+
+.legendItem.l {
+  color: #e24b4b;
+}
 
 .avatar.subAvatar {
   width: 28px;
@@ -3366,8 +3374,8 @@ label {
 }
 
 .stdBalLabel {
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: #1a1d33;
 }
 

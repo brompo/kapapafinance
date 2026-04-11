@@ -178,9 +178,14 @@ export function calculateSavingsMetrics(account, accountTxns, allAccounts, actua
   // Use the calculated liquid balance passed from the UI
   const owned = Number(actualBalance || 0);
 
+  // Sum up planned expenses and budgets
+  const plans = Array.isArray(account.plans) ? account.plans : [];
+  const planned = plans.reduce((s, p) => s + Number(p.amount || 0), 0);
+
   return {
     owned,
     lent: Math.max(0, netLent), // Ensure we don't show negative lending
+    planned,
     total: owned + Math.max(0, netLent)
   };
 }

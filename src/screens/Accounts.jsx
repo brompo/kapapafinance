@@ -1147,7 +1147,8 @@ function Section({
                           <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
                           {metaCategory === 'savings' && (
                             <div className="metricStack purple" style={{ alignItems: 'flex-start', marginTop: 2 }}>
-                              <div className="metricLabel">PLANNED: 0</div>
+                              <div className="metricLabel">PLANNED:</div>
+                              <div className="metricValue">{fmtTZS(metrics.planned)}</div>
                             </div>
                           )}
                         </div>
@@ -1234,6 +1235,10 @@ function todayISO() {
   return `${year}-${month}-${day}`;
 }
 
+function uid() {
+  return Math.random().toString(36).substr(2, 9);
+}
+
 
 
 function AccountDetail({
@@ -1262,6 +1267,7 @@ function AccountDetail({
   clients,
 }) {
   const currentGroup = groups.find((g) => g.id === account.groupId);
+  const metaCategory = currentGroup?.metaCategory || 'wallet';
   const effectiveType = account.accountType || currentGroup?.type || 'debit';
   const [mode, setMode] = useState(null); // adjust | transfer | null
 
@@ -1340,7 +1346,11 @@ function AccountDetail({
   const [editingSubAccountId, setEditingSubAccountId] = useState(null)
   const [subEditName, setSubEditName] = useState("")
   const [subEditLedgerId, setSubEditLedgerId] = useState("")
-  const [activeTab, setActiveTab] = useState("activity") // activity | future
+  const [activeTab, setActiveTab] = useState("activity") // activity | future | planner
+  const [showAddPlanModal, setShowAddPlanModal] = useState(false);
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanAmount, setNewPlanAmount] = useState("");
+  const [newPlanType, setNewPlanType] = useState("expense"); // expense | budget
 
   function handleOpenTxnEdit(t) {
     setSelectedTxn(t);
@@ -1404,6 +1414,12 @@ function AccountDetail({
     setEditReceiveDate(selectedTxn.receiveDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
     setEditInterestStartDate(selectedTxn.interestStartDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
   }, [selectedTxn]);
+
+  // Calculations for Hero Header
+  const plans = Array.isArray(account.plans) ? account.plans : [];
+  const totalPlanned = plans.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const currentBalance = getAccountBalance(account, 'current', true);
+  const progressPercent = totalPlanned > 0 ? Math.min(100, Math.floor((currentBalance / totalPlanned) * 100)) : 0;
 
   const entries = useMemo(() => {
     let filtered = accountTxns.filter((t) => t.accountId === account.id);
@@ -1705,6 +1721,125 @@ function AccountDetail({
     setAmount("");
     setNote("");
     setMode(null);
+  }
+
+  async function handleAddPlan() {
+    const amt = Number(newPlanAmount || 0);
+    const name = newPlanName.trim();
+    if (!name || amt <= 0) {
+      onToast("Enter valid name and amount.");
+      return;
+    }
+
+    const newPlan = { id: uid(), name, amount: amt, type: newPlanType };
+    const nextPlans = [...(Array.isArray(account.plans) ? account.plans : []), newPlan];
+
+    await onUpsertAccount({ ...account, plans: nextPlans });
+    setNewPlanName("");
+    setNewPlanAmount("");
+    setShowAddPlanModal(false);
+    onToast("Plan added.");
+  }
+
+  async function handleDeletePlan(planId) {
+    const nextPlans = (account.plans || []).filter(p => p.id !== planId);
+    await onUpsertAccount({ ...account, plans: nextPlans });
+    onToast("Plan removed.");
+  }
+
+  function renderPlannerTab() {
+    const plans = Array.isArray(account.plans) ? account.plans : [];
+    const totalPlanned = plans.reduce((s, p) => s + Number(p.amount || 0), 0);
+
+    return (
+      <div className="plannerContent" style={{ padding: '0 4px' }}>
+        <div style={{
+          background: '#f8fafc',
+          borderRadius: 16,
+          padding: 16,
+          marginBottom: 16,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 4px 12px rgba(168, 85, 247, 0.08)',
+          border: '1px solid rgba(168, 85, 247, 0.1)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Planned</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#a855f7' }}>{fmtTZS(totalPlanned)}</div>
+          </div>
+          <button
+            className="addPlanBtn"
+            onClick={() => setShowAddPlanModal(true)}
+            style={{
+              background: '#a855f7',
+              color: 'white',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: 12,
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <span>+</span> Add Goal
+          </button>
+        </div>
+
+        {plans.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 40px', color: '#94a3b8' }}>
+            <div style={{ fontSize: '3.5rem', marginBottom: 16 }}>🎯</div>
+            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#64748b' }}>Design your Savings Roadmap</div>
+            <div style={{ fontSize: '0.85rem', marginTop: 8 }}>Set target budgets for rent, holiday savings, or big purchases.</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {plans.map(p => (
+              <div key={p.id} style={{
+                background: 'white',
+                border: '1px solid #f1f5f9',
+                padding: '16px',
+                borderRadius: 18,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+              }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1e293b' }}>{p.name}</div>
+                  <div style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    color: p.type === 'budget' ? '#3b82f6' : '#64748b',
+                    background: p.type === 'budget' ? '#eff6ff' : '#f1f5f9',
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    display: 'inline-block',
+                    marginTop: 6,
+                    letterSpacing: '0.3px'
+                  }}>
+                    {p.type}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ fontWeight: 900, fontSize: '1.1rem', color: '#1e293b' }}>{fmtTZS(p.amount)}</div>
+                  <button
+                    onClick={() => handleDeletePlan(p.id)}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.5rem', cursor: 'pointer', opacity: 0.4, padding: '4px' }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   function handleDelete() {
@@ -2034,12 +2169,34 @@ function AccountDetail({
               {fmtTZS(getAccountBalance(account, 'current', true))}
             </div>
             {getAccountBalance(account, 'current', true) !== getAccountBalance(account, 'projected', true) && (
-              <div style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 2 }}>
-                Projected: {fmtTZS(getAccountBalance(account, 'projected', true))}
+              <div style={{ fontSize: "0.85rem", opacity: 0.6 }}>
+                Prj. {fmtTZS(getAccountBalance(account, 'projected', true))}
               </div>
             )}
           </div>
         </div>
+
+        {metaCategory === 'savings' && totalPlanned > 0 && (
+          <div className="goalProgressWrap">
+            <div className="goalProgressHeader">
+              <span className="goalLabel">Goals Funded</span>
+              <span className="goalPercent">{progressPercent}%</span>
+            </div>
+            <div className="goalProgressBar">
+              <div
+                className="goalProgressFill"
+                style={{
+                  width: `${progressPercent}%`,
+                  background: progressPercent >= 100 ? '#2fbf71' : 'linear-gradient(90deg, #a855f7, #6366f1)'
+                }}
+              />
+            </div>
+            <div className="goalProgressFooter">
+              {fmtTZS(currentBalance)} / {fmtTZS(totalPlanned)}
+            </div>
+          </div>
+        )}
+
 
         {/* Inner White Stats Card */}
         <div className="accDetailInnerCard">
@@ -2085,6 +2242,17 @@ function AccountDetail({
                 }}
               >
                 {effectiveType === 'asset' ? 'SALE' : 'TRANSFER'}
+              </button>
+            )}
+            {metaCategory === 'savings' && (
+              <button
+                className="actionBtnLarge btnPurple"
+                onClick={() => {
+                  setActiveTab('planner');
+                  setShowAddPlanModal(true);
+                }}
+              >
+                PLAN
               </button>
             )}
           </div>
@@ -3168,9 +3336,23 @@ function AccountDetail({
               return count > 0 ? <span className="accTabBadge">{count}</span> : null;
             })()}
           </div>
+          {metaCategory === 'savings' && (
+            <div
+              className={`accTab ${activeTab === 'planner' ? 'active' : ''}`}
+              onClick={() => setActiveTab('planner')}
+            >
+              Planner
+              {(() => {
+                const plans = Array.isArray(account.plans) ? account.plans : [];
+                return plans.length > 0 ? <span className="accTabBadge" style={{ background: '#a855f7' }}>{plans.length}</span> : null;
+              })()}
+            </div>
+          )}
         </div>
 
-        {grouped.length === 0 ? (
+        {activeTab === 'planner' ? (
+          renderPlannerTab()
+        ) : grouped.length === 0 ? (
           <div className="emptyRow">
             {activeTab === 'future' ? 'No future expenses planned.' : 'No activity yet.'}
           </div>
@@ -3269,7 +3451,45 @@ function AccountDetail({
             );
           })
         )}
-      </div>
-    </div >
-  );
+      {showAddPlanModal && (
+        <div className="modalBackdrop" style={{ zIndex: 4000 }} onClick={() => setShowAddPlanModal(false)}>
+          <div className="modalCard" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Add Savings Goal</div>
+            <div className="accQuickForm">
+              <div className="field">
+                <label>Goal Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. School Fees, Rent, Holiday"
+                  value={newPlanName}
+                  onChange={e => setNewPlanName(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Target Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={newPlanAmount}
+                  onChange={e => setNewPlanAmount(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Target Type</label>
+                <select value={newPlanType} onChange={e => setNewPlanType(e.target.value)}>
+                  <option value="expense">Planned Expense</option>
+                  <option value="budget">Monthly Budget</option>
+                </select>
+              </div>
+              <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowAddPlanModal(false)}>Cancel</button>
+                <button className="btn primary" type="button" onClick={handleAddPlan}>Add to Planner</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+);
 }

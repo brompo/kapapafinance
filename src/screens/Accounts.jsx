@@ -792,6 +792,9 @@ export default function Accounts({
                   <option value="savings">SAVINGS (Purpose)</option>
                 </select>
               </div>
+              <div style={{ fontSize: 11, color: '#6366f1', marginBottom: 12, padding: '8px 10px', background: '#f5f3ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
+                💡 <b>Global Sync:</b> Renaming or moving this group will update it across all your ledgers.
+              </div>
               <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
                 <button
                   className="btn danger"
@@ -961,6 +964,9 @@ export default function Accounts({
                       <option value="debt">DEBT (Liability)</option>
                       <option value="savings">SAVINGS (Purpose)</option>
                     </select>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6366f1', marginBottom: 16, padding: '8px 10px', background: '#f5f3ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
+                    💡 <b>Global Sync:</b> This group will be available across all your ledgers (Personal, Business, etc).
                   </div>
                   <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                     <button className="btn" type="button" onClick={() => setShowAddGroupModal(false)}>Cancel</button>

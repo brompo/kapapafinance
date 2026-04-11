@@ -247,8 +247,15 @@ export function normalizeVault(data) {
     
     // Safety: ensure all accounts have a valid ledgerId and groupId
     const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0]
+    
+    // NEW: Synchronize groups across ALL ledgers
+    const canonicalGroups = activeLedger.groups || []
+    ledgers.forEach(l => {
+      l.groups = [...canonicalGroups]
+    })
+    
+    const groupIds = new Set(canonicalGroups.map(g => g.id))
     const ledgerIds = new Set(ledgers.map(l => l.id))
-    const groupIds = new Set(activeLedger.groups.map(g => g.id))
     
     const rawAccounts = (Array.isArray(data.accounts) ? data.accounts : [])
     
@@ -260,13 +267,19 @@ export function normalizeVault(data) {
         ledgerId: (!a.ledgerId || isGhostLedger) ? activeLedgerId : a.ledgerId
       }
     })
-
+    
     // Recovery Phase 2: Detect orphaned groups and re-create them or merge into existing Savings
-    let savingsGroup = activeLedger.groups.find(g => g.metaCategory === 'savings' || g.name === 'Savings')
+    let savingsGroup = canonicalGroups.find(g => g.metaCategory === 'savings' || g.name === 'Savings')
     
     if (!savingsGroup) {
       savingsGroup = { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: 'savings', collapsed: false }
-      activeLedger.groups.push(savingsGroup)
+      // Update canonical and all ledgers
+      canonicalGroups.push(savingsGroup)
+      ledgers.forEach(l => {
+        if (!l.groups.find(g => g.id === savingsGroup.id)) {
+          l.groups.push(savingsGroup)
+        }
+      })
     }
     
     const finalMigratedAccounts = migratedAccounts.map(a => {
@@ -280,7 +293,7 @@ export function normalizeVault(data) {
       }
       return a
     })
-
+    
     // Recovery Phase 3: Cleanup duplicate Loans (if they have 0 balance and same name)
     const seenNames = new Set()
     const uniqueAccounts = finalMigratedAccounts.filter(a => {
@@ -291,9 +304,9 @@ export function normalizeVault(data) {
       }
       return true
     })
-
+    
     // Final Normalization
-    const finalAccounts = normalizeAccountsWithGroups(uniqueAccounts, activeLedger.groups)
+    const finalAccounts = normalizeAccountsWithGroups(uniqueAccounts, canonicalGroups)
     
     return {
       ledgers,

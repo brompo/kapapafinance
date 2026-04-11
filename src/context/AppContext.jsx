@@ -694,7 +694,8 @@ export function AppProvider({ children }) {
   }
 
   async function updateAccountGroups(nextGroups) {
-    await persistActiveLedger({ ...activeLedger, groups: nextGroups })
+    const nextLedgers = (vault.ledgers || []).map(l => ({ ...l, groups: nextGroups }))
+    await persist({ ...vault, ledgers: nextLedgers })
   }
 
   const clients = vault.clients || []

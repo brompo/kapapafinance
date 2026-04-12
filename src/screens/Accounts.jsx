@@ -124,11 +124,6 @@ export default function Accounts({
               const isSavings = type === 'savings';
               const total = items.reduce((s, a) => {
                 const bal = getAccountBalance(a);
-                // Group header total: User says "Owned is the Money the Account own"
-                // For the group header, we show the sum of 'Owned' (total portfolio)
-                if (isSavings) {
-                  return s + calculateSavingsMetrics(a, accountTxns, accounts, bal).total;
-                }
                 return s + bal;
               }, 0);
               const right = (group.type === "credit" || group.type === "loan") ? `Owed ${fmtTZS(total)}` : `Bal. ${fmtTZS(total)}`;
@@ -1349,6 +1344,19 @@ function AccountDetail({
   const [activeTab, setActiveTab] = useState("activity") // activity | future | planner
   const [primaryTab, setPrimaryTab] = useState("activity") // activity | goals
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
+  const isAnyModalOpen = !!(
+    mode || 
+    showAddPlanModal || 
+    showCreditModal || 
+    showPurchaseModal || 
+    showSaleModal || 
+    showValuationModal || 
+    showEditModal || 
+    showExportModal || 
+    showPaybackModal || 
+    selectedTxn || 
+    editingSubAccountId
+  );
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanAmount, setNewPlanAmount] = useState("");
@@ -3405,48 +3413,50 @@ function AccountDetail({
       </div>
 
       {/* Account FAB Action System */}
-      <div className="accountFabContainer">
-        {showFabMenu && (
-          <div className="accountFabOverlay" onClick={() => setShowFabMenu(false)}>
-            <div className="accountFabMenu" onClick={e => e.stopPropagation()}>
-              <button 
-                className="accountFabItem btnGreen" 
-                onClick={() => {
-                  setDirection("in");
-                  setMode("adjust");
-                  setSubAccountId(Array.isArray(account.subAccounts) && account.subAccounts.length ? account.subAccounts[0].id : "");
-                  setShowFabMenu(false);
-                }}
-              >
-                <span>Add Money</span>
-                <div className="fabIcon">+</div>
-              </button>
-              <button 
-                className="accountFabItem btnYellow" 
-                onClick={() => {
-                  if (effectiveType === 'asset') {
-                    const info = calculateAssetMetrics(account, accountTxns, effectiveType)
-                    setValuationPrice(info.unitPrice || "")
-                    setShowValuationModal(true)
-                  } else {
-                    setMode("transfer")
-                  }
-                  setShowFabMenu(false);
-                }}
-              >
-                <span>{effectiveType === 'asset' ? 'Update Valuation' : 'Transfer Funds'}</span>
-                <div className="fabIcon">{effectiveType === 'asset' ? '↑' : '⇄'}</div>
-              </button>
+      {!isAnyModalOpen && (
+        <div className="accountFabContainer">
+          {showFabMenu && (
+            <div className="accountFabOverlay" onClick={() => setShowFabMenu(false)}>
+              <div className="accountFabMenu" onClick={e => e.stopPropagation()}>
+                <button 
+                  className="accountFabItem btnGreen" 
+                  onClick={() => {
+                    setDirection("in");
+                    setMode("adjust");
+                    setSubAccountId(Array.isArray(account.subAccounts) && account.subAccounts.length ? account.subAccounts[0].id : "");
+                    setShowFabMenu(false);
+                  }}
+                >
+                  <span>Add Money</span>
+                  <div className="fabIcon">+</div>
+                </button>
+                <button 
+                  className="accountFabItem btnYellow" 
+                  onClick={() => {
+                    if (effectiveType === 'asset') {
+                      const info = calculateAssetMetrics(account, accountTxns, effectiveType)
+                      setValuationPrice(info.unitPrice || "")
+                      setShowValuationModal(true)
+                    } else {
+                      setMode("transfer")
+                    }
+                    setShowFabMenu(false);
+                  }}
+                >
+                  <span>{effectiveType === 'asset' ? 'Update Valuation' : 'Transfer Funds'}</span>
+                  <div className="fabIcon">{effectiveType === 'asset' ? '↑' : '⇄'}</div>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-        <button 
-          className={`accountFabMain ${showFabMenu ? 'active' : ''}`}
-          onClick={() => setShowFabMenu(!showFabMenu)}
-        >
-          {showFabMenu ? '✕' : '+'}
-        </button>
-      </div>
+          )}
+          <button 
+            className={`accountFabMain ${showFabMenu ? 'active' : ''}`}
+            onClick={() => setShowFabMenu(!showFabMenu)}
+          >
+            {showFabMenu ? '✕' : '+'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

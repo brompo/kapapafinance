@@ -329,41 +329,63 @@ export default function Accounts({
       const val = getAccountBalance(a); // Market Value
 
       if (type === "credit") {
-        liabilities += val;
-        totalDebt += val;
-        capitalDeployed -= val;
-      } else if (type === "loan") {
-        assets += val;
-        loanBook += val;
-        capitalDeployed += val;
-        invested += val;
-      } else if (type === "asset") {
-        assets += val;
-        const info = calculateAssetMetrics(a, accountTxns, 'asset');
-        capitalDeployed += (info.costBasis || 0);
-        invested += (info.costBasis || 0);
-        assetCost += (info.costBasis || 0);
-        assetValue += val;
-        totalRealizedGains += (info.realizedGain || 0);
-        // Classify as land or shares based on account name AND group name
-        const name = (a.name || '').toLowerCase();
-        const gName = (g?.name || '').toLowerCase();
-        const isLand = ['land', 'plot', 'property', 'shamba', 'farm', 'estate', 'real estate'].some(k => name.includes(k) || gName.includes(k));
-        if (isLand) {
-          landCapital += (info.costBasis || 0);
-          landValue += val;
-          landRealizedGains += (info.realizedGain || 0);
+        if (val >= 0) {
+          liabilities += val;
+          totalDebt += val;
+          capitalDeployed -= val;
         } else {
-          sharesCapital += (info.costBasis || 0);
-          sharesValue += val;
-          sharesRealizedGains += (info.realizedGain || 0);
+          assets += Math.abs(val);
+          capitalDeployed += Math.abs(val);
+        }
+      } else if (type === "loan") {
+        if (val >= 0) {
+          assets += val;
+          loanBook += val;
+          capitalDeployed += val;
+          invested += val;
+        } else {
+          liabilities += Math.abs(val);
+          totalDebt += Math.abs(val);
+          capitalDeployed -= Math.abs(val);
+        }
+      } else if (type === "asset") {
+        if (val >= 0) {
+          assets += val;
+          const info = calculateAssetMetrics(a, accountTxns, 'asset');
+          capitalDeployed += (info.costBasis || 0);
+          invested += (info.costBasis || 0);
+          assetCost += (info.costBasis || 0);
+          assetValue += val;
+          totalRealizedGains += (info.realizedGain || 0);
+          // Classify as land or shares based on account name AND group name
+          const name = (a.name || '').toLowerCase();
+          const gName = (g?.name || '').toLowerCase();
+          const isLand = ['land', 'plot', 'property', 'shamba', 'farm', 'estate', 'real estate'].some(k => name.includes(k) || gName.includes(k));
+          if (isLand) {
+            landCapital += (info.costBasis || 0);
+            landValue += val;
+            landRealizedGains += (info.realizedGain || 0);
+          } else {
+            sharesCapital += (info.costBasis || 0);
+            sharesValue += val;
+            sharesRealizedGains += (info.realizedGain || 0);
+          }
+        } else {
+          liabilities += Math.abs(val);
+          totalDebt += Math.abs(val);
         }
       } else {
         // Debit
-        assets += val;
+        if (val >= 0) {
+          assets += val;
+          capitalDeployed += val;
+          invested += val;
+        } else {
+          liabilities += Math.abs(val);
+          totalDebt += Math.abs(val);
+          capitalDeployed -= Math.abs(val);
+        }
         liquidCash += val;
-        capitalDeployed += val;
-        invested += val;
       }
     }
 
@@ -909,11 +931,11 @@ export default function Accounts({
             <div className="ovGrid">
               <div>
                 <div className="ovItemLabel">Assets</div>
-                <div className="ovItemValue">{fmtTZS(totals.assets)}</div>
+                <div className="ovItemValue" style={{ color: '#4ade80bd' }}>{fmtTZS(totals.assets)}</div>
               </div>
               <div>
                 <div className="ovItemLabel">Liabilities</div>
-                <div className="ovItemValue">{fmtTZS(totals.liabilities)}</div>
+                <div className="ovItemValue" style={{ color: '#ff7f50bd' }}>{fmtTZS(totals.liabilities)}</div>
               </div>
             </div>
           </div>

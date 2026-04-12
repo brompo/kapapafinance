@@ -2507,7 +2507,7 @@ function AccountDetail({
                     />
                   </div>
                   <div className="field">
-                    <label>Interest Rate (%)</label>
+                    <label>Interest Rate (% p.a.)</label>
                     <input
                       inputMode="decimal"
                       value={creditRate}
@@ -2847,7 +2847,7 @@ function AccountDetail({
                   </div>
                   {selectedTxn.kind === "credit" && (
                     <div className="field">
-                      <label>Interest Rate (%)</label>
+                      <label>Interest Rate (% p.a.)</label>
                       <input
                         inputMode="decimal"
                         value={editCreditRate}
@@ -3440,34 +3440,97 @@ function AccountDetail({
           {showFabMenu && (
             <div className="accountFabOverlay" onClick={() => setShowFabMenu(false)}>
               <div className="accountFabMenu" onClick={e => e.stopPropagation()}>
-                <button 
-                  className="accountFabItem btnGreen" 
-                  onClick={() => {
-                    setDirection("in");
-                    setMode("adjust");
-                    setSubAccountId(Array.isArray(account.subAccounts) && account.subAccounts.length ? account.subAccounts[0].id : "");
-                    setShowFabMenu(false);
-                  }}
-                >
-                  <span>Add Money</span>
-                  <div className="fabIcon">+</div>
-                </button>
-                <button 
-                  className="accountFabItem btnYellow" 
-                  onClick={() => {
-                    if (effectiveType === 'asset') {
-                      const info = calculateAssetMetrics(account, accountTxns, effectiveType)
-                      setValuationPrice(info.unitPrice || "")
-                      setShowValuationModal(true)
-                    } else {
-                      setMode("transfer")
-                    }
-                    setShowFabMenu(false);
-                  }}
-                >
-                  <span>{effectiveType === 'asset' ? 'Update Valuation' : 'Transfer Funds'}</span>
-                  <div className="fabIcon">{effectiveType === 'asset' ? '↑' : '⇄'}</div>
-                </button>
+                {/* Standard Debit/Wallet Actions */}
+                {(effectiveType === 'debit' || effectiveType === 'wallet') && (
+                  <>
+                    <button 
+                      className="accountFabItem btnGreen" 
+                      onClick={() => {
+                        setDirection("in");
+                        setMode("adjust");
+                        setSubAccountId(Array.isArray(account.subAccounts) && account.subAccounts.length ? account.subAccounts[0].id : "");
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>Add Money</span>
+                      <div className="fabIcon">+</div>
+                    </button>
+                    <button 
+                      className="accountFabItem btnYellow" 
+                      onClick={() => {
+                        setMode("transfer");
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>Transfer Funds</span>
+                      <div className="fabIcon">⇄</div>
+                    </button>
+                  </>
+                )}
+
+                {/* Asset Specific Actions */}
+                {effectiveType === 'asset' && (
+                  <>
+                    <button 
+                      className="accountFabItem btnGreen" 
+                      onClick={() => {
+                        setShowPurchaseModal(true);
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>Buy Asset</span>
+                      <div className="fabIcon">+</div>
+                    </button>
+                    <button 
+                      className="accountFabItem btnYellow" 
+                      onClick={() => {
+                        setShowSaleModal(true);
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>Sell Asset</span>
+                      <div className="fabIcon">−</div>
+                    </button>
+                    <button 
+                      className="accountFabItem btnYellow" 
+                      onClick={() => {
+                        const info = calculateAssetMetrics(account, accountTxns, effectiveType)
+                        setValuationPrice(info.unitPrice || "")
+                        setShowValuationModal(true)
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>Update Valuation</span>
+                      <div className="fabIcon">↑</div>
+                    </button>
+                  </>
+                )}
+
+                {/* Credit/Loan Specific Actions */}
+                {(effectiveType === 'credit' || effectiveType === 'loan') && (
+                  <>
+                    <button 
+                      className="accountFabItem btnGreen" 
+                      onClick={() => {
+                        setShowCreditModal(true);
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>{effectiveType === 'loan' ? 'Issue Loan' : 'Add Credit'}</span>
+                      <div className="fabIcon">+</div>
+                    </button>
+                    <button 
+                      className="accountFabItem btnYellow" 
+                      onClick={() => {
+                        setShowPaybackModal(true);
+                        setShowFabMenu(false);
+                      }}
+                    >
+                      <span>{effectiveType === 'loan' ? 'Receive Payback' : 'Pay Back'}</span>
+                      <div className="fabIcon">⇄</div>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}

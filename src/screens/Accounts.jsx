@@ -1367,16 +1367,16 @@ function AccountDetail({
   const [primaryTab, setPrimaryTab] = useState("activity") // activity | goals
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
   const isAnyModalOpen = !!(
-    mode || 
-    showAddPlanModal || 
-    showCreditModal || 
-    showPurchaseModal || 
-    showSaleModal || 
-    showValuationModal || 
-    showEditModal || 
-    showExportModal || 
-    showPaybackModal || 
-    selectedTxn || 
+    mode ||
+    showAddPlanModal ||
+    showCreditModal ||
+    showPurchaseModal ||
+    showSaleModal ||
+    showValuationModal ||
+    showEditModal ||
+    showExportModal ||
+    showPaybackModal ||
+    selectedTxn ||
     editingSubAccountId
   );
   const [showFabMenu, setShowFabMenu] = useState(false);
@@ -1800,7 +1800,7 @@ function AccountDetail({
 
         <div className="accHistoryCard">
           <div className="accHistoryHead" style={{ padding: '8px 12px' }}>
-             <div className="accHistoryTitle" style={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}>GOALS & TARGETS</div>
+            <div className="accHistoryTitle" style={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}>GOALS & TARGETS</div>
           </div>
           <div className="accHistoryBody">
             {plans.length === 0 ? (
@@ -2507,7 +2507,7 @@ function AccountDetail({
                     />
                   </div>
                   <div className="field">
-                    <label>Interest Rate (% p.a.)</label>
+                    <label>Annual Interest Rate (% p.a.)</label>
                     <input
                       inputMode="decimal"
                       value={creditRate}
@@ -2847,7 +2847,7 @@ function AccountDetail({
                   </div>
                   {selectedTxn.kind === "credit" && (
                     <div className="field">
-                      <label>Interest Rate (% p.a.)</label>
+                      <label>Annual Interest Rate (% p.a.)</label>
                       <input
                         inputMode="decimal"
                         value={editCreditRate}
@@ -3443,8 +3443,8 @@ function AccountDetail({
                 {/* Standard Debit/Wallet Actions */}
                 {(effectiveType === 'debit' || effectiveType === 'wallet') && (
                   <>
-                    <button 
-                      className="accountFabItem btnGreen" 
+                    <button
+                      className="accountFabItem btnGreen"
                       onClick={() => {
                         setDirection("in");
                         setMode("adjust");
@@ -3455,8 +3455,8 @@ function AccountDetail({
                       <span>Add Money</span>
                       <div className="fabIcon">+</div>
                     </button>
-                    <button 
-                      className="accountFabItem btnYellow" 
+                    <button
+                      className="accountFabItem btnYellow"
                       onClick={() => {
                         setMode("transfer");
                         setShowFabMenu(false);
@@ -3471,8 +3471,8 @@ function AccountDetail({
                 {/* Asset Specific Actions */}
                 {effectiveType === 'asset' && (
                   <>
-                    <button 
-                      className="accountFabItem btnGreen" 
+                    <button
+                      className="accountFabItem btnGreen"
                       onClick={() => {
                         setShowPurchaseModal(true);
                         setShowFabMenu(false);
@@ -3481,8 +3481,8 @@ function AccountDetail({
                       <span>Buy Asset</span>
                       <div className="fabIcon">+</div>
                     </button>
-                    <button 
-                      className="accountFabItem btnYellow" 
+                    <button
+                      className="accountFabItem btnYellow"
                       onClick={() => {
                         setShowSaleModal(true);
                         setShowFabMenu(false);
@@ -3491,8 +3491,8 @@ function AccountDetail({
                       <span>Sell Asset</span>
                       <div className="fabIcon">−</div>
                     </button>
-                    <button 
-                      className="accountFabItem btnYellow" 
+                    <button
+                      className="accountFabItem btnYellow"
                       onClick={() => {
                         const info = calculateAssetMetrics(account, accountTxns, effectiveType)
                         setValuationPrice(info.unitPrice || "")
@@ -3509,8 +3509,8 @@ function AccountDetail({
                 {/* Credit/Loan Specific Actions */}
                 {(effectiveType === 'credit' || effectiveType === 'loan') && (
                   <>
-                    <button 
-                      className="accountFabItem btnGreen" 
+                    <button
+                      className="accountFabItem btnGreen"
                       onClick={() => {
                         setShowCreditModal(true);
                         setShowFabMenu(false);
@@ -3519,8 +3519,8 @@ function AccountDetail({
                       <span>{effectiveType === 'loan' ? 'Issue Loan' : 'Add Credit'}</span>
                       <div className="fabIcon">+</div>
                     </button>
-                    <button 
-                      className="accountFabItem btnYellow" 
+                    <button
+                      className="accountFabItem btnYellow"
                       onClick={() => {
                         setShowPaybackModal(true);
                         setShowFabMenu(false);
@@ -3534,7 +3534,7 @@ function AccountDetail({
               </div>
             </div>
           )}
-          <button 
+          <button
             className={`accountFabMain ${showFabMenu ? 'active' : ''}`}
             onClick={() => setShowFabMenu(!showFabMenu)}
           >

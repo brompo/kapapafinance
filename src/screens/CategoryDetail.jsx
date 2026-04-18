@@ -57,6 +57,16 @@ export function CategoryDetail({
   const [reimburseAccountId, setReimburseAccountId] = useState('')
   const [reimburseSubAccountId, setReimburseSubAccountId] = useState('')
   const [reimburseDate, setReimburseDate] = useState(todayISO())
+  const [reimburseError, setReimburseError] = useState(false)
+
+  const handleOpenReimburse = (t) => {
+    const alreadyReimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+    setReimburseTxn(t)
+    setReimburseAmount(String(Number(t.amount || 0) - alreadyReimbursed))
+    setReimburseDate(todayISO())
+    setReimburseError(false)
+    setShowReimburseModal(true)
+  }
   const [isSaving, setIsSaving] = useState(false)
 
   const [isSelectMode, setIsSelectMode] = useState(false)
@@ -66,6 +76,10 @@ export function CategoryDetail({
   const selectedAccount = accounts.find(a => a.id === accountId)
   const showSubAccountSelect = selectedAccount && Array.isArray(selectedAccount.subAccounts) && selectedAccount.subAccounts.length > 0
   const [selectedTxn, setSelectedTxn] = useState(null)
+  
+  const reimburseAccount = accounts.find(a => a.id === reimburseAccountId)
+  const showReimburseSubSelect = reimburseAccount && Array.isArray(reimburseAccount.subAccounts) && reimburseAccount.subAccounts.length > 0
+  
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState(category.name)
   const [editColor, setEditColor] = useState(meta?.color || '')
@@ -177,12 +191,8 @@ export function CategoryDetail({
           setSelectedTxn(null)
         }}
         onReimburse={selectedTxn.type === 'expense' ? () => {
-          const t = selectedTxn.raw
+          handleOpenReimburse(selectedTxn.raw)
           setSelectedTxn(null)
-          setReimburseTxn(t)
-          const alreadyReimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
-          setReimburseAmount(String(Number(t.amount || 0) - alreadyReimbursed))
-          setShowReimburseModal(true)
         } : null}
       />
     )
@@ -509,7 +519,8 @@ export function CategoryDetail({
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
-                      transition: 'all 0.2s ease'
+                      transition: 'all 0.2s ease',
+                      position: 'relative'
                     }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: 16,
@@ -525,6 +536,11 @@ export function CategoryDetail({
                           {new Date(t.date).getDate()} {new Date(t.date).toLocaleString('default', { month: 'short' })}
                           {t.accountId && ` • ${accounts.find(a => a.id === t.accountId)?.name}`}
                         </div>
+                        {t.reimbursedBy && t.reimbursedBy.length > 0 && (
+                          <div className="reimbursedBadge" style={{ fontSize: 9, marginTop: 4 }}>
+                            ✓ {fmtCompact(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))} Reimbursed
+                          </div>
+                        )}
                       </div>
                       <div className={`catHistoryAmount ${t.type === 'income' ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
                         {t.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
@@ -541,6 +557,118 @@ export function CategoryDetail({
               No {txnTab} transactions found.
             </div>
           )}
+        </div>
+      )}
+
+      {showReimburseModal && reimburseTxn && (
+        <div className="modalBackdrop" onClick={() => setShowReimburseModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Reimburse</div>
+            <div className="reimburseOriginal">
+              <div className="reimburseOriginalLabel">Original Expense</div>
+              <div className="reimburseOriginalInfo">
+                <span>{reimburseTxn.note || reimburseTxn.category || 'Expense'}</span>
+                <span className="reimburseOriginalAmt">{fmtTZS(reimburseTxn.amount)}</span>
+              </div>
+              {reimburseTxn.reimbursedBy && reimburseTxn.reimbursedBy.length > 0 && (
+                <div className="reimburseAlready" style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                  Already reimbursed: {fmtTZS(reimburseTxn.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                </div>
+              )}
+            </div>
+            <div className="accQuickForm" style={{ marginTop: 15, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                  Reimbursement Amount (TZS) — Max: {fmtTZS(Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0))}
+                </label>
+                <input
+                  inputMode="decimal"
+                  value={reimburseAmount}
+                  onChange={e => {
+                    const max = Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                    const val = Number(e.target.value.replace(/,/g, '') || 0)
+                    if (val > max) setReimburseAmount(String(max))
+                    else setReimburseAmount(e.target.value)
+                  }}
+                  className="input"
+                  placeholder="e.g. 10000"
+                />
+              </div>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Date</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={reimburseDate}
+                  onChange={e => setReimburseDate(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: reimburseError ? '#ef4444' : '#64748b' }}>
+                  Receive Into Account {reimburseError ? '— Required' : ''}
+                </label>
+                <select
+                  className="input"
+                  value={reimburseAccountId}
+                  onChange={e => { setReimburseAccountId(e.target.value); setReimburseError(false) }}
+                  style={{ 
+                    ...(reimburseError ? { borderColor: '#ef4444' } : {}),
+                    appearance: 'auto',
+                    paddingRight: '30px'
+                  }}
+                >
+                  <option value="">Select account</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              {showReimburseSubSelect && (
+                <div className="field">
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Sub-account</label>
+                  <select 
+                    className="input" 
+                    value={reimburseSubAccountId} 
+                    onChange={e => setReimburseSubAccountId(e.target.value)}
+                    style={{ appearance: 'auto', paddingRight: '30px' }}
+                  >
+                    <option value="">Select sub-account</option>
+                    {reimburseAccount.subAccounts.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <button className="pillBtn" type="button" onClick={() => setShowReimburseModal(false)} style={{ flex: 1, justifyContent: 'center' }}>
+                  Cancel
+                </button>
+                <button
+                  className="pillBtn primary"
+                  type="button"
+                  onClick={() => {
+                    if (!reimburseAccountId) {
+                      setReimburseError(true)
+                      return
+                    }
+                    addReimbursement({
+                      originalTxnId: reimburseTxn.id,
+                      amount: reimburseAmount.replace(/,/g, ''),
+                      accountId: reimburseAccountId,
+                      subAccountId: reimburseSubAccountId,
+                      date: reimburseDate
+                    })
+                    setReimburseError(false)
+                    setShowReimburseModal(false)
+                    setReimburseTxn(null)
+                  }}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Save Reimbursement
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

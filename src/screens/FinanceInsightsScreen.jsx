@@ -7,7 +7,7 @@ export function FinanceInsightsScreen() {
   const { 
     activeLedger, accounts, accountTxns, txns, clients,
     expenseCats, incomeCats, settings, show, updateTxn, delTxn,
-    activeLedgerId, ALL_LEDGERS_ID, setShowLedgerPicker
+    activeLedgerId, ALL_LEDGERS_ID, setShowLedgerPicker, addReimbursement
   } = useAppContext()
 
   const [txnsMainTab, setTxnsMainTab] = useState('activity') 
@@ -15,9 +15,26 @@ export function FinanceInsightsScreen() {
   const [statPeriod, setStatPeriod] = useState(() => new Date().toISOString().slice(0, 4))
   const [insightTab, setInsightTab] = useState('cashflow')
   const [monthlyViewMode, setMonthlyViewMode] = useState('actual')
-  const [selectedTxn, setSelectedTxn] = useState(null)
-  const [showGranularityMenu, setShowGranularityMenu] = useState(false)
-  const [breakdownModal, setBreakdownModal] = useState(null) // { month, type, title }
+  const [infoModal, setInfoModal] = useState(null)
+  
+  // Reimbursement States
+  const [showReimburseModal, setShowReimburseModal] = useState(false)
+  const [reimburseTxn, setReimburseTxn] = useState(null)
+  const [reimburseAmount, setReimburseAmount] = useState('')
+  const [reimburseAccountId, setReimburseAccountId] = useState('')
+  const [reimburseSubAccountId, setReimburseSubAccountId] = useState('')
+  const [reimburseDate, setReimburseDate] = useState(todayISO())
+  const [reimburseError, setReimburseError] = useState(false)
+  
+  // Clear amount when opening modal but keep the default in state
+  const handleOpenReimburse = (t) => {
+    const alreadyReimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+    const val = String(Number(t.amount || 0) - alreadyReimbursed)
+    setReimburseTxn(t)
+    setReimburseAmount(val)
+    setReimburseDate(todayISO())
+    setShowReimburseModal(true)
+  }
 
   const statYear = Number(statPeriod.slice(0, 4))
   const groupById = useMemo(() => new Map((activeLedger.groups || []).map(g => [g.id, g])), [activeLedger.groups])
@@ -329,7 +346,8 @@ export function FinanceInsightsScreen() {
                 <div key={t.id} onClick={() => setSelectedTxn(t)} style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '10px 16px', borderBottom: i === data.items.length - 1 ? 'none' : '1px solid #f8fafc',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  position: 'relative'
                 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {/* Circle Icon */}
@@ -349,6 +367,11 @@ export function FinanceInsightsScreen() {
                         {t.raw?.recurring && ` • (${t.raw.recurring.current} of ${t.raw.recurring.total})`}
                         {!t.raw?.recurring && t.sub && ` • ${t.sub}`}
                       </div>
+                      {t.raw?.reimbursedBy && t.raw.reimbursedBy.length > 0 && (
+                        <div className="reimbursedBadge" style={{ fontSize: 9, marginTop: 4 }}>
+                          ✓ {fmtCompact(t.raw.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))} Reimbursed
+                        </div>
+                      )}
                     </div>
                   </div>
                   {/* Amount */}
@@ -428,7 +451,22 @@ export function FinanceInsightsScreen() {
   }
 
   if (selectedTxn) {
-    return <TransactionDetail txn={selectedTxn.raw} onClose={() => setSelectedTxn(null)} onSave={updateTxn} onDelete={delTxn} accounts={accounts} expenseCats={expenseCats} incomeCats={incomeCats} clients={clients} />
+    return <TransactionDetail
+      txn={selectedTxn.raw}
+      onClose={() => setSelectedTxn(null)}
+      onSave={updateTxn}
+      onDelete={delTxn}
+      accounts={accounts}
+      expenseCats={expenseCats}
+      incomeCats={incomeCats}
+      clients={clients}
+      settings={settings}
+      show={show}
+      onReimburse={selectedTxn.type === 'expense' ? () => {
+        handleOpenReimburse(selectedTxn.raw)
+        setSelectedTxn(null)
+      } : null}
+    />
   }
 
   return (
@@ -565,6 +603,119 @@ export function FinanceInsightsScreen() {
       )}
       {insightTab === 'summary' && <div style={{ padding: 15 }}><CategoryBreakdown /></div>}
       {breakdownModal && <BreakdownModal {...breakdownModal} />}
+
+      {showReimburseModal && reimburseTxn && (
+        <div className="modalBackdrop" onClick={() => setShowReimburseModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Reimburse</div>
+            <div className="reimburseOriginal">
+              <div className="reimburseOriginalLabel">Original Expense</div>
+              <div className="reimburseOriginalInfo">
+                <span>{reimburseTxn.note || reimburseTxn.category || 'Expense'}</span>
+                <span className="reimburseOriginalAmt">{fmtTZS(reimburseTxn.amount)}</span>
+              </div>
+              {reimburseTxn.reimbursedBy && reimburseTxn.reimbursedBy.length > 0 && (
+                <div className="reimburseAlready" style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                  Already reimbursed: {fmtTZS(reimburseTxn.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))}
+                </div>
+              )}
+            </div>
+            <div className="accQuickForm" style={{ marginTop: 15, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                  Reimbursement Amount (TZS) — Max: {fmtTZS(Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0))}
+                </label>
+                <input
+                  inputMode="decimal"
+                  value={reimburseAmount}
+                  onChange={e => {
+                    const max = Number(reimburseTxn.amount || 0) - (reimburseTxn.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                    const val = Number(e.target.value.replace(/,/g, '') || 0)
+                    if (val > max) setReimburseAmount(String(max))
+                    else setReimburseAmount(e.target.value)
+                  }}
+                  className="input"
+                  placeholder="e.g. 10000"
+                />
+              </div>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Date</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={reimburseDate}
+                  onChange={e => setReimburseDate(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label style={{ fontSize: 11, fontWeight: 600, color: reimburseError ? '#ef4444' : '#64748b' }}>
+                  Receive Into Account {reimburseError ? '— Required' : ''}
+                </label>
+                <select
+                  className="input"
+                  value={reimburseAccountId}
+                  onChange={e => { setReimburseAccountId(e.target.value); setReimburseError(false) }}
+                  style={{ 
+                    ...(reimburseError ? { borderColor: '#ef4444' } : {}),
+                    appearance: 'auto',
+                    paddingRight: '30px'
+                  }}
+                >
+                  <option value="">Select account</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                const ra = accounts.find(a => a.id === reimburseAccountId)
+                if (ra && Array.isArray(ra.subAccounts) && ra.subAccounts.length > 0) {
+                  return (
+                    <div className="field">
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Sub-account</label>
+                      <select className="input" value={reimburseSubAccountId} onChange={e => setReimburseSubAccountId(e.target.value)}>
+                        <option value="">Select sub-account</option>
+                        {ra.subAccounts.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <button className="pillBtn" type="button" onClick={() => setShowReimburseModal(false)} style={{ flex: 1, justifyContent: 'center' }}>
+                  Cancel
+                </button>
+                <button
+                  className="pillBtn primary"
+                  type="button"
+                  onClick={() => {
+                    if (!reimburseAccountId) {
+                      setReimburseError(true)
+                      return
+                    }
+                    addReimbursement({
+                      originalTxnId: reimburseTxn.id,
+                      amount: reimburseAmount.replace(/,/g, ''),
+                      accountId: reimburseAccountId,
+                      subAccountId: reimburseSubAccountId,
+                      date: reimburseDate
+                    })
+                    setReimburseError(false)
+                    setShowReimburseModal(false)
+                    setReimburseTxn(null)
+                  }}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Save Reimbursement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

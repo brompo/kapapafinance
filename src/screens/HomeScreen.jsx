@@ -171,11 +171,11 @@ export function HomeScreen() {
       {/* Ledger picker now global in App.jsx */}
 
       {[
-        { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: [...incomeTotals.values()].reduce((s,v)=>s+v, 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
-        { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: [...expenseTotals.values()].reduce((s,v)=>s+v, 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
-        { title: 'Allocations', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: [...allocationTotals.values()].reduce((s,v)=>s+v, 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
-        { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: [...cosTotals.values()].reduce((s,v)=>s+v, 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
-        { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: [...oppsTotals.values()].reduce((s,v)=>s+v, 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
+        { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
+        { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
+        { title: 'Allocations', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
+        { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
+        { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
       ].map(sec => {
         if (sec.list.length === 0 && (sec.type === 'cos' || sec.type === 'opps' || sec.type === 'allocation')) return null;
         return (

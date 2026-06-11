@@ -17,6 +17,11 @@ export function FinanceInsightsScreen() {
   const [monthlyViewMode, setMonthlyViewMode] = useState('actual')
   const [infoModal, setInfoModal] = useState(null)
   
+  // Screen States
+  const [selectedTxn, setSelectedTxn] = useState(null)
+  const [breakdownModal, setBreakdownModal] = useState(null)
+  const [showGranularityMenu, setShowGranularityMenu] = useState(false)
+
   // Reimbursement States
   const [showReimburseModal, setShowReimburseModal] = useState(false)
   const [reimburseTxn, setReimburseTxn] = useState(null)

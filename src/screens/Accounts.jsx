@@ -1330,6 +1330,7 @@ function AccountDetail({
   const [purchaseFee, setPurchaseFee] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [purchaseFromAccountId, setPurchaseFromAccountId] = useState("");
+  const [purchaseFromSubAccountId, setPurchaseFromSubAccountId] = useState("");
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [saleUnit, setSaleUnit] = useState("");
   const [saleQty, setSaleQty] = useState("");
@@ -1596,6 +1597,12 @@ function AccountDetail({
       setError("Select the account to pay from.");
       return;
     }
+    const fromAcct = accounts.find(a => a.id === purchaseFromAccountId);
+    const fromSubs = Array.isArray(fromAcct?.subAccounts) ? fromAcct.subAccounts : [];
+    if (fromSubs.length && !purchaseFromSubAccountId) {
+      setError("Select the sub-account to pay from.");
+      return;
+    }
     const unitPrice = total / qty;
     setError("");
     await onAddAccountTxn({
@@ -1610,6 +1617,7 @@ function AccountDetail({
       unitPrice,
       fee,
       fromId: purchaseFromAccountId,
+      fromSubAccountId: purchaseFromSubAccountId || null,
     });
     setPurchaseUnit("");
     setPurchaseQty("");
@@ -1617,6 +1625,7 @@ function AccountDetail({
     setPurchaseFee("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
     setPurchaseFromAccountId("");
+    setPurchaseFromSubAccountId("");
     setShowPurchaseModal(false);
   }
 
@@ -2634,7 +2643,7 @@ function AccountDetail({
                     <label>Pay From</label>
                     <select
                       value={purchaseFromAccountId}
-                      onChange={(e) => setPurchaseFromAccountId(e.target.value)}
+                      onChange={(e) => { setPurchaseFromAccountId(e.target.value); setPurchaseFromSubAccountId(""); }}
                     >
                       <option value="">— Select account —</option>
                       {accounts
@@ -2647,6 +2656,25 @@ function AccountDetail({
                         ))}
                     </select>
                   </div>
+                  {(() => {
+                    const fromAcct = accounts.find(a => a.id === purchaseFromAccountId);
+                    const fromSubs = Array.isArray(fromAcct?.subAccounts) ? fromAcct.subAccounts : [];
+                    if (!fromSubs.length) return null;
+                    return (
+                      <div className="field">
+                        <label>Sub-account</label>
+                        <select
+                          value={purchaseFromSubAccountId}
+                          onChange={(e) => setPurchaseFromSubAccountId(e.target.value)}
+                        >
+                          <option value="">— Select sub-account —</option>
+                          {fromSubs.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })()}
                   <div className="field">
                     <label>Units</label>
                     <input

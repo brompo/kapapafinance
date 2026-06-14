@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "2.1.4",
+        date: "2026-06-14",
+        changes: [
+            'Asset Purchase: Fixed sub-account deduction — when paying from an account with sub-accounts, a sub-account picker now appears so the correct balance is deducted.',
+        ]
+    },
+    {
         version: "2.1.3",
         date: "2026-06-14",
         changes: [

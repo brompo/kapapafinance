@@ -132,14 +132,14 @@ export function calculateAssetMetrics(account, accountTxns, groupType, dateLimit
   const latestPurchase = purchases.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
   const latestSale = sales.reduce((acc, t) => (!acc || t.date >= acc.date ? t : acc), null);
 
-  const unit = latestVal?.unit || latestSale?.unit || latestPurchase?.unit || "";
-  const unitPrice = Number(
-    latestVal?.unitPrice ||
-    latestSale?.unitPrice ||
-    latestPurchase?.unitPrice ||
-    avgPrice ||
-    0
+  // Pick the most recent price event across valuations, sales, and purchases
+  const priceEvents = [latestVal, latestSale, latestPurchase].filter(Boolean);
+  const latestPriceEvent = priceEvents.reduce(
+    (best, t) => (!best || t.date > best.date ? t : best),
+    null
   );
+  const unit = latestPriceEvent?.unit || "";
+  const unitPrice = Number(latestPriceEvent?.unitPrice || avgPrice || 0);
 
   return {
     hasData: true,

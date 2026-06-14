@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "2.1.5",
+        date: "2026-06-14",
+        changes: [
+            'Assets: Fixed market value using stale unit price — now uses the most recent price event (valuation, sale, or purchase) by date instead of always preferring valuations.',
+        ]
+    },
+    {
         version: "2.1.4",
         date: "2026-06-14",
         changes: [

@@ -612,13 +612,13 @@ export function AppProvider({ children }) {
   }
 
   async function addAccountTxn(params) {
-    const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice, fee, fromId, fromSubAccountId } = params
+    const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice, fee, fromId, fromSubAccountId, creditToAccountId, creditToSubAccountId, creditRate, creditType, interestStartDate } = params
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')
 
     const tid = uid()
     const entry = {
-      id: fromId ? `txn-${tid}-in` : `txn-${tid}`,
+      id: (fromId || creditToAccountId) ? `txn-${tid}-in` : `txn-${tid}`,
       accountId,
       subAccountId: subAccountId || null,
       amount: amt,
@@ -629,7 +629,14 @@ export function AppProvider({ children }) {
       unit,
       quantity,
       unitPrice,
-      fee: fee || undefined
+      fee: fee || undefined,
+      ...(kind === 'credit' && {
+        creditRate,
+        creditType,
+        interestStartDate: interestStartDate || null,
+        creditToAccountId: creditToAccountId || null,
+        creditToSubAccountId: creditToSubAccountId || null,
+      }),
     }
 
     let nextAccounts = applyAccountDelta(allAccounts, accountId, subAccountId, direction === 'in' ? amt : -amt)
@@ -649,6 +656,20 @@ export function AppProvider({ children }) {
       }
       nextAccounts = applyAccountDelta(nextAccounts, fromId, fromSubAccountId, -amt)
       newTxns = [entry, outEntry, ...allAccountTxns]
+    } else if (creditToAccountId) {
+      const inEntry = {
+        id: `txn-${tid}-out`,
+        accountId: creditToAccountId,
+        subAccountId: creditToSubAccountId || null,
+        amount: amt,
+        direction: 'in',
+        note: entry.note,
+        date: entry.date,
+        kind: 'txn',
+        relatedAccountId: accountId
+      }
+      nextAccounts = applyAccountDelta(nextAccounts, creditToAccountId, creditToSubAccountId, amt)
+      newTxns = [entry, inEntry, ...allAccountTxns]
     }
 
     persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: newTxns })

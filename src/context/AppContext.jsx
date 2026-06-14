@@ -646,7 +646,7 @@ export function AppProvider({ children }) {
 
     const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice, fee, fromId, fromSubAccountId, creditToAccountId, creditToSubAccountId, creditRate, creditType, interestStartDate } = params
     const amt = Number(amount || 0)
-    if (!amt) return show('Enter amount.')
+    if (!amt && kind !== 'valuation') return show('Enter amount.')
 
     const tid = uid()
     const entry = {

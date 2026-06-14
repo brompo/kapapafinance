@@ -2990,43 +2990,76 @@ function AccountDetail({
             const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0);
             return Number(t.amount || 0) - alreadyPaid > 0;
           });
+          const subAccountsWithBalance = (Array.isArray(account.subAccounts) ? account.subAccounts : [])
+            .map(s => ({ ...s, balance: getAccountBalance({ ...account, subAccounts: [], id: s.id, balance: s.balance }) }))
+            .filter(s => Number(s.balance || 0) > 0);
+          const hasAnything = outstanding.length > 0 || subAccountsWithBalance.length > 0;
+          const openPayback = (txn) => {
+            setPaybackTxn(txn);
+            setPaybackAmount(String(txn.amount));
+            setPaybackAccountId('');
+            setPaybackSubAccountId('');
+            setPaybackDate(new Date().toISOString().slice(0, 10));
+            setPaybackError(false);
+            setShowPaybackPickerModal(false);
+            setShowPaybackModal(true);
+          };
           return (
             <div className="modalBackdrop" onClick={() => setShowPaybackPickerModal(false)}>
               <div className="modalCard" onClick={e => e.stopPropagation()}>
                 <div className="modalTitle">{effectiveType === 'loan' ? 'Select Loan to Receive Payback' : 'Select Credit to Pay Back'}</div>
                 <div className="accQuickForm">
-                  {outstanding.length === 0 ? (
+                  {!hasAnything && (
                     <div style={{ textAlign: 'center', padding: '16px 0', color: '#888' }}>No outstanding {effectiveType === 'loan' ? 'loans' : 'credits'} to pay back.</div>
-                  ) : (
-                    outstanding.map(t => {
-                      const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0);
-                      const remaining = Number(t.amount || 0) - alreadyPaid;
-                      return (
+                  )}
+                  {outstanding.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, color: '#888', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Individual Loans</div>
+                      {outstanding.map(t => {
+                        const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+                        const remaining = Number(t.amount || 0) - alreadyPaid;
+                        return (
+                          <div
+                            key={t.id}
+                            className="accHistoryRow"
+                            style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 12px', marginBottom: 6, background: '#f5f5f5' }}
+                            onClick={() => openPayback({ ...t, amount: remaining })}
+                          >
+                            <div className="accHistoryInfo">
+                              <div className="accHistoryTitleRow"><span>{t.note || 'Loan'}</span></div>
+                              {alreadyPaid > 0 && <div className="accHistoryMeta">Paid: {fmtTZS(alreadyPaid)}</div>}
+                            </div>
+                            <div className="accHistoryAmount pos">{fmtTZS(remaining)} remaining</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                  {subAccountsWithBalance.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, color: '#888', marginTop: outstanding.length > 0 ? 12 : 0, marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Settle Sub-account</div>
+                      {subAccountsWithBalance.map(s => (
                         <div
-                          key={t.id}
+                          key={s.id}
                           className="accHistoryRow"
                           style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 12px', marginBottom: 6, background: '#f5f5f5' }}
-                          onClick={() => {
-                            setPaybackTxn(t);
-                            setPaybackAmount(String(remaining));
-                            setPaybackAccountId('');
-                            setPaybackSubAccountId('');
-                            setPaybackDate(new Date().toISOString().slice(0, 10));
-                            setPaybackError(false);
-                            setShowPaybackPickerModal(false);
-                            setShowPaybackModal(true);
-                          }}
+                          onClick={() => openPayback({
+                            id: null,
+                            note: s.name,
+                            amount: Number(s.balance || 0),
+                            subAccountId: s.id,
+                            paidBack: [],
+                            isSubAccountSettlement: true,
+                          })}
                         >
                           <div className="accHistoryInfo">
-                            <div className="accHistoryTitleRow"><span>{t.note || 'Loan'}</span></div>
-                            {alreadyPaid > 0 && (
-                              <div className="accHistoryMeta">Paid: {fmtTZS(alreadyPaid)}</div>
-                            )}
+                            <div className="accHistoryTitleRow"><span>{s.name}</span></div>
+                            <div className="accHistoryMeta">Full sub-account balance</div>
                           </div>
-                          <div className="accHistoryAmount pos">{fmtTZS(remaining)} remaining</div>
+                          <div className="accHistoryAmount pos">{fmtTZS(Number(s.balance || 0))} outstanding</div>
                         </div>
-                      );
-                    })
+                      ))}
+                    </>
                   )}
                   <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
                     <button className="btn" type="button" onClick={() => setShowPaybackPickerModal(false)}>Cancel</button>
@@ -3042,12 +3075,12 @@ function AccountDetail({
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
               <div className="modalTitle">Receive Money</div>
               <div className="reimburseOriginal">
-                <div className="reimburseOriginalLabel">Original Transaction</div>
+                <div className="reimburseOriginalLabel">{paybackTxn.isSubAccountSettlement ? 'Sub-account Balance' : 'Original Transaction'}</div>
                 <div className="reimburseOriginalInfo">
                   <span>{paybackTxn.note || 'Loan'}</span>
                   <span className="reimburseOriginalAmt" style={{ color: '#2fbf71' }}>+{fmtTZS(paybackTxn.amount)}</span>
                 </div>
-                {paybackTxn.paidBack && paybackTxn.paidBack.length > 0 && (
+                {!paybackTxn.isSubAccountSettlement && paybackTxn.paidBack && paybackTxn.paidBack.length > 0 && (
                   <div className="reimburseAlready">
                     Already paid back: {fmtTZS(paybackTxn.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
                   </div>
@@ -3124,22 +3157,33 @@ function AccountDetail({
                       const amt = Number(paybackAmount || 0)
                       if (!amt || amt <= 0) { onToast?.('Enter a valid amount.'); return }
                       if (!paybackAccountId) { setPaybackError(true); return }
-                      const alreadyPaid = (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
-                      const remaining = Number(paybackTxn.amount || 0) - alreadyPaid
-                      if (amt > remaining) { onToast?.(`Cannot pay back more than ${fmtTZS(remaining)}.`); return }
 
-                      const updatedPaidBack = [...(paybackTxn.paidBack || []), { amount: amt, date: paybackDate }]
-
-                      await onTransferAccount({
-                        fromId: account.id,
-                        toId: paybackAccountId,
-                        amount: amt,
-                        note: `Payback: ${paybackTxn.note || 'Loan'}`,
-                        fromSubAccountId: paybackTxn.subAccountId || null,
-                        toSubAccountId: paybackSubAccountId || null,
-                        date: paybackDate,
-                        patchTxn: { id: paybackTxn.id, fields: { paidBack: updatedPaidBack } }
-                      })
+                      if (paybackTxn.isSubAccountSettlement) {
+                        await onTransferAccount({
+                          fromId: account.id,
+                          toId: paybackAccountId,
+                          amount: amt,
+                          note: `Payback: ${paybackTxn.note}`,
+                          fromSubAccountId: paybackTxn.subAccountId || null,
+                          toSubAccountId: paybackSubAccountId || null,
+                          date: paybackDate,
+                        })
+                      } else {
+                        const alreadyPaid = (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                        const remaining = Number(paybackTxn.amount || 0) - alreadyPaid
+                        if (amt > remaining) { onToast?.(`Cannot pay back more than ${fmtTZS(remaining)}.`); return }
+                        const updatedPaidBack = [...(paybackTxn.paidBack || []), { amount: amt, date: paybackDate }]
+                        await onTransferAccount({
+                          fromId: account.id,
+                          toId: paybackAccountId,
+                          amount: amt,
+                          note: `Payback: ${paybackTxn.note || 'Loan'}`,
+                          fromSubAccountId: paybackTxn.subAccountId || null,
+                          toSubAccountId: paybackSubAccountId || null,
+                          date: paybackDate,
+                          patchTxn: { id: paybackTxn.id, fields: { paidBack: updatedPaidBack } }
+                        })
+                      }
 
                       setShowPaybackModal(false)
                       setPaybackTxn(null)

@@ -36,6 +36,7 @@ export default function Accounts({
   onAddAccountTxn,
   onIssueLoan,
   onTransferAccount,
+  onPayCreditBack,
   onUpdateAccountTxn,
   onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
@@ -754,6 +755,7 @@ export default function Accounts({
         onAddAccountTxn={onAddAccountTxn}
         onIssueLoan={onIssueLoan}
         onTransferAccount={onTransferAccount}
+        onPayCreditBack={onPayCreditBack}
         onUpsertAccount={onUpsertAccount}
         onDeleteAccount={onDeleteAccount}
         onUpdateAccountTxn={onUpdateAccountTxn}
@@ -1278,6 +1280,7 @@ function AccountDetail({
   onAddAccountTxn,
   onIssueLoan,
   onTransferAccount,
+  onPayCreditBack,
   onUpsertAccount,
   onDeleteAccount,
   onUpdateAccountTxn,
@@ -3125,7 +3128,7 @@ function AccountDetail({
         {showPaybackModal && paybackTxn && (
           <div className="modalBackdrop" onClick={() => setShowPaybackModal(false)}>
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <div className="modalTitle">Receive Money</div>
+              <div className="modalTitle">{effectiveType === 'credit' ? 'Pay Back' : 'Receive Money'}</div>
               <div className="reimburseOriginal">
                 <div className="reimburseOriginalLabel">{paybackTxn.isSubAccountSettlement ? 'Sub-account Balance' : 'Original Transaction'}</div>
                 <div className="reimburseOriginalInfo">
@@ -3162,7 +3165,7 @@ function AccountDetail({
                   />
                 </div>
                 <div className="field">
-                  <label style={paybackError ? { color: '#e24b4b' } : undefined}>Account To Receive Money {paybackError ? '— Required' : ''}</label>
+                  <label style={paybackError ? { color: '#e24b4b' } : undefined}>{effectiveType === 'credit' ? 'Account To Pay From' : 'Account To Receive Money'} {paybackError ? '— Required' : ''}</label>
                   <select
                     value={paybackAccountId}
                     onChange={e => {
@@ -3219,6 +3222,21 @@ function AccountDetail({
                           fromSubAccountId: paybackTxn.subAccountId || null,
                           toSubAccountId: paybackSubAccountId || null,
                           date: paybackDate,
+                        })
+                      } else if (effectiveType === 'credit') {
+                        const alreadyPaid = (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+                        const remaining = Number(paybackTxn.amount || 0) - alreadyPaid
+                        if (amt > remaining) { onToast?.(`Cannot pay back more than ${fmtTZS(remaining)}.`); return }
+                        const updatedPaidBack = [...(paybackTxn.paidBack || []), { amount: amt, date: paybackDate }]
+                        await onPayCreditBack({
+                          creditAccountId: account.id,
+                          creditSubAccountId: paybackTxn.subAccountId || null,
+                          fromAccountId: paybackAccountId,
+                          fromSubAccountId: paybackSubAccountId || null,
+                          amount: amt,
+                          note: `Payback: ${paybackTxn.note || 'Credit'}`,
+                          date: paybackDate,
+                          patchTxn: { id: paybackTxn.id, fields: { paidBack: updatedPaidBack } }
                         })
                       } else {
                         const alreadyPaid = (paybackTxn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0)

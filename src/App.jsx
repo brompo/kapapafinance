@@ -16,7 +16,7 @@ function VaultApp() {
     activeLedger, accounts, allAccountTxns, txns, clients,
     ledgers, focusAccountId, settings, setFocusAccountId,
     show, upsertAccount, deleteAccount, addAccountTxn, issueLoan,
-    transferAccount, updateAccountTxn, updateAccountTxnMeta,
+    transferAccount, payCreditBack, updateAccountTxn, updateAccountTxnMeta,
     deleteAccountTxn, updateAccountGroups, updateAccounts,
     updateSettings, handleSwitchLedgerToAccounts, setShowLedgerPicker,
     showLedgerPicker, handleSelectLedger, handleAddPersonalLedger, handleAddBusinessLedger,
@@ -58,6 +58,7 @@ function VaultApp() {
             onAddAccountTxn={addAccountTxn}
             onIssueLoan={issueLoan}
             onTransferAccount={transferAccount}
+            onPayCreditBack={payCreditBack}
             onUpdateAccountTxn={updateAccountTxn}
             onToast={show}
             onSwitchLedger={handleSwitchLedgerToAccounts}

@@ -754,6 +754,45 @@ export function AppProvider({ children }) {
     show('Transfer completed.')
   }
 
+  async function payCreditBack({ creditAccountId, creditSubAccountId, fromAccountId, fromSubAccountId, amount, note, date, patchTxn }) {
+    const amt = Number(amount || 0)
+    if (!amt) return show('Enter amount.')
+
+    const tid = uid()
+    const creditOutEntry = {
+      id: `txn-${tid}-credit`,
+      accountId: creditAccountId,
+      subAccountId: creditSubAccountId || null,
+      amount: amt,
+      direction: 'out',
+      note: note || 'Credit payback',
+      date: date || todayISO(),
+      kind: 'txn',
+      relatedAccountId: fromAccountId,
+    }
+    const walletOutEntry = {
+      id: `txn-${tid}-out`,
+      accountId: fromAccountId,
+      subAccountId: fromSubAccountId || null,
+      amount: amt,
+      direction: 'out',
+      note: note || 'Credit payback',
+      date: date || todayISO(),
+      kind: 'txn',
+      relatedAccountId: creditAccountId,
+    }
+
+    let nextAccounts = applyAccountDelta(allAccounts, creditAccountId, creditSubAccountId, -amt)
+    nextAccounts = applyAccountDelta(nextAccounts, fromAccountId, fromSubAccountId, -amt)
+
+    const baseTxns = patchTxn
+      ? allAccountTxns.map(t => t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t)
+      : allAccountTxns
+
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [creditOutEntry, walletOutEntry, ...baseTxns] })
+    show('Payback saved.')
+  }
+
   async function updateAccountTxn(original, next) {
     const oldDelta = original.direction === 'in' ? Number(original.amount || 0) : -Number(original.amount || 0)
     const newDelta = next.direction === 'in' ? Number(next.amount || 0) : -Number(next.amount || 0)
@@ -833,6 +872,7 @@ export function AppProvider({ children }) {
     addAccountTxn,
     issueLoan,
     transferAccount,
+    payCreditBack,
     updateAccountTxn,
     deleteAccountTxn,
 

@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "2.1.3",
+        date: "2026-06-14",
+        changes: [
+            'Asset Purchase: Added "Pay From" account picker so the purchasing bank/wallet account is shown and money is automatically deducted on buy.',
+            'Asset Purchase: Fixed unit price calculation — Price per Unit now reflects the share price before transaction fees; fees are added to cost basis only.',
+        ]
+    },
+    {
         version: "2.1.0",
         date: "2026-04-11",
         changes: [

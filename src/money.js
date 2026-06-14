@@ -136,6 +136,7 @@ export function calculateAssetMetrics(account, accountTxns, groupType, dateLimit
   const unitPrice = Number(
     latestVal?.unitPrice ||
     latestSale?.unitPrice ||
+    latestPurchase?.unitPrice ||
     avgPrice ||
     0
   );

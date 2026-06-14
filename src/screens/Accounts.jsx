@@ -1329,6 +1329,7 @@ function AccountDetail({
   const [purchaseTotal, setPurchaseTotal] = useState("");
   const [purchaseFee, setPurchaseFee] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [purchaseFromAccountId, setPurchaseFromAccountId] = useState("");
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [saleUnit, setSaleUnit] = useState("");
   const [saleQty, setSaleQty] = useState("");
@@ -1591,7 +1592,11 @@ function AccountDetail({
       setError("Select a date.");
       return;
     }
-    const unitPrice = (total + fee) / qty;
+    if (!purchaseFromAccountId) {
+      setError("Select the account to pay from.");
+      return;
+    }
+    const unitPrice = total / qty;
     setError("");
     await onAddAccountTxn({
       accountId: account.id,
@@ -1603,13 +1608,15 @@ function AccountDetail({
       unit,
       quantity: qty,
       unitPrice,
-      fee
+      fee,
+      fromId: purchaseFromAccountId,
     });
     setPurchaseUnit("");
     setPurchaseQty("");
     setPurchaseTotal("");
     setPurchaseFee("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setPurchaseFromAccountId("");
     setShowPurchaseModal(false);
   }
 
@@ -2624,6 +2631,23 @@ function AccountDetail({
                 <div className="modalTitle">Asset Purchase</div>
                 <div className="accQuickForm">
                   <div className="field">
+                    <label>Pay From</label>
+                    <select
+                      value={purchaseFromAccountId}
+                      onChange={(e) => setPurchaseFromAccountId(e.target.value)}
+                    >
+                      <option value="">— Select account —</option>
+                      {accounts
+                        .filter((a) => {
+                          const g = groups.find((g) => g.id === a.groupId);
+                          return g && g.metaCategory !== 'asset';
+                        })
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="field">
                     <label>Units</label>
                     <input
                       value={purchaseUnit}
@@ -2663,8 +2687,8 @@ function AccountDetail({
                     <input
                       readOnly
                       value={
-                        purchaseQty && (purchaseTotal || purchaseFee)
-                          ? ((Number(purchaseTotal || 0) + Number(purchaseFee || 0)) / Number(purchaseQty || 0)).toFixed(2)
+                        purchaseQty && purchaseTotal
+                          ? (Number(purchaseTotal) / Number(purchaseQty)).toFixed(2)
                           : ""
                       }
                       placeholder="Calculated"

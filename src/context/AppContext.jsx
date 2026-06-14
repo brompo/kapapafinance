@@ -612,6 +612,38 @@ export function AppProvider({ children }) {
   }
 
   async function addAccountTxn(params) {
+    if (Array.isArray(params)) {
+      const entries = []
+      let nextAccounts = allAccounts
+      for (const item of params) {
+        const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice, fee, category, linkId } = item
+        const amt = Number(amount || 0)
+        const tid = uid()
+        entries.push({
+          id: `txn-${tid}`,
+          accountId,
+          subAccountId: subAccountId || null,
+          amount: amt,
+          direction,
+          note: note || 'Adjustment',
+          date: receiveDate || todayISO(),
+          kind: kind || 'txn',
+          unit,
+          quantity,
+          unitPrice,
+          fee: fee || undefined,
+          category: category || undefined,
+          linkId: linkId || undefined,
+        })
+        if (amt) {
+          nextAccounts = applyAccountDelta(nextAccounts, accountId, subAccountId, direction === 'in' ? amt : -amt)
+        }
+      }
+      persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [...entries, ...allAccountTxns] })
+      show('Transaction added.')
+      return
+    }
+
     const { accountId, subAccountId, amount, direction, note, receiveDate, kind, unit, quantity, unitPrice, fee, fromId, fromSubAccountId, creditToAccountId, creditToSubAccountId, creditRate, creditType, interestStartDate } = params
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')

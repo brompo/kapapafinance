@@ -635,8 +635,46 @@ export function AppProvider({ children }) {
     show('Transaction added.')
   }
 
+  async function issueLoan(params) {
+    const { loanAccountId, fromAccountId, fromSubAccountId, amount, note, receiveDate, creditRate, creditType, interestStartDate } = params
+    const amt = Number(amount || 0)
+    if (!amt) return show('Enter amount.')
+
+    const tid = uid()
+    const loanEntry = {
+      id: `txn-${tid}-loan`,
+      accountId: loanAccountId,
+      amount: amt,
+      direction: 'in',
+      note: note || 'Loan issued',
+      date: receiveDate || todayISO(),
+      kind: 'credit',
+      creditRate,
+      creditType,
+      receiveDate,
+      interestStartDate: interestStartDate || null,
+      creditToAccountId: fromAccountId,
+      creditToSubAccountId: fromSubAccountId || null,
+    }
+    const outEntry = {
+      id: `txn-${tid}-out`,
+      accountId: fromAccountId,
+      subAccountId: fromSubAccountId || null,
+      amount: amt,
+      direction: 'out',
+      note: note || 'Loan issued',
+      date: receiveDate || todayISO(),
+      kind: 'txn',
+      relatedAccountId: loanAccountId,
+    }
+    let nextAccounts = applyAccountDelta(allAccounts, loanAccountId, null, amt)
+    nextAccounts = applyAccountDelta(nextAccounts, fromAccountId, fromSubAccountId, -amt)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [loanEntry, outEntry, ...allAccountTxns] })
+    show('Loan issued.')
+  }
+
   async function transferAccount(params) {
-    const { fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date } = params
+    const { fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date, patchTxn } = params
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')
 
@@ -667,7 +705,11 @@ export function AppProvider({ children }) {
     let nextAccounts = applyAccountDelta(allAccounts, fromId, fromSubAccountId, -amt)
     nextAccounts = applyAccountDelta(nextAccounts, toId, toSubAccountId, amt)
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [outEntry, inEntry, ...allAccountTxns] })
+    const baseTxns = patchTxn
+      ? allAccountTxns.map(t => t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t)
+      : allAccountTxns
+
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [outEntry, inEntry, ...baseTxns] })
     show('Transfer completed.')
   }
 
@@ -686,9 +728,23 @@ export function AppProvider({ children }) {
   async function deleteAccountTxn(txnId) {
     const t = allAccountTxns.find(x => x.id === txnId)
     if (!t) return
-    const delta = t.direction === 'in' ? -Number(t.amount || 0) : Number(t.amount || 0)
-    const nextAccounts = applyAccountDelta(allAccounts, t.accountId, t.subAccountId, delta)
-    const nextAccountTxns = allAccountTxns.filter(x => x.id !== txnId)
+
+    // Loan and payback entries are created in pairs sharing a base id, e.g.
+    // txn-abc-loan / txn-abc-out  or  txn-abc-out / txn-abc-in
+    const baseMatch = txnId.match(/^(.+)-(loan|out|in)$/)
+    const toDelete = baseMatch
+      ? new Set(allAccountTxns.filter(x => x.id.startsWith(baseMatch[1] + '-')).map(x => x.id))
+      : new Set([txnId])
+
+    let nextAccounts = allAccounts
+    for (const id of toDelete) {
+      const tx = allAccountTxns.find(x => x.id === id)
+      if (!tx) continue
+      const delta = tx.direction === 'in' ? -Number(tx.amount || 0) : Number(tx.amount || 0)
+      nextAccounts = applyAccountDelta(nextAccounts, tx.accountId, tx.subAccountId, delta)
+    }
+
+    const nextAccountTxns = allAccountTxns.filter(x => !toDelete.has(x.id))
     persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
     show('Deleted.')
   }
@@ -734,6 +790,7 @@ export function AppProvider({ children }) {
     upsertAccount,
     deleteAccount,
     addAccountTxn,
+    issueLoan,
     transferAccount,
     updateAccountTxn,
     deleteAccountTxn,

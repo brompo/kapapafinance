@@ -15,7 +15,7 @@ function VaultApp() {
     stage, tab, setTab, selectedCategory, showAddForm,
     activeLedger, accounts, allAccountTxns, txns, clients,
     ledgers, focusAccountId, settings, setFocusAccountId,
-    show, upsertAccount, deleteAccount, addAccountTxn,
+    show, upsertAccount, deleteAccount, addAccountTxn, issueLoan,
     transferAccount, updateAccountTxn, updateAccountTxnMeta,
     deleteAccountTxn, updateAccountGroups, updateAccounts,
     updateSettings, handleSwitchLedgerToAccounts, setShowLedgerPicker,
@@ -56,6 +56,7 @@ function VaultApp() {
             onUpsertAccount={upsertAccount}
             onDeleteAccount={deleteAccount}
             onAddAccountTxn={addAccountTxn}
+            onIssueLoan={issueLoan}
             onTransferAccount={transferAccount}
             onUpdateAccountTxn={updateAccountTxn}
             onToast={show}

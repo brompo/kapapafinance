@@ -34,6 +34,7 @@ export default function Accounts({
   onUpsertAccount,
   onDeleteAccount,
   onAddAccountTxn,
+  onIssueLoan,
   onTransferAccount,
   onUpdateAccountTxn,
   onUpdateAccountTxnMeta,
@@ -206,7 +207,7 @@ export default function Accounts({
     creditEntries.forEach((t) => {
       if (balanceType === 'current' && t.date > today) return;
       const rate = Number(t.creditRate || 0) / 100;
-      if (!rate || !t.interestStartDate) return;
+      if (!rate || !t.interestStartDate || t.creditType === "none") return;
       const start = t.interestStartDate;
       if (t.creditType === "compound") {
         const months = monthsBetween(start, today);
@@ -751,6 +752,7 @@ export default function Accounts({
         onClose={() => setSelectedId(null)}
         getAccountBalance={getAccountBalance}
         onAddAccountTxn={onAddAccountTxn}
+        onIssueLoan={onIssueLoan}
         onTransferAccount={onTransferAccount}
         onUpsertAccount={onUpsertAccount}
         onDeleteAccount={onDeleteAccount}
@@ -1274,6 +1276,7 @@ function AccountDetail({
   onToast,
   onClose,
   onAddAccountTxn,
+  onIssueLoan,
   onTransferAccount,
   onUpsertAccount,
   onDeleteAccount,
@@ -1302,6 +1305,7 @@ function AccountDetail({
   const [fromAccountId, setFromAccountId] = useState(account.id);
   const [filterSubAccountId, setFilterSubAccountId] = useState(null);
   const [showPaybackModal, setShowPaybackModal] = useState(false);
+  const [showPaybackPickerModal, setShowPaybackPickerModal] = useState(false);
   const [paybackTxn, setPaybackTxn] = useState(null);
   const [paybackAmount, setPaybackAmount] = useState('');
   const [paybackAccountId, setPaybackAccountId] = useState('');
@@ -1339,6 +1343,7 @@ function AccountDetail({
   const [saleCategory, setSaleCategory] = useState("");
   const [creditToAccountId, setCreditToAccountId] = useState("");
   const [creditToSubId, setCreditToSubId] = useState("");
+  const [creditNote, setCreditNote] = useState("");
   const [error, setError] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1376,6 +1381,7 @@ function AccountDetail({
     showEditModal ||
     showExportModal ||
     showPaybackModal ||
+    showPaybackPickerModal ||
     selectedTxn ||
     editingSubAccountId
   );
@@ -1947,7 +1953,7 @@ function AccountDetail({
     let accrued = 0;
     creditEntries.forEach((t) => {
       const rate = Number(t.creditRate || 0) / 100;
-      if (!rate || !t.interestStartDate) return;
+      if (!rate || !t.interestStartDate || t.creditType === "none") return;
       const start = t.interestStartDate;
       if (t.creditType === "compound") {
         const months = monthsBetween(start, today);
@@ -1993,33 +1999,48 @@ function AccountDetail({
       return;
     }
     if (!creditToAccountId) {
-      setError("Select the account to receive the money.");
+      setError(effectiveType === 'loan' ? "Select the account to fund the loan from." : "Select the account to receive the money.");
       return;
     }
     const target = accounts.find((a) => a.id === creditToAccountId);
     const subs = Array.isArray(target?.subAccounts) ? target.subAccounts : [];
     if (subs.length && !creditToSubId) {
-      setError("Select a sub-account for the receiving account.");
+      setError(effectiveType === 'loan' ? "Select a sub-account for the funding account." : "Select a sub-account for the receiving account.");
       return;
     }
     setError("");
-    await onAddAccountTxn({
-      accountId: account.id,
-      amount: amt,
-      direction: "in",
-      note: "",
-      kind: "credit",
-      creditRate: rate,
-      creditType,
-      receiveDate,
-      interestStartDate,
-      creditToAccountId,
-      creditToSubAccountId: creditToSubId || null
-    });
+    if (effectiveType === 'loan') {
+      await onIssueLoan({
+        loanAccountId: account.id,
+        fromAccountId: creditToAccountId,
+        fromSubAccountId: creditToSubId || null,
+        amount: amt,
+        note: creditNote,
+        receiveDate,
+        creditRate: rate,
+        creditType,
+        interestStartDate: creditType !== 'none' ? interestStartDate : null,
+      });
+    } else {
+      await onAddAccountTxn({
+        accountId: account.id,
+        amount: amt,
+        direction: "in",
+        note: creditNote,
+        kind: "credit",
+        creditRate: rate,
+        creditType,
+        receiveDate,
+        interestStartDate: creditType !== 'none' ? interestStartDate : null,
+        creditToAccountId,
+        creditToSubAccountId: creditToSubId || null,
+      });
+    }
     setCreditAmount("");
     setCreditRate("");
     setCreditToAccountId("");
     setCreditToSubId("");
+    setCreditNote("");
     setShowCreditModal(false);
   }
 
@@ -2040,16 +2061,17 @@ function AccountDetail({
     }
     setError("");
     if (selectedTxn.kind === "credit") {
+      const txnDate = editReceiveDate || selectedTxn.date;
       onUpdateAccountTxn?.(selectedTxn.id, {
         amount: amt,
         note: editTxnNote || "",
-        date: editTxnDate || selectedTxn.date,
+        date: txnDate,
         accountId: editTxnAccountId,
         subAccountId: editTxnSubAccountId,
         creditRate: Number(editCreditRate || 0),
         creditType: editCreditType,
-        receiveDate: editReceiveDate || editTxnDate || selectedTxn.date,
-        interestStartDate: editInterestStartDate || editTxnDate || selectedTxn.date
+        receiveDate: txnDate,
+        interestStartDate: editCreditType !== 'none' ? (editInterestStartDate || txnDate) : null,
       });
     } else {
       onUpdateAccountTxn?.(selectedTxn.id, {
@@ -2495,7 +2517,7 @@ function AccountDetail({
           showCreditModal && (
             <div className="modalBackdrop" onClick={() => setShowCreditModal(false)}>
               <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-                <div className="modalTitle">Add Credit</div>
+                <div className="modalTitle">{effectiveType === 'loan' ? 'Issue Loan' : 'Add Credit'}</div>
                 <div className="accQuickForm">
                   <div className="field">
                     <label>Amount (TZS)</label>
@@ -2507,23 +2529,25 @@ function AccountDetail({
                     />
                   </div>
                   <div className="field">
+                    <label>Interest Type</label>
+                    <select value={creditType} onChange={(e) => setCreditType(e.target.value)}>
+                      <option value="simple">Simple</option>
+                      <option value="compound">Compound</option>
+                      <option value="none">No Interest</option>
+                    </select>
+                  </div>
+                  <div className="field" style={creditType === 'none' ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
                     <label>Annual Interest Rate (% p.a.)</label>
                     <input
                       inputMode="decimal"
                       value={creditRate}
                       onChange={(e) => setCreditRate(e.target.value)}
                       placeholder="e.g. 2"
+                      disabled={creditType === 'none'}
                     />
                   </div>
                   <div className="field">
-                    <label>Interest Type</label>
-                    <select value={creditType} onChange={(e) => setCreditType(e.target.value)}>
-                      <option value="simple">Simple</option>
-                      <option value="compound">Compound</option>
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>Receiving Date</label>
+                    <label>{effectiveType === 'loan' ? 'Loan Date' : 'Receiving Date'}</label>
                     <input
                       type="date"
                       value={receiveDate}
@@ -2531,7 +2555,7 @@ function AccountDetail({
                     />
                   </div>
                   <div className="field">
-                    <label>To account</label>
+                    <label>{effectiveType === 'loan' ? 'From account' : 'To account'}</label>
                     <select value={creditToAccountId} onChange={(e) => setCreditToAccountId(e.target.value)}>
                       <option value="">Select account</option>
                       {accounts
@@ -2548,25 +2572,34 @@ function AccountDetail({
                     if (!target || !Array.isArray(target.subAccounts) || !target.subAccounts.length) return null;
                     return (
                       <div className="field">
-                        <label>To sub-account</label>
+                        <label>{effectiveType === 'loan' ? 'From sub-account' : 'To sub-account'}</label>
                         <select value={creditToSubId} onChange={(e) => setCreditToSubId(e.target.value)}>
                           <option value="">Select sub-account</option>
-                          {target.subAccounts
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}
-                              </option>
-                            ))}
+                          {target.subAccounts.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     );
                   })()}
+                  {creditType !== 'none' && (
+                    <div className="field">
+                      <label>Interest Start Date</label>
+                      <input
+                        type="date"
+                        value={interestStartDate}
+                        onChange={(e) => setInterestStartDate(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <div className="field">
-                    <label>Interest Start Date</label>
+                    <label>Notes</label>
                     <input
-                      type="date"
-                      value={interestStartDate}
-                      onChange={(e) => setInterestStartDate(e.target.value)}
+                      value={creditNote}
+                      onChange={(e) => setCreditNote(e.target.value)}
+                      placeholder={effectiveType === 'loan' ? 'e.g. Business loan to John' : 'e.g. Credit from CRDB Bank'}
                     />
                   </div>
                   {error && <div className="formError">{error}</div>}
@@ -2575,7 +2608,7 @@ function AccountDetail({
                       Cancel
                     </button>
                     <button className="btn primary" type="button" onClick={handleAddCredit}>
-                      Save Credit
+                      {effectiveType === 'loan' ? 'Issue Loan' : 'Save Credit'}
                     </button>
                   </div>
                 </div>
@@ -2808,7 +2841,7 @@ function AccountDetail({
             <div className="modalBackdrop" onClick={() => setSelectedTxn(null)}>
               <div className="modalCard" onClick={(e) => e.stopPropagation()}>
                 <div className="modalTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{selectedTxn.kind === "credit" ? "Edit Credit" : "Transaction"}</span>
+                  <span>{selectedTxn.kind === "credit" ? (effectiveType === 'loan' ? "Edit Loan" : "Edit Credit") : "Transaction"}</span>
                   <button className="iconBtn" type="button" onClick={() => setSelectedTxn(null)} style={{ fontSize: 18 }}>✕</button>
                 </div>
 
@@ -2847,26 +2880,28 @@ function AccountDetail({
                   </div>
                   {selectedTxn.kind === "credit" && (
                     <div className="field">
+                      <label>Interest Type</label>
+                      <select value={editCreditType} onChange={(e) => setEditCreditType(e.target.value)}>
+                        <option value="simple">Simple</option>
+                        <option value="compound">Compound</option>
+                        <option value="none">No Interest</option>
+                      </select>
+                    </div>
+                  )}
+                  {selectedTxn.kind === "credit" && (
+                    <div className="field" style={editCreditType === 'none' ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
                       <label>Annual Interest Rate (% p.a.)</label>
                       <input
                         inputMode="decimal"
                         value={editCreditRate}
                         onChange={(e) => setEditCreditRate(e.target.value)}
+                        disabled={editCreditType === 'none'}
                       />
                     </div>
                   )}
                   {selectedTxn.kind === "credit" && (
                     <div className="field">
-                      <label>Interest Type</label>
-                      <select value={editCreditType} onChange={(e) => setEditCreditType(e.target.value)}>
-                        <option value="simple">Simple</option>
-                        <option value="compound">Compound</option>
-                      </select>
-                    </div>
-                  )}
-                  {selectedTxn.kind === "credit" && (
-                    <div className="field">
-                      <label>Receiving Date</label>
+                      <label>{effectiveType === 'loan' ? 'Loan Date' : 'Receiving Date'}</label>
                       <input
                         type="date"
                         value={editReceiveDate}
@@ -2874,7 +2909,7 @@ function AccountDetail({
                       />
                     </div>
                   )}
-                  {selectedTxn.kind === "credit" && (
+                  {selectedTxn.kind === "credit" && editCreditType !== 'none' && (
                     <div className="field">
                       <label>Interest Start Date</label>
                       <input
@@ -2891,14 +2926,16 @@ function AccountDetail({
                       onChange={(e) => setEditTxnNote(e.target.value)}
                     />
                   </div>
-                  <div className="field">
-                    <label>Date</label>
-                    <input
-                      type="date"
-                      value={editTxnDate}
-                      onChange={(e) => setEditTxnDate(e.target.value)}
-                    />
-                  </div>
+                  {selectedTxn.kind !== "credit" && (
+                    <div className="field">
+                      <label>Date</label>
+                      <input
+                        type="date"
+                        value={editTxnDate}
+                        onChange={(e) => setEditTxnDate(e.target.value)}
+                      />
+                    </div>
+                  )}
                   {error && <div className="formError">{error}</div>}
                   {selectedTxn.direction === 'in' && selectedTxn.paidBack && selectedTxn.paidBack.length > 0 && (
                     <div className="reimbursedBadge" style={{ marginBottom: 4, fontSize: 13, padding: '6px 12px' }}>
@@ -2946,6 +2983,59 @@ function AccountDetail({
             </div>
           )
         }
+
+        {showPaybackPickerModal && (() => {
+          const creditTxns = accountTxns.filter(t => t.accountId === account.id && t.kind === 'credit');
+          const outstanding = creditTxns.filter(t => {
+            const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+            return Number(t.amount || 0) - alreadyPaid > 0;
+          });
+          return (
+            <div className="modalBackdrop" onClick={() => setShowPaybackPickerModal(false)}>
+              <div className="modalCard" onClick={e => e.stopPropagation()}>
+                <div className="modalTitle">{effectiveType === 'loan' ? 'Select Loan to Receive Payback' : 'Select Credit to Pay Back'}</div>
+                <div className="accQuickForm">
+                  {outstanding.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '16px 0', color: '#888' }}>No outstanding {effectiveType === 'loan' ? 'loans' : 'credits'} to pay back.</div>
+                  ) : (
+                    outstanding.map(t => {
+                      const alreadyPaid = (t.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+                      const remaining = Number(t.amount || 0) - alreadyPaid;
+                      return (
+                        <div
+                          key={t.id}
+                          className="accHistoryRow"
+                          style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 12px', marginBottom: 6, background: '#f5f5f5' }}
+                          onClick={() => {
+                            setPaybackTxn(t);
+                            setPaybackAmount(String(remaining));
+                            setPaybackAccountId('');
+                            setPaybackSubAccountId('');
+                            setPaybackDate(new Date().toISOString().slice(0, 10));
+                            setPaybackError(false);
+                            setShowPaybackPickerModal(false);
+                            setShowPaybackModal(true);
+                          }}
+                        >
+                          <div className="accHistoryInfo">
+                            <div className="accHistoryTitleRow"><span>{t.note || 'Loan'}</span></div>
+                            {alreadyPaid > 0 && (
+                              <div className="accHistoryMeta">Paid: {fmtTZS(alreadyPaid)}</div>
+                            )}
+                          </div>
+                          <div className="accHistoryAmount pos">{fmtTZS(remaining)} remaining</div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button className="btn" type="button" onClick={() => setShowPaybackPickerModal(false)}>Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {showPaybackModal && paybackTxn && (
           <div className="modalBackdrop" onClick={() => setShowPaybackModal(false)}>
@@ -3329,7 +3419,9 @@ function AccountDetail({
                         const subName =
                           account.subAccounts?.find((s) => s.id === t.subAccountId)?.name || "";
                         const title = t.note || (t.kind ? `${t.kind[0].toUpperCase()}${t.kind.slice(1)}` : "Balance update");
-                        const kindLabel = t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "";
+                        const kindLabel = t.kind === 'credit' && effectiveType === 'loan'
+                          ? 'Loan'
+                          : (t.kind ? t.kind.charAt(0).toUpperCase() + t.kind.slice(1) : "");
 
                         let meta = subName || (t.kind === "transfer" ? "Transfer" : (kindLabel || "Account"));
                         if (t.relatedAccountId) {
@@ -3522,7 +3614,7 @@ function AccountDetail({
                     <button
                       className="accountFabItem btnYellow"
                       onClick={() => {
-                        setShowPaybackModal(true);
+                        setShowPaybackPickerModal(true);
                         setShowFabMenu(false);
                       }}
                     >

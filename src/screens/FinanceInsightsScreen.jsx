@@ -546,12 +546,11 @@ export function FinanceInsightsScreen() {
           </div>
       </div>
       <div style={{ padding: '15px 15px 0 15px' }}>
-        <div style={{ display: 'flex', background: '#fff', borderRadius: 12, padding: 4, border: '1px solid #e2e8f0' }}>{['Records', 'Cashflow', 'Summary'].map(t => (<button key={t} onClick={() => setInsightTab(t.toLowerCase())} style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: insightTab === t.toLowerCase() ? '#eff6ff' : 'transparent', border: 'none', color: insightTab === t.toLowerCase() ? '#3b82f6' : '#64748b', fontWeight: 700 }}>{t}</button>))}</div>
+        <div style={{ display: 'flex', background: '#fff', borderRadius: 12, padding: 4, border: '1px solid #e2e8f0' }}>{['Summary', 'Cashflow', 'Records'].map(t => (<button key={t} onClick={() => setInsightTab(t.toLowerCase())} style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: insightTab === t.toLowerCase() ? '#eff6ff' : 'transparent', border: 'none', color: insightTab === t.toLowerCase() ? '#3b82f6' : '#64748b', fontWeight: 700 }}>{t}</button>))}</div>
       </div>
       {insightTab === 'records' && <RecordsView />}
       {insightTab === 'cashflow' && (
         <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 15 }}>
-          <CashflowChart />
           <div className="card" style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}><div style={{ fontWeight: 700, fontSize: 14 }}>Monthly Performance Breakdown</div><div style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 18 }}><button onClick={()=>setMonthlyViewMode('actual')} style={{ padding: '5px 12px', borderRadius: 15, border: 'none', background: monthlyViewMode === 'actual' ? '#6366f1' : 'transparent', color: monthlyViewMode === 'actual' ? '#fff' : '#64748b', fontWeight: 700, fontSize: 12 }}>Actual</button><button onClick={()=>setMonthlyViewMode('projected')} style={{ padding: '5px 12px', borderRadius: 15, border: 'none', background: monthlyViewMode === 'projected' ? '#6366f1' : 'transparent', color: monthlyViewMode === 'projected' ? '#fff' : '#64748b', fontWeight: 700, fontSize: 12 }}>Projected</button></div></div>
             <div style={{ overflowX: 'auto' }}>

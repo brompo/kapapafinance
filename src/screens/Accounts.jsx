@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fmtTZS, fmtCompact, calculateAssetMetrics, calculateSavingsMetrics } from "../money.js";
 
+function calculateBucketSpentYTD(subId, accountTxns) {
+  const year = String(new Date().getFullYear())
+  return accountTxns
+    .filter(t => t.subAccountId === subId && t.direction === 'out' && String(t.date || '').startsWith(year))
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+}
+
 function daysBetween(a, b) {
   const start = new Date(a);
   const end = new Date(b);
@@ -42,6 +49,7 @@ export default function Accounts({
   onDeleteAccountTxn,
   onUpdateGroups,
   onUpdateAccounts,
+  onReallocateBuckets,
   settings = {},
   onUpdateSettings,
   categories = {}, // { income: [], expense: [] }
@@ -761,6 +769,7 @@ export default function Accounts({
         onUpdateAccountTxn={onUpdateAccountTxn}
         onUpdateAccountTxnMeta={onUpdateAccountTxnMeta}
         onDeleteAccountTxn={onDeleteAccountTxn}
+        onReallocateBuckets={onReallocateBuckets}
         onToast={onToast}
         clients={clients}
       />
@@ -1201,20 +1210,24 @@ function Section({
 
 
               const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
-              const visibleSubs = activeLedgerId === "all"
+              const isDebitAccount = (a.accountType || group.type) === 'debit';
+              const allLedgerSubs = activeLedgerId === "all"
                 ? subs
                 : subs.filter(s => s.ledgerId === activeLedgerId);
+              const visibleSubs = isDebitAccount
+                ? allLedgerSubs.filter(s => Number(s.balance || 0) !== 0)
+                : allLedgerSubs;
 
-              if (visibleSubs.length && expandedAccounts?.[a.id]) {
+              if (visibleSubs.length && (expandedAccounts?.[a.id] || isDebitAccount)) {
                 visibleSubs.forEach((s) => {
                   nodes.push(
                     <div className="rowItem subRow" key={`${a.id}-${s.id}`}>
                       <div className="rowLeft">
                         <div className="avatar subAvatar">
-                          {s.name.slice(0, 1).toUpperCase()}
+                          {(isDebitAccount && s.isUnallocated ? 'U' : s.name.slice(0, 1)).toUpperCase()}
                         </div>
                         <div>
-                          <div className="rowName">{s.name}</div>
+                          <div className="rowName">{s.isUnallocated ? 'Unallocated' : s.name}</div>
                         </div>
                       </div>
                       <div className="rowRight">
@@ -1286,6 +1299,7 @@ function AccountDetail({
   onUpdateAccountTxn,
   onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
+  onReallocateBuckets,
   getAccountBalance,
   clients,
 }) {
@@ -1373,6 +1387,13 @@ function AccountDetail({
   const [editingSubAccountId, setEditingSubAccountId] = useState(null)
   const [subEditName, setSubEditName] = useState("")
   const [subEditLedgerId, setSubEditLedgerId] = useState("")
+  const [showAddBucketModal, setShowAddBucketModal] = useState(false)
+  const [newBucketName, setNewBucketName] = useState('')
+  const [newBucketAmount, setNewBucketAmount] = useState('')
+  const [showReallocateModal, setShowReallocateModal] = useState(false)
+  const [reallocFromId, setReallocFromId] = useState('')
+  const [reallocToId, setReallocToId] = useState('')
+  const [reallocAmount, setReallocAmount] = useState('')
   const [activeTab, setActiveTab] = useState("activity") // activity | future | planner
   const [primaryTab, setPrimaryTab] = useState("activity") // activity | goals
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
@@ -1388,7 +1409,9 @@ function AccountDetail({
     showPaybackModal ||
     showPaybackPickerModal ||
     selectedTxn ||
-    editingSubAccountId
+    editingSubAccountId ||
+    showAddBucketModal ||
+    showReallocateModal
   );
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
@@ -1544,27 +1567,35 @@ function AccountDetail({
       setError("Select a date.");
       return;
     }
-    if (Array.isArray(account.subAccounts) && account.subAccounts.length && !subAccountId) {
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
+    const isDebit = effectiveType === 'debit'
+    if (subs.length && !subAccountId && !isDebit) {
       setError("Select a sub-account.");
       return;
     }
+    const resolvedSubId = subs.length
+      ? (subAccountId || (isDebit ? subs.find(s => s.isUnallocated)?.id || subs[0]?.id : null))
+      : null
     setError("");
 
     // If a From Account is specified, treat as a transfer
     if (adjustFromAccountId) {
+      const fromAcct = accounts.find(a => a.id === adjustFromAccountId)
+      const fromSubs = Array.isArray(fromAcct?.subAccounts) ? fromAcct.subAccounts : []
+      const resolvedFromSubId = adjustFromSubAccountId || (fromSubs.find(s => s.isUnallocated)?.id || null)
       await onTransferAccount({
         fromId: adjustFromAccountId,
         toId: account.id,
         amount: amt,
         note: note || '',
-        fromSubAccountId: adjustFromSubAccountId || null,
-        toSubAccountId: subAccountId || null,
+        fromSubAccountId: resolvedFromSubId,
+        toSubAccountId: resolvedSubId,
         date: adjustDate
       })
     } else {
       await onAddAccountTxn({
         accountId: account.id,
-        subAccountId: subAccountId || null,
+        subAccountId: resolvedSubId,
         amount: amt,
         direction,
         note,
@@ -1752,16 +1783,27 @@ function AccountDetail({
       setError("Select a target account.");
       return;
     }
-    if (Array.isArray(account.subAccounts) && account.subAccounts.length && !subAccountId) {
+    const fromAcct = accounts.find(a => a.id === fromAccountId)
+    const fromSubs = Array.isArray(fromAcct?.subAccounts) ? fromAcct.subAccounts : []
+    const fromIsDebit = (fromAcct?.accountType || groups.find(g => g.id === fromAcct?.groupId)?.type) === 'debit'
+    if (fromSubs.length && !subAccountId && !fromIsDebit) {
       setError("Select a sub-account.");
       return;
     }
     const target = accounts.find((a) => a.id === targetId);
-    if (Array.isArray(target?.subAccounts) && target.subAccounts.length && !targetSubId) {
+    const targetSubs = Array.isArray(target?.subAccounts) ? target.subAccounts : []
+    const targetIsDebit = (target?.accountType || groups.find(g => g.id === target?.groupId)?.type) === 'debit'
+    if (targetSubs.length && !targetSubId && !targetIsDebit) {
       setError("Select a target sub-account.");
       return;
     }
-    if (targetId === fromAccountId && subAccountId === targetSubId) {
+    const resolvedFromSubId = fromSubs.length
+      ? (subAccountId || (fromIsDebit ? fromSubs.find(s => s.isUnallocated)?.id || null : null))
+      : null
+    const resolvedTargetSubId = targetSubs.length
+      ? (targetSubId || (targetIsDebit ? targetSubs.find(s => s.isUnallocated)?.id || null : null))
+      : null
+    if (targetId === fromAccountId && resolvedFromSubId === resolvedTargetSubId) {
       setError("Select a different sub-account.");
       return;
     }
@@ -1771,8 +1813,8 @@ function AccountDetail({
       toId: targetId,
       amount: amt,
       note,
-      fromSubAccountId: subAccountId || null,
-      toSubAccountId: targetSubId || null,
+      fromSubAccountId: resolvedFromSubId,
+      toSubAccountId: resolvedTargetSubId,
       date: transferDate,
     });
     setAmount("");
@@ -2109,46 +2151,44 @@ function AccountDetail({
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-
-    let targetLedgerId = activeLedgerId;
-    if (activeLedgerId === "all" || accounts.length > 0) {
-      // If in "All Ledgers", or just generically, maybe ask? 
-      // For now, let's default to the current active ledger (if specific), 
-      // or the parent account's ledger if active is "all".
-      if (activeLedgerId === "all") targetLedgerId = account.ledgerId;
-
-      // Optional: Prompt for ledger?
-      // Simplification: We will just use the current context or parent.
-      // The user requested "assigned to a particulat ledger".
-      // Let's add a confirm or simple prompt extension or just defaulting.
-      // User requirement: "assigned to a particulat ledger".
-      // Let's prompt for it if multiple ledgers exist.
-      if (ledgers.length > 1) {
-        // Simple approach: show a list in prompt? No, that's hard.
-        // Let's just create it in the active ledger (if valid) or prompt?
-        // To keep UI simple like before, we will default to `activeLedgerId || account.ledgerId`.
-        // But maybe we need a modal for adding subaccount now?
-        // Re-using the prompt flow for now but maybe we can be smarter.
-        // Actually, let's just create it. Editing is where assignment happens usually?
-        // Or wait, if I am in Ledger B, and I add a subaccount to Account (from Ledger A), 
-        // it MUST be in Ledger B for it to show up here!
-        // So defaulting to `activeLedgerId` is the correct behavior for "show in that Ledger".
-        if (activeLedgerId === 'all') targetLedgerId = account.ledgerId;
-      }
-    }
-
+    const targetLedgerId = activeLedgerId === "all" ? account.ledgerId : activeLedgerId;
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = [
       ...subs,
-      {
-        id: crypto.randomUUID(),
-        name: trimmed,
-        balance: 0,
-        ledgerId: targetLedgerId || account.ledgerId,
-      },
+      { id: crypto.randomUUID(), name: trimmed, balance: 0, ledgerId: targetLedgerId || account.ledgerId },
     ];
     onUpsertAccount({ ...account, subAccounts: nextSubs });
     if (!subAccountId) setSubAccountId(nextSubs[0].id);
+  }
+
+  function handleAddBucket() {
+    const name = newBucketName.trim()
+    if (!name) return
+    const amt = Number(newBucketAmount || 0)
+    const targetLedgerId = activeLedgerId === "all" ? account.ledgerId : activeLedgerId
+    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
+    const currentBalance = getAccountBalance(account, 'current', true)
+
+    if (subs.length === 0) {
+      const unallocId = crypto.randomUUID()
+      const newBucketId = crypto.randomUUID()
+      const nextSubs = [
+        { id: unallocId, name: 'Unallocated', balance: currentBalance - amt, ledgerId: targetLedgerId, isUnallocated: true },
+        { id: newBucketId, name, balance: amt, ledgerId: targetLedgerId },
+      ]
+      onUpsertAccount({ ...account, balance: 0, subAccounts: nextSubs })
+    } else {
+      const newBucketId = crypto.randomUUID()
+      const nextSubs = subs.map(s =>
+        s.isUnallocated ? { ...s, balance: Number(s.balance || 0) - amt } : s
+      )
+      nextSubs.push({ id: newBucketId, name, balance: amt, ledgerId: targetLedgerId })
+      onUpsertAccount({ ...account, subAccounts: nextSubs })
+    }
+
+    setShowAddBucketModal(false)
+    setNewBucketName('')
+    setNewBucketAmount('')
   }
 
   function handleSaveSubEdit() {
@@ -2165,13 +2205,24 @@ function AccountDetail({
     const sub = (account.subAccounts || []).find(s => s.id === subId)
     if (!sub) return
     const bal = Number(sub.balance || 0)
-    const msg = bal !== 0
-      ? `This sub-account has a balance of ${fmtTZS(bal)}. Deleting it will discard this balance. Continue?`
-      : "Delete this sub-account?"
 
-    if (!window.confirm(msg)) return;
-    const nextSubs = (account.subAccounts || []).filter(s => s.id !== subId)
-    onUpsertAccount({ ...account, subAccounts: nextSubs })
+    if (effectiveType === 'debit' && !sub.isUnallocated) {
+      const msg = bal !== 0
+        ? `Delete "${sub.name}"? Its balance of ${fmtTZS(bal)} will move to Unallocated.`
+        : `Delete bucket "${sub.name}"?`
+      if (!window.confirm(msg)) return
+      const nextSubs = (account.subAccounts || [])
+        .filter(s => s.id !== subId)
+        .map(s => s.isUnallocated ? { ...s, balance: Number(s.balance || 0) + bal } : s)
+      onUpsertAccount({ ...account, subAccounts: nextSubs })
+    } else {
+      const msg = bal !== 0
+        ? `This sub-account has a balance of ${fmtTZS(bal)}. Deleting it will discard this balance. Continue?`
+        : "Delete this sub-account?"
+      if (!window.confirm(msg)) return
+      const nextSubs = (account.subAccounts || []).filter(s => s.id !== subId)
+      onUpsertAccount({ ...account, subAccounts: nextSubs })
+    }
   }
 
   return (
@@ -2296,44 +2347,70 @@ function AccountDetail({
 
             {(effectiveType === 'debit' || (Array.isArray(account.subAccounts) && account.subAccounts.length > 0)) && (
               <div className="accHistory" style={{ marginBottom: 20 }}>
-                <div className="accHistoryTitle">Sub-accounts</div>
+                <div className="accHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{effectiveType === 'debit' ? 'Buckets' : 'Sub-accounts'}</span>
+                  {effectiveType === 'debit' && Array.isArray(account.subAccounts) && account.subAccounts.length > 1 && (
+                    <button className="miniBtn" type="button" onClick={() => {
+                      const namedSubs = (account.subAccounts || []).filter(s => !s.isUnallocated)
+                      setReallocFromId(namedSubs[0]?.id || '')
+                      setReallocToId(namedSubs[1]?.id || (account.subAccounts.find(s => s.isUnallocated)?.id || ''))
+                      setReallocAmount('')
+                      setShowReallocateModal(true)
+                    }}>Reallocate</button>
+                  )}
+                </div>
                 {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 ? (
                   <div className="list">
                     {account.subAccounts
-                      .map((s) => (
-                        <div
-                          className={`rowItem subRow ${filterSubAccountId === s.id ? 'active' : ''}`}
-                          key={s.id}
-                          onClick={() => setFilterSubAccountId(filterSubAccountId === s.id ? null : s.id)}
-                          role="button"
-                          tabIndex={0}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <div className="rowLeft">
-                            <div className="avatar subAvatar">{s.name.slice(0, 1).toUpperCase()}</div>
-                            <div>
-                              <div className="rowName">{s.name}</div>
-                              <div className="rowMeta">
-                                {ledgers.find(l => l.id === s.ledgerId)?.name}
+                      .map((s) => {
+                        const spentYTD = effectiveType === 'debit' ? calculateBucketSpentYTD(s.id, accountTxns) : 0
+                        return (
+                          <div
+                            className={`rowItem subRow ${filterSubAccountId === s.id ? 'active' : ''}`}
+                            key={s.id}
+                            onClick={() => setFilterSubAccountId(filterSubAccountId === s.id ? null : s.id)}
+                            role="button"
+                            tabIndex={0}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div className="rowLeft">
+                              <div className="avatar subAvatar">{(s.isUnallocated ? 'U' : s.name.slice(0, 1)).toUpperCase()}</div>
+                              <div>
+                                <div className="rowName">{s.isUnallocated ? 'Unallocated' : s.name}</div>
+                                {effectiveType !== 'debit' && (
+                                  <div className="rowMeta">{ledgers.find(l => l.id === s.ledgerId)?.name}</div>
+                                )}
                               </div>
                             </div>
+                            <div className="rowRight" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                <div className={`rowAmount ${Number(s.balance || 0) < 0 ? "neg" : ""}`}>{fmtTZS(s.balance)}</div>
+                                {effectiveType === 'debit' && spentYTD > 0 && (
+                                  <div style={{ fontSize: '0.7rem', color: '#EF4444' }}>Spent YTD: {fmtTZS(spentYTD)}</div>
+                                )}
+                              </div>
+                              {!s.isUnallocated && (
+                                <button className="miniBtn" type="button" onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditingSubAccountId(s.id)
+                                  setSubEditName(s.name)
+                                  setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
+                                }}>Edit</button>
+                              )}
+                            </div>
                           </div>
-                          <div className="rowRight">
-                            <div className="rowAmount">{fmtTZS(s.balance)}</div>
-                            <button className="miniBtn" type="button" onClick={(e) => {
-                              e.stopPropagation()
-                              setEditingSubAccountId(s.id)
-                              setSubEditName(s.name)
-                              setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
-                            }}>Edit</button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                   </div>
                 ) : (
-                  <div className="emptyRow">No sub-accounts yet.</div>
+                  <div className="emptyRow">{effectiveType === 'debit' ? 'No buckets yet.' : 'No sub-accounts yet.'}</div>
                 )}
                 {effectiveType === 'debit' && (
+                  <button className="btn" type="button" onClick={() => { setNewBucketName(''); setNewBucketAmount(''); setShowAddBucketModal(true) }}>
+                    Add Bucket
+                  </button>
+                )}
+                {effectiveType !== 'debit' && (
                   <button className="btn" type="button" onClick={handleAddSubAccount}>
                     Add Sub-account
                   </button>
@@ -2389,16 +2466,15 @@ function AccountDetail({
                       {(() => {
                         const fromAcct = accounts.find(a => a.id === fromAccountId)
                         const fromSubs = fromAcct && Array.isArray(fromAcct.subAccounts) ? fromAcct.subAccounts : []
+                        const fromIsDebit = (fromAcct?.accountType || groups.find(g => g.id === fromAcct?.groupId)?.type) === 'debit'
                         if (!fromSubs.length) return null
                         return (
                           <div className="field">
-                            <label>From sub-account</label>
+                            <label>{fromIsDebit ? 'From Bucket (optional)' : 'From sub-account'}</label>
                             <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
-                              <option value="">Select</option>
-                              {fromSubs.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
+                              <option value="">{fromIsDebit ? '— Unallocated' : 'Select'}</option>
+                              {fromSubs.filter(s => !s.isUnallocated).map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
                               ))}
                             </select>
                           </div>
@@ -2419,16 +2495,16 @@ function AccountDetail({
                       {(() => {
                         const target = accounts.find((a) => a.id === targetId);
                         if (!Array.isArray(target?.subAccounts) || target.subAccounts.length === 0) return null;
+                        const targetIsDebit = (target?.accountType || groups.find(g => g.id === target?.groupId)?.type) === 'debit'
                         return (
                           <div className="field">
-                            <label>To sub-account</label>
+                            <label>{targetIsDebit ? 'To Bucket (optional)' : 'To sub-account'}</label>
                             <select value={targetSubId} onChange={(e) => setTargetSubId(e.target.value)}>
-                              <option value="">Select</option>
+                              <option value="">{targetIsDebit ? '— Unallocated' : 'Select'}</option>
                               {target.subAccounts
+                                .filter(s => !s.isUnallocated)
                                 .map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
+                                  <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>
                           </div>
@@ -2465,14 +2541,13 @@ function AccountDetail({
 
                       {Array.isArray(account.subAccounts) && account.subAccounts.length > 0 && (
                         <div className="field">
-                          <label>Sub-account</label>
+                          <label>{effectiveType === 'debit' ? 'Bucket (optional)' : 'Sub-account'}</label>
                           <select value={subAccountId} onChange={(e) => setSubAccountId(e.target.value)}>
-                            <option value="">Select</option>
+                            <option value="">{effectiveType === 'debit' ? '— Unallocated' : 'Select'}</option>
                             {account.subAccounts
+                              .filter(s => !s.isUnallocated)
                               .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
+                                <option key={s.id} value={s.id}>{s.name}</option>
                               ))}
                           </select>
                         </div>
@@ -2496,13 +2571,14 @@ function AccountDetail({
                       {(() => {
                         const fromAcct = accounts.find(a => a.id === adjustFromAccountId)
                         const fromSubs = fromAcct && Array.isArray(fromAcct.subAccounts) ? fromAcct.subAccounts : []
+                        const fromIsDebit = (fromAcct?.accountType || groups.find(g => g.id === fromAcct?.groupId)?.type) === 'debit'
                         if (!fromSubs.length) return null
                         return (
                           <div className="field">
-                            <label>From sub-account</label>
+                            <label>{fromIsDebit ? 'From Bucket (optional)' : 'From sub-account'}</label>
                             <select value={adjustFromSubAccountId} onChange={e => setAdjustFromSubAccountId(e.target.value)}>
-                              <option value="">Select</option>
-                              {fromSubs.map(s => (
+                              <option value="">{fromIsDebit ? '— Unallocated' : 'Select'}</option>
+                              {fromSubs.filter(s => !s.isUnallocated).map(s => (
                                 <option key={s.id} value={s.id}>{s.name}</option>
                               ))}
                             </select>
@@ -3397,12 +3473,89 @@ function AccountDetail({
           )
         }
 
+        {showAddBucketModal && (
+          <div className="modalBackdrop" onClick={() => setShowAddBucketModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Add Bucket</div>
+              <div className="field">
+                <label>Bucket Name</label>
+                <input
+                  value={newBucketName}
+                  onChange={(e) => setNewBucketName(e.target.value)}
+                  placeholder="e.g. Home Renovation"
+                  autoFocus
+                />
+              </div>
+              <div className="field">
+                <label>Initial Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={newBucketAmount}
+                  onChange={(e) => setNewBucketAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowAddBucketModal(false)}>Cancel</button>
+                <button className="btn primary" type="button" onClick={handleAddBucket}>Add</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showReallocateModal && (
+          <div className="modalBackdrop" onClick={() => setShowReallocateModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalTitle">Reallocate Between Buckets</div>
+              <div className="field">
+                <label>From Bucket</label>
+                <select value={reallocFromId} onChange={(e) => setReallocFromId(e.target.value)}>
+                  {(account.subAccounts || []).map(s => (
+                    <option key={s.id} value={s.id}>{s.isUnallocated ? 'Unallocated' : s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>To Bucket</label>
+                <select value={reallocToId} onChange={(e) => setReallocToId(e.target.value)}>
+                  {(account.subAccounts || []).map(s => (
+                    <option key={s.id} value={s.id}>{s.isUnallocated ? 'Unallocated' : s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Amount (TZS)</label>
+                <input
+                  inputMode="decimal"
+                  value={reallocAmount}
+                  onChange={(e) => setReallocAmount(e.target.value)}
+                  placeholder="e.g. 500000"
+                  autoFocus
+                />
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setShowReallocateModal(false)}>Cancel</button>
+                <button className="btn primary" type="button" onClick={async () => {
+                  if (!reallocFromId || !reallocToId || reallocFromId === reallocToId) return
+                  await onReallocateBuckets({ accountId: account.id, fromSubId: reallocFromId, toSubId: reallocToId, amount: reallocAmount })
+                  setShowReallocateModal(false)
+                  setReallocAmount('')
+                }}>Move</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {primaryTab === 'activity' && (
           <div className="accHistory">
             <div className="accHistoryTitle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>
                 {filterSubAccountId
-                  ? `${account.subAccounts?.find(s => s.id === filterSubAccountId)?.name || 'Sub-account'} activity`
+                  ? (() => {
+                      const sub = account.subAccounts?.find(s => s.id === filterSubAccountId)
+                      const label = sub?.isUnallocated ? 'Unallocated' : (sub?.name || (effectiveType === 'debit' ? 'Bucket' : 'Sub-account'))
+                      return `${label} activity`
+                    })()
                   : activeTab === 'future' ? 'Future Expenses' : 'Recent activity'
                 }
               </span>

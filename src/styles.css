@@ -791,10 +791,19 @@ label {
 .rowItem.subRow {
   background: #fdeff0;
   margin-top: 1px;
-  border-radius: 12px;
+  border-radius: 10px;
   margin-left: 22px;
   border: 1px solid #f5d7da;
-  padding: 9px;
+  padding: 6px 8px;
+}
+
+.rowItem.subRow .rowName {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.rowItem.subRow .rowAmount {
+  font-size: 0.78rem;
 }
 
 .rowItem.subRow.active {

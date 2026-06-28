@@ -287,7 +287,9 @@ export function AppProvider({ children }) {
         if (acct) {
           const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
           const targetSubId = subs.length
-            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            ? (subAccountId && subs.find(s => s.id === subAccountId)
+              ? subAccountId
+              : (subs.find(s => s.isUnallocated)?.id || subs[0]?.id))
             : null;
 
           const entry = {
@@ -311,7 +313,9 @@ export function AppProvider({ children }) {
         if (acct) {
           const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : [];
           const targetSubId = subs.length
-            ? (subAccountId && subs.find(s => s.id === subAccountId) ? subAccountId : subs[0]?.id)
+            ? (subAccountId && subs.find(s => s.id === subAccountId)
+              ? subAccountId
+              : (subs.find(s => s.isUnallocated)?.id || subs[0]?.id))
             : null;
 
           const entry = {
@@ -866,6 +870,15 @@ export function AppProvider({ children }) {
     await persist({ ...vault, ledgers: nextLedgers })
   }
 
+  async function reallocateBuckets({ accountId, fromSubId, toSubId, amount }) {
+    const amt = Number(amount || 0)
+    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    let nextAccounts = applyAccountDelta(allAccounts, accountId, fromSubId, -amt)
+    nextAccounts = applyAccountDelta(nextAccounts, accountId, toSubId, amt)
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: allAccountTxns })
+    show('Reallocated.')
+  }
+
   const clients = vault.clients || []
 
   // Context value
@@ -907,6 +920,7 @@ export function AppProvider({ children }) {
     payCreditBack,
     updateAccountTxn,
     deleteAccountTxn,
+    reallocateBuckets,
 
     // Transaction Helpers
     addQuickTxn,

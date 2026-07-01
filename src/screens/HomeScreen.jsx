@@ -162,10 +162,27 @@ export function HomeScreen() {
         </div>
       </div>
 
-      <div className={`ledgerSummary ${kpis.monthlyBalance < 0 ? 'neg' : 'pos'}`}>
-        <div className="ledgerSummaryLabel">Balance</div>
-        <div className="ledgerSummaryValue">{fmtTZS(kpis.monthlyBalance)}</div>
-        <span className="ledgerSummaryCaret">▾</span>
+      <div className={`ledgerSummaryCard ${kpis.monthlyBalance < 0 ? 'neg' : 'pos'}`}>
+        <div className="ledgerSummaryBalanceRow">
+          <span className="ledgerSummaryBalanceLabel">Balance</span>
+          <span className="ledgerSummaryBalanceValue">{fmtTZS(kpis.monthlyBalance)}</span>
+        </div>
+        <div className="ledgerSummaryRow">
+          <div className="ledgerSummaryStat">
+            <span className="ledgerStatLabel">Income</span>
+            <span className="ledgerStatValue kpi-income">{fmtTZS(kpis.inc)}</span>
+          </div>
+          <div className="ledgerSummaryDivider" />
+          <div className="ledgerSummaryStat">
+            <span className="ledgerStatLabel">Exp</span>
+            <span className="ledgerStatValue kpi-expense">{fmtTZS(kpis.exp)}</span>
+          </div>
+          <div className="ledgerSummaryDivider" />
+          <div className="ledgerSummaryStat">
+            <span className="ledgerStatLabel">Alloc</span>
+            <span className="ledgerStatValue kpi-alloc">{fmtTZS(kpis.monthlyAlloc)}</span>
+          </div>
+        </div>
       </div>
 
       {/* Ledger picker now global in App.jsx */}

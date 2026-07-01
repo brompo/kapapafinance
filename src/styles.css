@@ -2055,6 +2055,86 @@ label {
   color: #9aa0bf
 }
 
+.ledgerSummaryCard {
+  background: #fff;
+  border: 1px solid #eceef6;
+  border-radius: 16px;
+  padding: 10px 16px 8px;
+  box-shadow: 0 4px 14px rgba(27, 33, 62, .06);
+}
+
+.ledgerSummaryCard.pos {
+  background: linear-gradient(160deg, #f6fdf9 0%, #eefaf2 100%);
+  border-color: #d0edd9;
+}
+
+.ledgerSummaryCard.neg {
+  background: linear-gradient(160deg, #fff6f7 0%, #fde3e6 100%);
+  border-color: #f1c2c8;
+}
+
+.ledgerSummaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.ledgerSummaryStat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.ledgerSummaryDivider {
+  width: 1px;
+  height: 18px;
+  background: #e0e3f0;
+  margin: 0 4px;
+}
+
+.ledgerStatLabel {
+  font-size: 9px;
+  font-weight: 600;
+  color: #9aa0bf;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ledgerStatValue {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1f2332;
+}
+
+.ledgerStatValue.kpi-income { color: #2bb06a; }
+.ledgerStatValue.kpi-expense { color: #e05260; }
+.ledgerStatValue.kpi-alloc { color: #7b61ff; }
+
+.ledgerSummaryBalanceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.ledgerSummaryBalanceLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8b90b2;
+}
+
+.ledgerSummaryBalanceValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1f2332;
+  letter-spacing: -0.02em;
+}
+
 .ledgerPickerBackdrop {
   position: fixed;
   inset: 0;

@@ -171,17 +171,17 @@ export function AppProvider({ children }) {
         exp += Number(t.amount || 0) - reimbursed
       }
     }
-    // Add realized gains to income KPI
+    // Add realized gains to income KPI (use accountTxns scoped to this ledger, gains only)
     const assets = accounts.filter(a => {
       const g = activeLedger.groups?.find(g => g.id === a.groupId);
       return g && g.type === 'asset';
     });
     for (const acc of assets) {
-      const info = calculateAssetMetrics(acc, allAccountTxns, 'asset');
+      const info = calculateAssetMetrics(acc, accountTxns, 'asset');
       if (info && info.realizedGains) {
         const monthsGains = info.realizedGains.filter(g => monthKey(g.date) === month);
         for (const g of monthsGains) {
-          inc += g.amount;
+          if (g.amount > 0) inc += g.amount;
         }
       }
     }

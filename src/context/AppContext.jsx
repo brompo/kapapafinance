@@ -831,15 +831,37 @@ export function AppProvider({ children }) {
     show('Payback saved.')
   }
 
-  async function updateAccountTxn(original, next) {
+  async function updateAccountTxn(id, fields) {
+    const original = allAccountTxns.find(t => t.id === id)
+    if (!original) return
+
+    const next = { ...original, ...fields }
+
     const oldDelta = original.direction === 'in' ? Number(original.amount || 0) : -Number(original.amount || 0)
     const newDelta = next.direction === 'in' ? Number(next.amount || 0) : -Number(next.amount || 0)
-    
+
     let nextAccounts = applyAccountDelta(allAccounts, original.accountId, original.subAccountId, -oldDelta)
     nextAccounts = applyAccountDelta(nextAccounts, next.accountId, next.subAccountId, newDelta)
-    
-    const nextAccountTxns = allAccountTxns.map(t => t.id === original.id ? next : t)
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+
+    const nextAccountTxns = allAccountTxns.map(t => t.id === id ? next : t)
+
+    // If this entry is linked to a ledger transaction, sync date/amount/note there too
+    let nextLedger
+    if (original.kind === 'txn') {
+      const catId = id.replace(/^txn-/, '').replace(/-to$/, '')
+      const ledgerTxn = txns.find(t => t.id === catId)
+      if (ledgerTxn) {
+        const updatedLedgerTxn = {
+          ...ledgerTxn,
+          ...(fields.date !== undefined && { date: fields.date }),
+          ...(fields.amount !== undefined && { amount: fields.amount }),
+          ...(fields.note !== undefined && { note: fields.note }),
+        }
+        nextLedger = { ...activeLedger, txns: txns.map(t => t.id === catId ? updatedLedgerTxn : t) }
+      }
+    }
+
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns, nextLedger })
     show('Updated.')
   }
 

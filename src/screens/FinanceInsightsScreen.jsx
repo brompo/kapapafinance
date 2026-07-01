@@ -4,11 +4,14 @@ import { fmtTZS, fmtCompact, todayISO, calculateAssetMetrics, monthsBetween, day
 import { TransactionDetail } from '../components/TransactionDetail'
 
 export function FinanceInsightsScreen() {
-  const { 
+  const {
     activeLedger, accounts, accountTxns, txns, clients,
-    expenseCats, incomeCats, settings, show, updateTxn, delTxn,
+    expenseCats, incomeCats, categories, settings, show, updateTxn, delTxn,
     activeLedgerId, ALL_LEDGERS_ID, setShowLedgerPicker, addReimbursement
   } = useAppContext()
+
+  const cosCats = useMemo(() => new Set(categories?.cos || []), [categories])
+  const oppsCats = useMemo(() => new Set(categories?.opps || []), [categories])
 
   const [txnsMainTab, setTxnsMainTab] = useState('activity') 
   const [viewGranularity, setViewGranularity] = useState('year') 
@@ -193,8 +196,11 @@ export function FinanceInsightsScreen() {
       const key = viewGranularity === 'year' ? date.slice(0, 7) : date
       if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0 })
       const e = stats.get(key), amt = Number(t.amount || 0), act = date <= todayISO()
+      const isExp = t.type === 'expense'
+        || (t.type === 'cos' && cosCats.has(t.category))
+        || (t.type === 'opps' && oppsCats.has(t.category))
       if (t.type === 'income') { e.inc += amt; if (act) e.actualInc += amt }
-      else if (['expense', 'cos', 'opps'].includes(t.type)) { e.exp += amt; if (act) e.actualExp += amt }
+      else if (isExp) { e.exp += amt; if (act) e.actualExp += amt }
       else if (t.type === 'allocation') { e.all += amt; if (act) e.actualAll += amt }
     })
     const res = []
@@ -205,7 +211,7 @@ export function FinanceInsightsScreen() {
       }
     }
     return res
-  }, [statYear, viewGranularity, txns, statPeriod])
+  }, [statYear, viewGranularity, txns, statPeriod, cosCats, oppsCats])
 
   const CashflowChart = () => {
     const data = [...monthlyStats].reverse()

@@ -108,6 +108,13 @@ export function HomeScreen() {
   useEffect(() => { localStorage.setItem('collapse_opps', collapseOpps) }, [collapseOpps])
   useEffect(() => { localStorage.setItem('collapse_allocation', collapseAllocation) }, [collapseAllocation])
 
+  const displayIncome = incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0)
+  const displayExp = expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0)
+    + cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0)
+    + oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0)
+  const displayAlloc = allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0)
+  const displayBalance = displayIncome - displayExp - displayAlloc
+
   const addCategory = (type) => {
     const name = prompt(`New ${type} category name?`)
     if (!name?.trim()) return
@@ -157,30 +164,30 @@ export function HomeScreen() {
           <button className="ledgerNavBtn" onClick={() => shiftMonth(1)}>›</button>
         </div>
         <div className="ledgerRatio">
-          <span>{kpis.inc ? ((kpis.exp / kpis.inc) * 100).toFixed(2) : '0.00'}%</span>
+          <span>{displayIncome ? ((displayExp / displayIncome) * 100).toFixed(2) : '0.00'}%</span>
           <span className="ledgerRatioDot">◔</span>
         </div>
       </div>
 
-      <div className={`ledgerSummaryCard ${kpis.monthlyBalance < 0 ? 'neg' : 'pos'}`}>
+      <div className={`ledgerSummaryCard ${displayBalance < 0 ? 'neg' : 'pos'}`}>
         <div className="ledgerSummaryBalanceRow">
           <span className="ledgerSummaryBalanceLabel">Balance</span>
-          <span className="ledgerSummaryBalanceValue">{fmtTZS(kpis.monthlyBalance)}</span>
+          <span className="ledgerSummaryBalanceValue">{fmtTZS(displayBalance)}</span>
         </div>
         <div className="ledgerSummaryRow">
           <div className="ledgerSummaryStat">
             <span className="ledgerStatLabel">Income</span>
-            <span className="ledgerStatValue kpi-income">{fmtTZS(kpis.inc)}</span>
+            <span className="ledgerStatValue kpi-income">{fmtTZS(displayIncome)}</span>
           </div>
           <div className="ledgerSummaryDivider" />
           <div className="ledgerSummaryStat">
             <span className="ledgerStatLabel">Exp</span>
-            <span className="ledgerStatValue kpi-expense">{fmtTZS(kpis.exp)}</span>
+            <span className="ledgerStatValue kpi-expense">{fmtTZS(displayExp)}</span>
           </div>
           <div className="ledgerSummaryDivider" />
           <div className="ledgerSummaryStat">
             <span className="ledgerStatLabel">Alloc</span>
-            <span className="ledgerStatValue kpi-alloc">{fmtTZS(kpis.monthlyAlloc)}</span>
+            <span className="ledgerStatValue kpi-alloc">{fmtTZS(displayAlloc)}</span>
           </div>
         </div>
       </div>

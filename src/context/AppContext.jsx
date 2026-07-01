@@ -498,12 +498,13 @@ export function AppProvider({ children }) {
         const entryId = `txn-${t.id}`
         const entry = allAccountTxns.find(at => at.id === entryId)
 
-        const delta = t.type === 'income' ? -Number(t.amount || 0) : Number(t.amount || 0)
-        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-        const subId = (entry && entry.subAccountId) || t.subAccountId || (subs.length ? subs[0].id : null)
-        nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
-
-        nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+        if (entry) {
+          const delta = t.type === 'income' ? -Number(t.amount || 0) : Number(t.amount || 0)
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+          const subId = entry.subAccountId || t.subAccountId || (subs.length ? subs[0].id : null)
+          nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
+          nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+        }
       }
     }
 
@@ -513,12 +514,13 @@ export function AppProvider({ children }) {
         const entryId = `txn-${t.id}-to`
         const entry = allAccountTxns.find(at => at.id === entryId)
 
-        const delta = -Number(t.amount || 0) // Reverse 'in'
-        const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-        const subId = (entry && entry.subAccountId) || t.subAccountId || (subs.length ? subs[0].id : null)
-        nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
-
-        nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+        if (entry) {
+          const delta = -Number(t.amount || 0) // Reverse 'in'
+          const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
+          const subId = entry.subAccountId || t.subAccountId || (subs.length ? subs[0].id : null)
+          nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)
+          nextAccountTxns = nextAccountTxns.filter(at => at.id !== entryId)
+        }
       }
     }
 
@@ -861,7 +863,19 @@ export function AppProvider({ children }) {
     }
 
     const nextAccountTxns = allAccountTxns.filter(x => !toDelete.has(x.id))
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+
+    // Derive category txn ids from account entries with kind 'txn' (id pattern: txn-<catId> or txn-<catId>-to)
+    const catIdsToDelete = new Set(
+      [...toDelete]
+        .map(id => allAccountTxns.find(x => x.id === id))
+        .filter(x => x?.kind === 'txn')
+        .map(x => x.id.replace(/^txn-/, '').replace(/-to$/, ''))
+    )
+    const nextLedger = catIdsToDelete.size > 0
+      ? { ...activeLedger, txns: txns.filter(t => !catIdsToDelete.has(t.id)) }
+      : undefined
+
+    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns, nextLedger })
     show('Deleted.')
   }
 

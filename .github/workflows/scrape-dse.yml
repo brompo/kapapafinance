@@ -1,0 +1,37 @@
+name: Scrape DSE prices
+
+on:
+  schedule:
+    # Weekdays at 16:30 EAT (13:30 UTC) — after DSE market close
+    - cron: "30 13 * * 1-5"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run DSE scraper
+        run: node scripts/scrape-dse.mjs
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git diff --quiet public/data/ && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit & push price data
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "dse-price-bot"
+          git config user.email "bot@kapapafinance.com"
+          git add public/data/dse-prices.json public/data/dse-history.json
+          git commit -m "data: DSE prices $(date +%Y-%m-%d)"
+          git push

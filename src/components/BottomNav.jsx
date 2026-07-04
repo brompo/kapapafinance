@@ -1,10 +1,11 @@
 import React from 'react'
+import { useAppContext } from '../context/AppContext'
 
 export default function BottomNav({ tab, setTab, variant }) {
+  const { settings } = useAppContext()
   const isLight = variant === 'light'
-  // Colors from the user's screenshot
-  const activeColor = '#5a5fb0' 
-  const inactiveColor = '#9aa0bf' 
+  const activeColor = '#5a5fb0'
+  const inactiveColor = '#9aa0bf'
 
   const icons = [
     {
@@ -34,6 +35,16 @@ export default function BottomNav({ tab, setTab, variant }) {
       )
     },
     {
+      id: 'dse',
+      label: 'DSE',
+      content: (active) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 17L9 11L13 15L21 7" stroke={active ? '#5a5fb0' : '#9aa0bf'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M17 7H21V11" stroke={active ? '#5a5fb0' : '#9aa0bf'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
+    },
+    {
       id: 'settings',
       label: 'Settings',
       content: (active) => (
@@ -42,9 +53,11 @@ export default function BottomNav({ tab, setTab, variant }) {
     }
   ]
 
+  const visibleIcons = icons.filter(i => i.id !== 'dse' || settings.dseEnabled)
+
   return (
     <div className={`bottomNav ${isLight ? 'light' : ''}`} style={{ borderTop: '1px solid #f1f1f4' }}>
-      {icons.map(icon => (
+      {visibleIcons.map(icon => (
         <button 
           key={icon.id}
           className={`navItem ${tab === icon.id ? 'active' : ''}`}

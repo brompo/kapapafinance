@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react'
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react'
 import {
   uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
   normalizeAccountsWithGroups
@@ -10,6 +10,7 @@ import {
 import { useVault } from '../hooks/useVault.js'
 import { useGoogleDrive } from '../hooks/useGoogleDrive.js'
 import { loadVaultPlain, exportEncryptedBackup, importEncryptedBackup, resetAll, hasPin } from '../cryptoVault.js'
+import { useDSEPrices, buildAutoValuations } from '../hooks/useDSEPrices.js'
 
 const AppContext = createContext()
 
@@ -118,6 +119,36 @@ export function AppProvider({ children }) {
     DEFAULT_TAB,
     setStage
   })
+
+  // DSE live price sync
+  const dse = useDSEPrices()
+  const dseSyncedRef = useRef(false)
+
+  useEffect(() => {
+    if (stage !== 'app' || !dse.prices?.companies?.length || dseSyncedRef.current) return
+    if (!allAccounts.length) return
+
+    const updates = buildAutoValuations(allAccounts, allAccountTxns, dse.prices.companies)
+    if (!updates.length) {
+      dseSyncedRef.current = true
+      return
+    }
+
+    const today = todayISO()
+    const valuations = updates.map(u => ({
+      accountId: u.accountId,
+      amount: 0,
+      direction: 'in',
+      kind: 'valuation',
+      receiveDate: today,
+      unitPrice: u.unitPrice,
+      note: `DSE auto-price ${u.symbol} @ ${u.unitPrice.toLocaleString()}`,
+    }))
+
+    addAccountTxn(valuations)
+    dseSyncedRef.current = true
+    console.log(`[DSE] Auto-priced ${updates.length} share(s):`, updates.map(u => `${u.symbol}=${u.unitPrice}`).join(', '))
+  }, [stage, dse.prices, allAccounts, allAccountTxns])
 
   function handleReset() {
     if (window.confirm('Wipe all data and reset?')) {
@@ -982,7 +1013,10 @@ export function AppProvider({ children }) {
     addLedgerName, setAddLedgerName,
     handleAddPersonalLedger, handleAddBusinessLedger,
     handleSaveNewLedger, handleDeleteLedger,
-    handleSelectLedger, handleSwitchLedgerToAccounts
+    handleSelectLedger, handleSwitchLedgerToAccounts,
+
+    // DSE Market Data
+    dse,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

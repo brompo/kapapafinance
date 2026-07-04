@@ -47,6 +47,7 @@ export const APP_TAB_LABELS = {
   insights: 'Insights',
   tx: 'Transactions',
   accounts: 'Accounts',
+  dse: 'DSE',
   settings: 'Settings'
 };
 

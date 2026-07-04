@@ -5,6 +5,7 @@ import { HomeScreen } from './screens/HomeScreen'
 import { FinanceInsightsScreen } from './screens/FinanceInsightsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import AccountsScreen from './screens/Accounts'
+import DSEWatchScreen from './screens/DSEWatchScreen'
 import BottomNav from './components/BottomNav'
 import { LedgerPicker } from './components/LedgerPicker'
 
@@ -65,6 +66,7 @@ function VaultApp() {
             onSwitchLedger={handleSwitchLedgerToAccounts}
           />
         )}
+        {tab === 'dse' && settings.dseEnabled && <DSEWatchScreen />}
         {tab === 'settings' && <SettingsScreen />}
       </main>
       

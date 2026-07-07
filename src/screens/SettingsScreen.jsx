@@ -8,7 +8,7 @@ import ChangelogScreen from './ChangelogScreen'
 import pkg from '../../package.json'
 
 export function SettingsScreen() {
-  const { show } = useAppContext()
+  const { settings, updateSettings, show } = useAppContext()
   const version = pkg.version
   
   const [activeSub, setActiveSub] = useState(null)
@@ -42,6 +42,30 @@ export function SettingsScreen() {
             </div>
             <div className="stgChevron">›</div>
           </button>
+        </div>
+      </div>
+
+      <div className="stgSection">
+        <div className="stgSectionTitle">FEATURES</div>
+        <div className="stgGroup">
+          <div className="stgRow" style={{ cursor: 'default' }}>
+            <div className="stgRowIcon">📈</div>
+            <div className="stgRowBody" style={{ flex: 1 }}>
+              <div className="stgRowText">DSE Watch</div>
+              <div className="stgRowSub">Show DSE stock market tab</div>
+            </div>
+            <label className="toggle" style={{ marginLeft: 'auto' }}>
+              <input
+                type="checkbox"
+                checked={!!settings.dseEnabled}
+                onChange={e => {
+                  updateSettings({ ...settings, dseEnabled: e.target.checked })
+                  show(e.target.checked ? 'DSE Watch enabled.' : 'DSE Watch hidden.')
+                }}
+              />
+              <span className="toggleTrack" />
+            </label>
+          </div>
         </div>
       </div>
 

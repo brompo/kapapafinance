@@ -49,26 +49,6 @@ export default function GeneralSettings({ onClose }) {
 
           <div className="hr" />
 
-          <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between', padding: '16px 0' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>DSE Watch</div>
-              <div className="small">Show DSE stock market tab.</div>
-            </div>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={!!settings.dseEnabled}
-                onChange={e => {
-                  updateSettings({ ...settings, dseEnabled: e.target.checked })
-                  show(e.target.checked ? 'DSE Watch enabled.' : 'DSE Watch hidden.')
-                }}
-              />
-              <span className="toggleTrack" />
-            </label>
-          </div>
-
-          <div className="hr" />
-
           <div className="row" style={{ padding: '16px 0' }}>
             <button
               className="btn"

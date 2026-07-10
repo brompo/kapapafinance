@@ -1,7 +1,20 @@
 import React, { useState, useMemo } from 'react'
+import {
+  ResponsiveContainer, ComposedChart, BarChart, Bar, Cell, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, ReferenceLine
+} from 'recharts'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, fmtCompact, todayISO, calculateAssetMetrics, monthsBetween, daysBetween } from '../money'
 import { TransactionDetail } from '../components/TransactionDetail'
+
+// Categorical palette for allocation-category segments — green/red are reserved
+// for the breakeven status (bar/line color) and never reused as a category hue.
+const ALLOC_PALETTE = ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7', '#e87ba4', '#eb6834']
+const ALLOC_OTHER_COLOR = '#94a3b8'
+const ALLOC_SURPLUS_COLOR = '#cbd5e1'
+const BREAKEVEN_GOOD = '#22c55e'
+const BREAKEVEN_BAD = '#ef4444'
+const ALLOC_OTHER_KEY = '__other__'
 
 export function FinanceInsightsScreen() {
   const {
@@ -189,75 +202,154 @@ export function FinanceInsightsScreen() {
 
   const monthlyStats = useMemo(() => {
     const stats = new Map()
+    const emptyStat = () => ({ inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0, allocByCat: {}, actualAllocByCat: {} })
     txns.forEach(t => {
       const date = t.date || todayISO()
       if (viewGranularity === 'month' && !date.startsWith(statPeriod)) return
       if (viewGranularity === 'year' && Number(date.slice(0, 4)) !== statYear) return
       const key = viewGranularity === 'year' ? date.slice(0, 7) : date
-      if (!stats.has(key)) stats.set(key, { inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0 })
+      if (!stats.has(key)) stats.set(key, emptyStat())
       const e = stats.get(key), amt = Number(t.amount || 0), act = date <= todayISO()
       const isExp = t.type === 'expense'
         || (t.type === 'cos' && cosCats.has(t.category))
         || (t.type === 'opps' && oppsCats.has(t.category))
       if (t.type === 'income') { e.inc += amt; if (act) e.actualInc += amt }
       else if (isExp) { e.exp += amt; if (act) e.actualExp += amt }
-      else if (t.type === 'allocation') { e.all += amt; if (act) e.actualAll += amt }
+      else if (t.type === 'allocation') {
+        const cat = t.category || 'Uncategorized'
+        e.all += amt; e.allocByCat[cat] = (e.allocByCat[cat] || 0) + amt
+        if (act) { e.actualAll += amt; e.actualAllocByCat[cat] = (e.actualAllocByCat[cat] || 0) + amt }
+      }
     })
     const res = []
     if (viewGranularity === 'year') {
       for (let m = 1; m <= 12; m++) {
-        const k = `${statYear}-${String(m).padStart(2, '0')}`, dt = new Date(statYear, m - 1, 1), d = stats.get(k) || { inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0 }
+        const k = `${statYear}-${String(m).padStart(2, '0')}`, dt = new Date(statYear, m - 1, 1), d = stats.get(k) || emptyStat()
         res.push({ key: k, label: dt.toLocaleString('default', { month: 'short' }), ...d })
       }
     }
     return res
   }, [statYear, viewGranularity, txns, statPeriod, cosCats, oppsCats])
 
-  const CashflowChart = () => {
-    const data = [...monthlyStats].reverse()
-    const maxVal = Math.max(...data.map(m => Math.max(m.inc, m.exp, m.all || 0)), 1)
-    const isYear = viewGranularity === 'year', w = 300, h = 130, pL = 10, pR = 10, pT = 15, pB = 25
-    const getNiceMax = (m) => { const p = Math.pow(10, Math.floor(Math.log10(m))), f = m/p; let nf; if (f<=1) nf=1; else if (f<=2) nf=2; else if (f<=2.5) nf=2.5; else if (f<=5) nf=5; else nf=10; return nf*p; }
-    const chartMax = getNiceMax(maxVal)
-    const getX = (i) => (i * (w - pL - pR)) / Math.max(data.length - 1, 1) + pL
-    const getY = (v) => h - (v / chartMax) * (h - pT - pB) - pB
-    const now = new Date(), todayStr = now.toISOString().slice(0,10)
-    let activeIdx = -1
-    if (viewGranularity === 'month') { if (statPeriod === todayStr.slice(0,7)) activeIdx = now.getDate()-1; else if (statPeriod < todayStr.slice(0,7)) activeIdx = data.length-1 }
-    else if (viewGranularity === 'year') { if (statYear === now.getFullYear()) activeIdx = now.getMonth(); else if (statYear < now.getFullYear()) activeIdx = 11 }
-    
-    const incAct = data.slice(0, activeIdx+1).map((m,i)=>`${i===0?'M':'L'} ${getX(i)} ${getY(m.inc)}`).join(' ')
-    const expAct = data.slice(0, activeIdx+1).map((m,i)=>`${i===0?'M':'L'} ${getX(i)} ${getY(m.exp)}`).join(' ')
-    const startIdx = Math.max(0, activeIdx)
-    const incProj = data.slice(startIdx).map((m,i)=>`${i===0?'M':'L'} ${getX(i+startIdx)} ${getY(m.inc)}`).join(' ')
-    const expProj = data.slice(startIdx).map((m,i)=>`${i===0?'M':'L'} ${getX(i+startIdx)} ${getY(m.exp)}`).join(' ')
-    const tInc = data.reduce((s,m)=>s+m.inc,0), tExp = data.reduce((s,m)=>s+m.exp,0), aInc = data.reduce((s,m)=>s+m.actualInc,0), pInc = Math.max(0,tInc-aInc), aExp = data.reduce((s,m)=>s+m.actualExp,0), pExp = Math.max(0,tExp-aExp), aBal = aInc-aExp, pBal = pInc-pExp, tBal = tInc-tExp
+  // Fixed, ledger-defined order so a category's color/slot never shifts across
+  // months (color follows the entity, not its rank). Anything beyond the
+  // palette's 6 slots folds into "Other" rather than cycling/generating a hue.
+  const allocCategoryOrder = useMemo(() => (categories.allocation || []).slice(0, ALLOC_PALETTE.length), [categories])
+
+  const BreakevenChart = () => {
+    const todayKey = todayISO().slice(0, 7)
+
+    // Chronological Jan->Dec, each row annotated with its stacked segments.
+    const chartData = useMemo(() => monthlyStats.map(m => {
+      const total = m.inc - m.exp - m.all
+      const isPositive = total >= 0
+      const row = { key: m.key, label: m.label, total, isProjected: m.key > todayKey }
+      let otherAlloc = 0
+      allocCategoryOrder.forEach((cat, i) => { row[`cat${i}`] = isPositive ? (m.allocByCat[cat] || 0) : 0 })
+      Object.entries(m.allocByCat).forEach(([cat, amt]) => { if (!allocCategoryOrder.includes(cat)) otherAlloc += amt })
+      row.other = isPositive ? otherAlloc : 0
+      row.surplus = isPositive ? total : 0
+      row.deficit = isPositive ? 0 : total
+      return row
+    }), [monthlyStats, allocCategoryOrder, todayKey])
+
+    const hasOther = chartData.some(r => r.other > 0)
+
+    // Cumulative running total for the year — its own single axis (separate
+    // panel from the bars, per the dual-axis anti-pattern).
+    const cumData = useMemo(() => {
+      let running = 0
+      const lastActualIdx = chartData.reduce((acc, r, i) => (r.key <= todayKey ? i : acc), -1)
+      return chartData.map((r, i) => {
+        running += r.total
+        return {
+          key: r.key, label: r.label, cum: running,
+          cumActual: i <= lastActualIdx ? running : null,
+          cumProjected: i >= lastActualIdx ? running : null
+        }
+      })
+    }, [chartData, todayKey])
+
+    const cumMax = Math.max(...cumData.map(d => d.cum), 0)
+    const cumMin = Math.min(...cumData.map(d => d.cum), 0)
+    const cumRange = (cumMax - cumMin) || 1
+    const zeroOffset = cumMax / cumRange
+
+    const openMonth = (monthKey, type, category, label) => {
+      setBreakdownModal({ month: monthKey, type, category, title: `${label} ${type === 'all' ? 'Overview' : type === 'allocation' ? (category === ALLOC_OTHER_KEY ? 'Other Allocations' : (category || 'Allocation')) : type[0].toUpperCase()+type.slice(1)}` })
+    }
+
     return (
-      <div className="card" style={{ padding: '20px 16px', marginBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}><div style={{ fontWeight: 700, fontSize: 18 }}>Money Cashflow</div><div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', padding: '4px 8px', borderRadius: 8 }}>{statYear}</div></div>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 25, fontSize: 11, color: '#64748b' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 24, height: 2, background: '#64748b' }} /> Actual</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 24, display: 'flex', gap: 2 }}>{[1,2,3,4].map(k=><div key={k} style={{ width: 4, height: 2, background: '#64748b' }} />)}</div> Projected</div>
+      <div className="card" style={{ padding: '20px 16px 10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Breakeven Progress</div>
+          <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', padding: '4px 8px', borderRadius: 8 }}>{statYear}</div>
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 25, justifyContent: 'space-between' }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 12, color: '#64748b' }}>Actual Income</div><div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{fmtCompact(aInc)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Proj: <span style={{ color: '#22c55e' }}>{fmtCompact(pInc)}</span><br/>Total: <span style={{ color: '#22c55e' }}>{fmtCompact(tInc)}</span></div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 12, color: '#64748b' }}>Actual Exp.</div><div style={{ fontSize: 20, fontWeight: 700, color: '#ef4444' }}>{fmtCompact(aExp)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Proj: <span style={{ color: '#ef4444' }}>{fmtCompact(pExp)}</span><br/>Total: <span style={{ color: '#ef4444' }}>{fmtCompact(tExp)}</span></div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 12, color: '#64748b' }}>Actual Bal.</div><div style={{ fontSize: 20, fontWeight: 700, color: aBal>=0?'#16A34A':'#ef4444' }}>{fmtCompact(aBal)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Proj: <span style={{ color: pBal>=0?'#16A34A':'#ef4444' }}>{fmtCompact(pBal)}</span><br/>Total: <span style={{ color: tBal>=0?'#16A34A':'#ef4444' }}>{fmtCompact(tBal)}</span></div></div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>Tap a bar to see the transactions behind it</div>
+
+        <div style={{ width: '100%', height: 190 }}>
+          <ResponsiveContainer>
+            <BarChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => fmtCompact(v)} width={40} />
+              <ReferenceLine y={0} stroke="#cbd5e1" />
+              <Tooltip
+                formatter={(value, name) => [fmtCompact(value), name]}
+                labelFormatter={label => label}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #f1f5f9' }}
+              />
+              {allocCategoryOrder.map((cat, i) => (
+                <Bar key={cat} dataKey={`cat${i}`} name={cat} stackId="s" onClick={(_, idx) => openMonth(chartData[idx].key, 'allocation', cat, chartData[idx].label)}>
+                  {chartData.map((row, idx) => <Cell key={idx} fill={ALLOC_PALETTE[i]} fillOpacity={row.isProjected ? 0.45 : 1} cursor="pointer" />)}
+                </Bar>
+              ))}
+              {hasOther && (
+                <Bar dataKey="other" name="Other" stackId="s" onClick={(_, idx) => openMonth(chartData[idx].key, 'allocation', ALLOC_OTHER_KEY, chartData[idx].label)}>
+                  {chartData.map((row, idx) => <Cell key={idx} fill={ALLOC_OTHER_COLOR} fillOpacity={row.isProjected ? 0.45 : 1} cursor="pointer" />)}
+                </Bar>
+              )}
+              <Bar dataKey="surplus" name="Uncommitted surplus" stackId="s" onClick={(_, idx) => openMonth(chartData[idx].key, 'all', null, chartData[idx].label)}>
+                {chartData.map((row, idx) => <Cell key={idx} fill={ALLOC_SURPLUS_COLOR} fillOpacity={row.isProjected ? 0.45 : 1} cursor="pointer" />)}
+              </Bar>
+              <Bar dataKey="deficit" name="Deficit" stackId="s" onClick={(_, idx) => openMonth(chartData[idx].key, 'all', null, chartData[idx].label)}>
+                {chartData.map((row, idx) => <Cell key={idx} fill={BREAKEVEN_BAD} fillOpacity={row.isProjected ? 0.45 : 1} cursor="pointer" />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-        <div style={{ position: 'relative', height: h, width: 'calc(100% + 16px)', marginLeft: -7, marginBottom: 10 }}>
-          <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-            {[0, 0.25, 0.5, 0.75, 1].map(p=>(<g key={p}><line x1={pL} y1={getY(chartMax*p)} x2={w-pR} y2={getY(chartMax*p)} stroke="#f1f5f9" strokeDasharray="4 4" strokeWidth="0.5" /><text x={pL-4} y={getY(chartMax*p)} textAnchor="end" alignmentBaseline="middle" fill="#94a3b8" style={{ fontSize: 8 }}>{(chartMax*p/1_000_000).toFixed(1)}M</text></g>))}
-            {data.map((m, i) => (isYear || i % 5 === 0) && <text key={m.key} x={getX(i)} y={h-5} textAnchor="middle" fill="#94a3b8" style={{ fontSize: 8 }}>{isYear ? m.label.slice(0,3) : m.label}</text>)}
-            {activeIdx>=0 && <>
-              <path d={expAct} fill="none" stroke="#ef4444" strokeWidth="2" opacity="0.6" />
-              <path d={incAct} fill="none" stroke="#22c55e" strokeWidth="2" />
-            </>}
-            {activeIdx < data.length-1 && <>
-              <path d={expProj} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" opacity="0.4" />
-              <path d={incProj} fill="none" stroke="#22c55e" strokeWidth="2" strokeDasharray="4 4" opacity="0.6" />
-            </>}
-            {data.map((m,i)=>(<React.Fragment key={i}><circle cx={getX(i)} cy={getY(m.exp)} r="1.5" fill={i<=activeIdx?"#ef4444":"#fff"} stroke="#ef4444" strokeWidth={i<=activeIdx?"0":"1"} opacity={i<=activeIdx?"0.6":"0.4"} /><circle cx={getX(i)} cy={getY(m.inc)} r="1.5" fill={i<=activeIdx?"#22c55e":"#fff"} stroke="#22c55e" strokeWidth={i<=activeIdx?"0":"1"} opacity={i<=activeIdx?"1":"0.6"} /></React.Fragment>))}
-          </svg>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, color: '#64748b', margin: '10px 0 20px' }}>
+          {allocCategoryOrder.map((cat, i) => (
+            <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 9, height: 9, borderRadius: 3, background: ALLOC_PALETTE[i] }} />{cat}
+            </div>
+          ))}
+          {hasOther && <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 3, background: ALLOC_OTHER_COLOR }} />Other</div>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 3, background: ALLOC_SURPLUS_COLOR }} />Uncommitted surplus</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 3, background: BREAKEVEN_BAD }} />Below breakeven</div>
+        </div>
+
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 2 }}>Cumulative for {statYear}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Running total — green above breakeven, red below</div>
+        <div style={{ width: '100%', height: 110 }}>
+          <ResponsiveContainer>
+            <ComposedChart data={cumData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={Math.max(0, Math.min(1, zeroOffset))} stopColor={BREAKEVEN_GOOD} />
+                  <stop offset={Math.max(0, Math.min(1, zeroOffset))} stopColor={BREAKEVEN_BAD} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+              <YAxis domain={[cumMin, cumMax]} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => fmtCompact(v)} width={40} />
+              <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="4 4" />
+              <Tooltip formatter={(value) => [fmtCompact(value), 'Cumulative']} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #f1f5f9' }} />
+              <Line type="monotone" dataKey="cumActual" stroke="url(#cumGrad)" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="cumProjected" stroke="url(#cumGrad)" strokeWidth={2.5} strokeDasharray="4 4" dot={false} connectNulls={false} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       </div>
     )
@@ -403,58 +495,83 @@ export function FinanceInsightsScreen() {
     )
   }
 
-  const BreakdownModal = ({ month, type, title }) => {
+  const KIND_STYLE = {
+    income: { bg: '#ecfdf5', fg: '#059669', label: 'IN', amtColor: '#10b981', sign: '+' },
+    expense: { bg: '#fef2f2', fg: '#dc2626', label: 'OUT', amtColor: '#ef4444', sign: '-' },
+    allocation: { bg: '#eef2ff', fg: '#4f46e5', label: 'ALC', amtColor: '#6366f1', sign: '-' },
+  }
+
+  const BreakdownModal = ({ month, type, category, title }) => {
     const list = useMemo(() => {
       const mKey = month // e.g. "2026-02"
       const vaultTxns = txns.filter(t => {
         if (!t.date || !t.date.startsWith(mKey)) return false
         if (type === 'income') return t.type === 'income'
         if (type === 'expense') return ['expense', 'cos', 'opps'].includes(t.type)
-        if (type === 'allocation') return t.type === 'allocation'
+        if (type === 'allocation') {
+          if (t.type !== 'allocation') return false
+          if (!category) return true
+          if (category === ALLOC_OTHER_KEY) return !allocCategoryOrder.includes(t.category)
+          return t.category === category
+        }
+        if (type === 'all') return ['income', 'expense', 'cos', 'opps', 'allocation'].includes(t.type)
         return false
       })
-      const acctTxns = accountTxns.filter(t => {
+      // Category-filtered allocation drill-downs only cover categorized ledger
+      // transactions — account-level transfers carry no category to match against.
+      const acctTxns = category ? [] : accountTxns.filter(t => {
         if (t.kind === 'txn') return false
         if (!t.date || !t.date.startsWith(mKey)) return false
+        if (type === 'all') return true
         const dirMatch = (type === 'income') ? t.direction === 'in' : t.direction === 'out'
         return dirMatch
       })
       return [...vaultTxns.map(t => ({ ...t, source: 'ledger' })), ...acctTxns.map(t => ({ ...t, source: 'account' }))]
         .sort((a,b) => b.date.localeCompare(a.date))
-    }, [month, type])
+    }, [month, type, category])
+
+    const rowKind = (t) => {
+      if (t.source === 'account') return t.direction === 'in' ? 'income' : 'expense'
+      if (t.type === 'income') return 'income'
+      if (t.type === 'allocation') return 'allocation'
+      return 'expense'
+    }
 
     return (
       <div className="modalBackdrop" onClick={() => setBreakdownModal(null)} style={{ zIndex: 200 }}>
         <div className="modalCard" onClick={e => e.stopPropagation()} style={{ maxWidth: 450, padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 18 }}>{title} Breakdown</div>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
               <div style={{ fontSize: 12, color: '#64748b' }}>{month} • {monthlyViewMode === 'actual' ? 'Actuals' : 'Projected'}</div>
             </div>
             <button className="btn" onClick={() => setBreakdownModal(null)}>Close</button>
           </div>
           <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '10px 0' }}>
             {list.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No transactions found</div>}
-            {list.map((t, i) => (
-              <div 
-                key={i} 
-                style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 20px', borderBottom: i === list.length-1 ? 'none' : '1px solid #f8fafc', cursor: 'pointer' }}
-                onClick={() => { if (t.source === 'ledger') setSelectedTxn({ raw: t }); setBreakdownModal(null); }}
-              >
-                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: type === 'income' ? '#ecfdf5' : '#fef2f2', color: type === 'income' ? '#059669' : '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
-                    {type === 'income' ? 'IN' : 'OUT'}
+            {list.map((t, i) => {
+              const kind = rowKind(t), st = KIND_STYLE[kind]
+              return (
+                <div
+                  key={i}
+                  style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 20px', borderBottom: i === list.length-1 ? 'none' : '1px solid #f8fafc', cursor: 'pointer' }}
+                  onClick={() => { if (t.source === 'ledger') setSelectedTxn({ raw: t }); setBreakdownModal(null); }}
+                >
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: st.bg, color: st.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
+                      {st.label}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{t.category || t.note || (kind === 'income' ? 'Income' : kind === 'allocation' ? 'Allocation' : 'Expense')}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(t.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} {t.note && `• ${t.note}`}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{t.category || t.note || (type === 'income' ? 'Income' : 'Expense')}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(t.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} {t.note && `• ${t.note}`}</div>
+                  <div style={{ fontWeight: 800, color: st.amtColor }}>
+                    {st.sign}{fmtCompact(t.amount)}
                   </div>
                 </div>
-                <div style={{ fontWeight: 800, color: type === 'income' ? '#10b981' : '#ef4444' }}>
-                  {type === 'income' ? '+' : '-'}{fmtCompact(t.amount)}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
@@ -557,6 +674,7 @@ export function FinanceInsightsScreen() {
       {insightTab === 'records' && <RecordsView />}
       {insightTab === 'cashflow' && (
         <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 15 }}>
+          {viewGranularity === 'year' && <BreakevenChart />}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}><div style={{ fontWeight: 700, fontSize: 14 }}>Monthly Performance Breakdown</div><div style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 3, borderRadius: 18 }}><button onClick={()=>setMonthlyViewMode('actual')} style={{ padding: '5px 12px', borderRadius: 15, border: 'none', background: monthlyViewMode === 'actual' ? '#6366f1' : 'transparent', color: monthlyViewMode === 'actual' ? '#fff' : '#64748b', fontWeight: 700, fontSize: 12 }}>Actual</button><button onClick={()=>setMonthlyViewMode('projected')} style={{ padding: '5px 12px', borderRadius: 15, border: 'none', background: monthlyViewMode === 'projected' ? '#6366f1' : 'transparent', color: monthlyViewMode === 'projected' ? '#fff' : '#64748b', fontWeight: 700, fontSize: 12 }}>Projected</button></div></div>
             <div style={{ overflowX: 'auto' }}>

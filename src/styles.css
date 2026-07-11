@@ -2318,9 +2318,9 @@ label {
 }
 
 .ledgerCardIcon {
-  width: 32px;
+  width: 45px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: 40%;
   display: flex;
   align-items: center;
   justify-content: center;

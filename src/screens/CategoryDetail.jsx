@@ -80,9 +80,15 @@ export function CategoryDetail({
   const reimburseAccount = accounts.find(a => a.id === reimburseAccountId)
   const showReimburseSubSelect = reimburseAccount && Array.isArray(reimburseAccount.subAccounts) && reimburseAccount.subAccounts.length > 0
   
+  // Collections have no categories/categoryMeta bucket of their own — they reuse
+  // Income's, so any read/write keyed by category.type must resolve through this.
+  const metaType = category.type === 'collection' ? 'income' : category.type
+
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState(category.name)
   const [editColor, setEditColor] = useState(meta?.color || '')
+  const [editNeedsCompliance, setEditNeedsCompliance] = useState(!!meta?.needsCompliance)
+  const [editBudget, setEditBudget] = useState(String(meta?.budget || 0))
   const budget = meta?.budget || 0
   const subcats = meta?.subs?.length ? meta.subs : (CATEGORY_SUBS[category.name] || [])
   const colorOptions = ['#ffe8b6', '#ffe0cf', '#ffd9ec', '#e8dcff', '#dbeaff', '#e6f3ff', '#dff5e1', '#fff1c9', '#f0efe9']
@@ -150,7 +156,13 @@ export function CategoryDetail({
       clientId,
       recurring,
       pendingClient,
-      updateDefaultAccount
+      updateDefaultAccount,
+      // Collections inherit their category's compliance requirement — if the
+      // category needs compliance, new entries start pending until cleared.
+      ...(category.type === 'collection' && {
+        needsCompliance: !!meta?.needsCompliance,
+        complianceAmount: meta?.needsCompliance ? '' : 0
+      })
     });
   }
 
@@ -158,10 +170,10 @@ export function CategoryDetail({
     setSelectedTxn({
       id: `txn-${t.id}`,
       date: t.date,
-      title: t.category || (t.type === 'income' ? 'Income' : 'Expense'),
+      title: t.category || ((t.type === 'income' || t.type === 'collection') ? 'Income' : 'Expense'),
       sub: t.note || '',
       amount: Number(t.amount || 0),
-      direction: t.type === 'income' ? 'in' : 'out',
+      direction: (t.type === 'income' || t.type === 'collection') ? 'in' : 'out',
       type: t.type,
       category: t.category || '',
       accountId: t.accountId || '',
@@ -244,6 +256,24 @@ export function CategoryDetail({
                   ))}
                 </div>
               </div>
+              {category.type === 'collection' && (
+                <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>Needs Compliance</div>
+                    <div className="small">New collections in this category start Pending until a compliance amount is set, and are excluded from Income until cleared.</div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={editNeedsCompliance} onChange={e => setEditNeedsCompliance(e.target.checked)} />
+                    <span className="toggleTrack" />
+                  </label>
+                </div>
+              )}
+              {category.type === 'allocation' && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Monthly Target (TZS)</div>
+                  <input className="input" inputMode="decimal" value={editBudget} onChange={e => setEditBudget(e.target.value)} placeholder="e.g. 100000" />
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                 <button className="btn" style={{ flex: 1 }} onClick={() => setShowEditModal(false)}>Cancel</button>
                 <button className="btn primary" style={{ flex: 1 }} onClick={() => {
@@ -251,13 +281,18 @@ export function CategoryDetail({
                     ...activeLedger,
                     categories: {
                       ...activeLedger.categories,
-                      [category.type]: activeLedger.categories[category.type].map(n => n === category.name ? editName : n)
+                      [metaType]: activeLedger.categories[metaType].map(n => n === category.name ? editName : n)
                     },
                     categoryMeta: {
                       ...activeLedger.categoryMeta,
-                      [category.type]: {
-                        ...(activeLedger.categoryMeta[category.type] || {}),
-                        [editName]: { ...(activeLedger.categoryMeta[category.type]?.[category.name] || {}), color: editColor }
+                      [metaType]: {
+                        ...(activeLedger.categoryMeta[metaType] || {}),
+                        [editName]: {
+                          ...(activeLedger.categoryMeta[metaType]?.[category.name] || {}),
+                          color: editColor,
+                          ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
+                          ...(category.type === 'allocation' && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 })
+                        }
                       }
                     }
                   }
@@ -266,6 +301,30 @@ export function CategoryDetail({
                   show('Card updated.')
                 }}>Save Changes</button>
               </div>
+              <button
+                className="btn danger"
+                style={{ width: '100%', marginTop: 4 }}
+                onClick={() => {
+                  const warn = total > 0
+                    ? `Delete "${category.name}"? It has ${fmtTZS(total)} recorded — existing transactions are kept but will no longer show this card.`
+                    : `Delete "${category.name}"? This can't be undone.`
+                  if (!window.confirm(warn)) return
+                  const nextMetaForType = { ...(activeLedger.categoryMeta[metaType] || {}) }
+                  delete nextMetaForType[category.name]
+                  const updatedLedger = {
+                    ...activeLedger,
+                    categories: {
+                      ...activeLedger.categories,
+                      [metaType]: activeLedger.categories[metaType].filter(n => n !== category.name)
+                    },
+                    categoryMeta: { ...activeLedger.categoryMeta, [metaType]: nextMetaForType }
+                  }
+                  persistActiveLedger(updatedLedger)
+                  setShowEditModal(false)
+                  show('Card deleted.')
+                  onClose()
+                }}
+              >Delete Category</button>
             </div>
           </div>
         </div>
@@ -461,7 +520,7 @@ export function CategoryDetail({
         </div>
       ) : (
         <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
-          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : 'Expense'}</button>
+          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : 'Expense'}</button>
 
           <div className="modeSegmented" style={{
             display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12,
@@ -497,8 +556,8 @@ export function CategoryDetail({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
             {groupedTxns.map(([m, items]) => {
               const monthName = new Date(m + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })
-              const totalOut = items.reduce((s, t) => s + (t.type !== 'income' ? Number(t.amount || 0) : 0), 0)
-              const totalIn = items.reduce((s, t) => s + (t.type === 'income' ? Number(t.amount || 0) : 0), 0)
+              const totalOut = items.reduce((s, t) => s + (!(t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
+              const totalIn = items.reduce((s, t) => s + ((t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
               return (
                 <div key={m} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{
@@ -542,8 +601,8 @@ export function CategoryDetail({
                           </div>
                         )}
                       </div>
-                      <div className={`catHistoryAmount ${t.type === 'income' ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
-                        {t.type === 'income' ? '+' : '-'}{fmtTZS(t.amount)}
+                      <div className={`catHistoryAmount ${(t.type === 'income' || t.type === 'collection') ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
+                        {(t.type === 'income' || t.type === 'collection') ? '+' : '-'}{fmtTZS(t.amount)}
                       </div>
                     </div>
                   ))}

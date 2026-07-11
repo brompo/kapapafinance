@@ -6,6 +6,7 @@ import {
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, fmtCompact, todayISO, calculateAssetMetrics, monthsBetween, daysBetween } from '../money'
 import { TransactionDetail } from '../components/TransactionDetail'
+import { collectionStatus } from '../utils/pipeline'
 
 // Categorical palette for allocation-category segments — green/red are reserved
 // for the breakeven status (bar/line color) and never reused as a category hue.
@@ -19,12 +20,17 @@ const ALLOC_OTHER_KEY = '__other__'
 export function FinanceInsightsScreen() {
   const {
     activeLedger, accounts, accountTxns, txns, clients,
-    expenseCats, incomeCats, categories, settings, show, updateTxn, delTxn,
+    expenseCats, incomeCats, categories, categoryMeta, settings, show, updateTxn, delTxn,
     activeLedgerId, ALL_LEDGERS_ID, setShowLedgerPicker, addReimbursement
   } = useAppContext()
 
   const cosCats = useMemo(() => new Set(categories?.cos || []), [categories])
   const oppsCats = useMemo(() => new Set(categories?.opps || []), [categories])
+
+  // Collections (personal-ledger pipeline) are the inflow-equivalent of legacy income
+  // transactions, but their recognized amount is net of any compliance held-back sum.
+  const isIncomeType = (t) => t.type === 'income' || t.type === 'collection'
+  const incomeAmt = (t) => t.type === 'collection' ? collectionStatus(t).net : Number(t.amount || 0)
 
   const [txnsMainTab, setTxnsMainTab] = useState('activity') 
   const [viewGranularity, setViewGranularity] = useState('year') 
@@ -164,7 +170,7 @@ export function FinanceInsightsScreen() {
     const iso3m = threeMonthsAgo.toISOString().slice(0, 10);
     const recentTxns = txns.filter(t => t.date >= iso3m);
     let inc3m = 0, exp3m = 0;
-    recentTxns.forEach(t => { if (t.type === 'income') inc3m += Number(t.amount || 0); else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') exp3m += Number(t.amount || 0); });
+    recentTxns.forEach(t => { if (isIncomeType(t)) inc3m += incomeAmt(t); else if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') exp3m += Number(t.amount || 0); });
     const avgMonthlyProfit = (inc3m - exp3m) / 3;
     const monthlyReturn = capitalDeployed > 0 ? (avgMonthlyProfit / capitalDeployed) * 100 : 0;
     let totalWeightedRate = 0;
@@ -179,7 +185,7 @@ export function FinanceInsightsScreen() {
       const clientName = t.clientId ? clients.find(c => c.id === t.clientId)?.name : null
       let sub = t.note || ''
       if (clientName) sub = sub ? `${clientName} • ${sub}` : clientName
-      return { id: `txn-${t.id}`, date: t.date, title: t.category || (t.type === 'income' ? 'Income' : 'Expense'), sub, amount: Number(t.amount || 0), direction: t.type === 'income' ? 'in' : 'out', type: t.type, raw: t }
+      return { id: `txn-${t.id}`, date: t.date, title: t.category || (isIncomeType(t) ? 'Income' : 'Expense'), sub, amount: isIncomeType(t) ? incomeAmt(t) : Number(t.amount || 0), direction: isIncomeType(t) ? 'in' : 'out', type: t.type, raw: t }
     })
     const acctTxns = accountTxns.filter(t => t.kind !== 'txn').map(t => {
       const acct = accounts.find(a => a.id === t.accountId)
@@ -213,7 +219,7 @@ export function FinanceInsightsScreen() {
       const isExp = t.type === 'expense'
         || (t.type === 'cos' && cosCats.has(t.category))
         || (t.type === 'opps' && oppsCats.has(t.category))
-      if (t.type === 'income') { e.inc += amt; if (act) e.actualInc += amt }
+      if (isIncomeType(t)) { const inc = incomeAmt(t); e.inc += inc; if (act) e.actualInc += inc }
       else if (isExp) { e.exp += amt; if (act) e.actualExp += amt }
       else if (t.type === 'allocation') {
         const cat = t.category || 'Uncategorized'
@@ -234,7 +240,11 @@ export function FinanceInsightsScreen() {
   // Fixed, ledger-defined order so a category's color/slot never shifts across
   // months (color follows the entity, not its rank). Anything beyond the
   // palette's 6 slots folds into "Other" rather than cycling/generating a hue.
-  const allocCategoryOrder = useMemo(() => (categories.allocation || []).slice(0, ALLOC_PALETTE.length), [categories])
+  const allocCategoryOrder = useMemo(() => (
+    [...(categories.allocation || [])]
+      .sort((a, b) => (categoryMeta.allocation?.[a]?.priority ?? Infinity) - (categoryMeta.allocation?.[b]?.priority ?? Infinity))
+      .slice(0, ALLOC_PALETTE.length)
+  ), [categories, categoryMeta])
 
   const BreakevenChart = () => {
     const todayKey = todayISO().slice(0, 7)
@@ -358,11 +368,11 @@ export function FinanceInsightsScreen() {
   const CategoryBreakdown = () => {
     const [breakdownType, setBreakdownType] = useState('expense')
     const periodTxns = useMemo(() => txns.filter(t => t.date && t.date.startsWith(statPeriod)), [txns, statPeriod])
-    const aInc = useMemo(() => periodTxns.filter(t => t.type === 'income').reduce((s,t)=>s+Number(t.amount||0),0), [periodTxns])
+    const aInc = useMemo(() => periodTxns.filter(isIncomeType).reduce((s,t)=>s+incomeAmt(t),0), [periodTxns])
     const aExp = useMemo(() => periodTxns.filter(t => ['expense','cos','opps'].includes(t.type)).reduce((s,t)=>s+Number(t.amount||0),0), [periodTxns])
     const catTotals = useMemo(() => {
       const t = {}
-      periodTxns.forEach(txn => { if (breakdownType === 'income' ? txn.type === 'income' : ['expense','cos','opps'].includes(txn.type)) { const c = txn.category || 'Uncategorized'; t[c] = (t[c] || 0) + Number(txn.amount || 0) } })
+      periodTxns.forEach(txn => { if (breakdownType === 'income' ? isIncomeType(txn) : ['expense','cos','opps'].includes(txn.type)) { const c = txn.category || 'Uncategorized'; t[c] = (t[c] || 0) + (isIncomeType(txn) ? incomeAmt(txn) : Number(txn.amount || 0)) } })
       return Object.entries(t).map(([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total)
     }, [periodTxns, breakdownType])
     const tAmt = catTotals.reduce((s,c) => s+c.total, 0), colors = ['#FF6B6B', '#FF9E7D', '#FFD93D', '#A8E6CF', '#56C596', '#4D96FF', '#6BCBFF', '#9B72AA', '#E06C9F', '#F8BD7F'], r = 60, cX = 160, cY = 160, fW = 320, fH = 320
@@ -506,7 +516,7 @@ export function FinanceInsightsScreen() {
       const mKey = month // e.g. "2026-02"
       const vaultTxns = txns.filter(t => {
         if (!t.date || !t.date.startsWith(mKey)) return false
-        if (type === 'income') return t.type === 'income'
+        if (type === 'income') return isIncomeType(t)
         if (type === 'expense') return ['expense', 'cos', 'opps'].includes(t.type)
         if (type === 'allocation') {
           if (t.type !== 'allocation') return false
@@ -514,7 +524,7 @@ export function FinanceInsightsScreen() {
           if (category === ALLOC_OTHER_KEY) return !allocCategoryOrder.includes(t.category)
           return t.category === category
         }
-        if (type === 'all') return ['income', 'expense', 'cos', 'opps', 'allocation'].includes(t.type)
+        if (type === 'all') return ['income', 'collection', 'expense', 'cos', 'opps', 'allocation'].includes(t.type)
         return false
       })
       // Category-filtered allocation drill-downs only cover categorized ledger
@@ -532,7 +542,7 @@ export function FinanceInsightsScreen() {
 
     const rowKind = (t) => {
       if (t.source === 'account') return t.direction === 'in' ? 'income' : 'expense'
-      if (t.type === 'income') return 'income'
+      if (isIncomeType(t)) return 'income'
       if (t.type === 'allocation') return 'allocation'
       return 'expense'
     }

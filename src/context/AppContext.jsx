@@ -3,6 +3,7 @@ import {
   uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
   normalizeAccountsWithGroups
 } from '../utils/ledger.js'
+import { collectionStatus } from '../utils/pipeline.js'
 import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, fmtTZS } from '../money.js'
 import {
   SEED_KEY, PIN_FLOW_KEY, DEFAULT_TAB
@@ -197,6 +198,7 @@ export function AppProvider({ children }) {
 
     for (const t of filteredTxns) {
       if (t.type === 'income' && !t.reimbursementOf) inc += Number(t.amount || 0)
+      if (t.type === 'collection') inc += collectionStatus(t).net
       if (t.type === 'expense' || t.type === 'cos' || t.type === 'opps') {
         const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
         exp += Number(t.amount || 0) - reimbursed
@@ -267,7 +269,11 @@ export function AppProvider({ children }) {
 
   const ledgerAccountIds = useMemo(() => new Set(accounts.map(a => a.id)), [accounts])
 
-  async function addQuickTxn({ type, amount, category, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount }) {
+  function isInflowType(type) {
+    return type === 'income' || type === 'collection'
+  }
+
+  async function addQuickTxn({ type, amount, category, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, needsCompliance, complianceAmount }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (categoryMeta.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -307,11 +313,15 @@ export function AppProvider({ children }) {
         accountId: accountId || '',
         toAccountId: toAccountId || '',
         subAccountId: subAccountId || '',
-        clientId: clientId || ''
+        clientId: clientId || '',
+        ...(type === 'collection' && {
+          needsCompliance: !!needsCompliance,
+          complianceAmount: needsCompliance ? complianceAmount : 0
+        })
       };
 
       newTxns.push(t);
-      totalDelta += (t.type === 'income' ? amt : -amt);
+      totalDelta += (isInflowType(t.type) ? amt : -amt);
 
       if (t.accountId) {
         const acct = allAccounts.find(a => String(a.id) === String(t.accountId) || a.name === t.accountId);
@@ -328,7 +338,7 @@ export function AppProvider({ children }) {
             accountId: acct.id,
             subAccountId: targetSubId,
             amount: amt,
-            direction: t.type === 'income' ? 'in' : 'out',
+            direction: isInflowType(t.type) ? 'in' : 'out',
             kind: 'txn',
             relatedAccountId: t.toAccountId || null,
             note: t.note || t.category,
@@ -422,7 +432,7 @@ export function AppProvider({ children }) {
     if (isRecurring) {
       show(`Saved ${count} recurring transactions.`);
     } else {
-      show(`${type === 'income' ? 'Income' : 'Expense'} Added`);
+      show(`${type === 'income' ? 'Income' : type === 'collection' ? 'Collection' : 'Expense'} Added`);
     }
     return newTxns[0];
   }
@@ -434,8 +444,8 @@ export function AppProvider({ children }) {
     const oldAccount = findAccountByIdOrName(original.accountId)
     const newAccount = findAccountByIdOrName(next.accountId)
 
-    const oldDelta = original.type === 'income' ? Number(original.amount || 0) : -Number(original.amount || 0)
-    const newDelta = next.type === 'income' ? Number(next.amount || 0) : -Number(next.amount || 0)
+    const oldDelta = isInflowType(original.type) ? Number(original.amount || 0) : -Number(original.amount || 0)
+    const newDelta = isInflowType(next.type) ? Number(next.amount || 0) : -Number(next.amount || 0)
 
     if (oldAccount) {
       nextAccounts = nextAccounts.map(a => {
@@ -478,7 +488,7 @@ export function AppProvider({ children }) {
             accountId: acct.id,
             subAccountId: targetSubId,
             amount: Number(t.amount || 0),
-            direction: t.type === 'income' ? 'in' : 'out',
+            direction: isInflowType(t.type) ? 'in' : 'out',
             kind: 'txn',
             relatedAccountId: t.toAccountId || null,
             note: t.note || t.category,
@@ -530,7 +540,7 @@ export function AppProvider({ children }) {
         const entry = allAccountTxns.find(at => at.id === entryId)
 
         if (entry) {
-          const delta = t.type === 'income' ? -Number(t.amount || 0) : Number(t.amount || 0)
+          const delta = isInflowType(t.type) ? -Number(t.amount || 0) : Number(t.amount || 0)
           const subs = Array.isArray(acct.subAccounts) ? acct.subAccounts : []
           const subId = entry.subAccountId || t.subAccountId || (subs.length ? subs[0].id : null)
           nextAccounts = applyAccountDelta(nextAccounts, acct.id, subId, delta)

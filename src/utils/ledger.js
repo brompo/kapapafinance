@@ -23,6 +23,45 @@ export function normalizeAccountsWithGroups(inputAccounts, groups) {
   })
 }
 
+export const GROWTH_POOL_DEFS = [
+  { id: 'upkeep-buffer', name: 'Upkeep Buffer', priority: 1 },
+  { id: 'family-projects', name: 'Family Projects', priority: 2 },
+  { id: 'investments', name: 'Investments', priority: 3 }
+]
+
+function resolvePipeline(pipeline) {
+  const src = pipeline && typeof pipeline === 'object' ? pipeline : {}
+  const upkeepTarget = Number.isFinite(Number(src.upkeepTarget)) ? Number(src.upkeepTarget) : 0
+  const srcPools = Array.isArray(src.growthPools) ? src.growthPools : []
+  const growthPools = GROWTH_POOL_DEFS.map(def => {
+    const existing = srcPools.find(p => p && p.id === def.id)
+    return {
+      id: def.id,
+      name: def.name,
+      priority: def.priority,
+      percent: existing && Number.isFinite(Number(existing.percent)) ? Number(existing.percent) : 0
+    }
+  })
+  return { upkeepTarget, growthPools }
+}
+
+function resolveAllocationMeta(allocationCategories, allocationMeta) {
+  const meta = allocationMeta && typeof allocationMeta === 'object' ? { ...allocationMeta } : {}
+  let nextPriority = allocationCategories.reduce((max, name) => {
+    const p = Number(meta[name]?.priority)
+    return Number.isFinite(p) && p > max ? p : max
+  }, 0) + 1
+  allocationCategories.forEach((name, i) => {
+    const existing = meta[name] && typeof meta[name] === 'object' ? meta[name] : {}
+    if (!Number.isFinite(Number(existing.priority))) {
+      meta[name] = { budget: 0, subs: [], ...existing, priority: i + 1 }
+    } else {
+      meta[name] = existing
+    }
+  })
+  return meta
+}
+
 export function createLedger({
   id = uid(),
   name = 'Personal',
@@ -30,7 +69,8 @@ export function createLedger({
   txns = [],
   categories,
   categoryMeta,
-  groups
+  groups,
+  pipeline
 } = {}) {
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
@@ -89,7 +129,7 @@ export function createLedger({
     income: categoryMeta?.income && typeof categoryMeta.income === 'object' ? categoryMeta.income : {},
     cos: categoryMeta?.cos && typeof categoryMeta.cos === 'object' ? categoryMeta.cos : {},
     opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {},
-    allocation: categoryMeta?.allocation && typeof categoryMeta.allocation === 'object' ? categoryMeta.allocation : {}
+    allocation: resolveAllocationMeta(resolvedCategories.allocation, categoryMeta?.allocation)
   }
 
   return {
@@ -99,7 +139,8 @@ export function createLedger({
     txns: Array.isArray(txns) ? txns : [],
     categories: resolvedCategories,
     categoryMeta: resolvedMeta,
-    groups: normalizedGroups
+    groups: normalizedGroups,
+    pipeline: resolvePipeline(pipeline)
   }
 }
 
@@ -112,7 +153,8 @@ export function normalizeLedger(data) {
     txns: data.txns,
     categories: data.categories,
     categoryMeta: data.categoryMeta,
-    groups: data.groups
+    groups: data.groups,
+    pipeline: data.pipeline
   })
 }
 

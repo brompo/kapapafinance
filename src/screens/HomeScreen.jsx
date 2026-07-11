@@ -2,11 +2,25 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, calculateAssetMetrics, monthKey, todayISO, fmtCompact } from '../money'
 import { CategoryDetail } from './CategoryDetail'
+import { PipelineHomeScreen } from './PipelineHomeScreen'
 
 export function HomeScreen() {
-  const { 
-    month, shiftMonth, formatMonthLabel, 
-    activeLedger, accounts, accountTxns, 
+  const { activeLedger, settings } = useAppContext()
+
+  // The 5-stage pipeline is opt-in (Settings → Features → Money Flow Pipeline) and only
+  // ever applies to personal ledgers; business ledgers always get the classic screen.
+  // Branching here (before ClassicHomeScreen's own hooks run) keeps hook call order
+  // stable when the active ledger's type or the setting changes between renders.
+  if (activeLedger.type === 'personal' && settings.moneyPipelineEnabled) {
+    return <PipelineHomeScreen />
+  }
+  return <ClassicHomeScreen />
+}
+
+function ClassicHomeScreen() {
+  const {
+    month, shiftMonth, formatMonthLabel,
+    activeLedger, accounts, accountTxns,
     filteredTxns, expenseCats, incomeCats, categories, categoryMeta,
     kpis, persistActiveLedger, show, selectedCategory, setSelectedCategory,
     showAddForm, setShowAddForm, highlightId, setHighlightId,
@@ -16,7 +30,7 @@ export function HomeScreen() {
   } = useAppContext()
 
   const monthLabel = useMemo(() => formatMonthLabel(month), [month, formatMonthLabel])
-  
+
   const [collapseExpense, setCollapseExpense] = useState(() => localStorage.getItem('collapse_expense') === 'true')
   const [collapseAllocation, setCollapseAllocation] = useState(() => localStorage.getItem('collapse_allocation') === 'true')
   const [collapseIncome, setCollapseIncome] = useState(() => localStorage.getItem('collapse_income') === 'true')
@@ -82,7 +96,7 @@ export function HomeScreen() {
     const map = new Map()
     for (const c of incomeCats) map.set(c, 0)
     for (const t of filteredTxns) {
-      if (t.type === 'income' && !t.reimbursementOf) {
+      if ((t.type === 'income' || t.type === 'collection') && !t.reimbursementOf) {
         const key = t.category || 'Other'
         map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
       }

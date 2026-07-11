@@ -4,6 +4,7 @@ import { CATEGORY_SUBS } from '../constants'
 
 export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], allocationCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
   const isEditable = !txn.kind || txn.kind === 'txn'
+  const isCollection = txn.type === 'collection'
   const [type, setType] = useState(txn.type || 'expense')
   const [amount, setAmount] = useState(String(txn.amount || ''))
   const [amountError, setAmountError] = useState(false)
@@ -13,6 +14,10 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
   const [accountError, setAccountError] = useState(false)
   const [clientId, setClientId] = useState(txn.raw?.clientId || '')
   const [pendingClient, setPendingClient] = useState(null)
+  const [needsCompliance, setNeedsCompliance] = useState(!!txn.raw?.needsCompliance)
+  const [complianceAmount, setComplianceAmount] = useState(
+    txn.raw?.complianceAmount != null ? String(txn.raw.complianceAmount) : ''
+  )
 
   const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
     ? [...clients, pendingClient]
@@ -36,15 +41,24 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
   })
 
   const labelType = type === 'income' ? 'Income' :
+    type === 'collection' ? 'Collection' :
     type === 'cos' ? 'Cost of Sales' :
       type === 'opps' ? 'Operating Expenses' :
         type === 'allocation' ? 'Allocation' : 'Expense'
   const categoryOptions = type === 'income' ? incomeCats :
+    type === 'collection' ? incomeCats :
     type === 'cos' ? cosCats :
       type === 'opps' ? oppsCats :
         type === 'allocation' ? allocationCats : expenseCats
 
   const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
+
+  const amt = Number(amount || 0)
+  const pending = isCollection && needsCompliance && complianceAmount === ''
+  const netToIncome = !isCollection ? amt
+    : pending ? 0
+    : needsCompliance ? amt - Number(complianceAmount || 0)
+    : amt
 
   function handleSave() {
     if (!isEditable) return
@@ -74,7 +88,11 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
       accountId: accountId || '',
       toAccountId: toAccountId || '',
       clientId: clientId || '',
-      date: date || todayISO()
+      date: date || todayISO(),
+      ...(isCollection && {
+        needsCompliance,
+        complianceAmount: needsCompliance ? complianceAmount : 0
+      })
     }, pendingClient)
     onClose()
   }
@@ -91,12 +109,12 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
 
       <div className="card" style={{ margin: '0 10px' }}>
         <div className="field">
-          <label style={{ fontWeight: 600, color: type === 'income' ? 'var(--ok)' : 'var(--danger)' }}>
-            Amount (TZS)
+          <label style={{ fontWeight: 600, color: (type === 'income' || type === 'collection') ? 'var(--ok)' : 'var(--danger)' }}>
+            Amount (TZS) {isCollection ? '— Gross' : ''}
           </label>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <span style={{ position: 'absolute', left: 12, fontWeight: 700, fontSize: 18, color: 'var(--muted)' }}>
-              {type === 'income' ? '+' : '-'}
+              {(type === 'income' || type === 'collection') ? '+' : '-'}
             </span>
             <input
               className="txnAmountInput"
@@ -118,7 +136,9 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
         <div className="txnDetailGrid">
           <div className="txnDetailRow">
             <div className="txnDetailLabel">Type</div>
-            {isEditable ? (
+            {isCollection ? (
+              <div className="txnDetailValue">Collection</div>
+            ) : isEditable ? (
               <select className="txnDetailSelect" value={type} onChange={e => {
                 setType(e.target.value); setCategory(''); setSubCategory('')
               }}>
@@ -134,7 +154,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
           </div>
 
           <div className="txnDetailRow">
-            <div className="txnDetailLabel">Category</div>
+            <div className="txnDetailLabel">{isCollection ? 'Source' : 'Category'}</div>
             {isEditable ? (
               <select className="txnDetailSelect" value={category} onChange={e => {
                 setCategory(e.target.value); setSubCategory('')
@@ -147,21 +167,63 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
             )}
           </div>
 
-          <div className="txnDetailRow">
-            <div className="txnDetailLabel">Subcategory</div>
-            {isEditable ? (
-              subOptions.length > 0 ? (
-                <select className="txnDetailSelect" value={subCategory} onChange={e => setSubCategory(e.target.value)}>
-                  <option value="">None</option>
-                  {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+          {!isCollection && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Subcategory</div>
+              {isEditable ? (
+                subOptions.length > 0 ? (
+                  <select className="txnDetailSelect" value={subCategory} onChange={e => setSubCategory(e.target.value)}>
+                    <option value="">None</option>
+                    {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                ) : (
+                  <input className="txnDetailInput" value={subCategory} onChange={e => setSubCategory(e.target.value)} placeholder="None" />
+                )
               ) : (
-                <input className="txnDetailInput" value={subCategory} onChange={e => setSubCategory(e.target.value)} placeholder="None" />
-              )
-            ) : (
-              <div className="txnDetailValue">{subCategory || 'None'}</div>
-            )}
-          </div>
+                <div className="txnDetailValue">{subCategory || 'None'}</div>
+              )}
+            </div>
+          )}
+
+          {isCollection && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Needs Compliance</div>
+              {isEditable ? (
+                <button type="button" className="pillBtn" onClick={() => setNeedsCompliance(!needsCompliance)}
+                  style={{ padding: '6px 14px', fontSize: 12, background: needsCompliance ? '#fde68a' : '#f8f9fc', borderColor: needsCompliance ? '#f59e0b' : '#e2e8f0' }}>
+                  {needsCompliance ? 'Needs Compliance' : 'Already Clean'}
+                </button>
+              ) : (
+                <div className="txnDetailValue">{needsCompliance ? 'Needs Compliance' : 'Already Clean'}</div>
+              )}
+            </div>
+          )}
+
+          {isCollection && needsCompliance && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Compliance Amount Held</div>
+              {isEditable ? (
+                <input
+                  className="txnDetailInput"
+                  inputMode="decimal"
+                  value={complianceAmount}
+                  onChange={e => setComplianceAmount(e.target.value)}
+                  placeholder="Not yet set (Pending)"
+                />
+              ) : (
+                <div className="txnDetailValue">{complianceAmount !== '' ? complianceAmount : 'Pending'}</div>
+              )}
+            </div>
+          )}
+
+          {isCollection && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Net to Income</div>
+              <div className="txnDetailValue" style={{ fontWeight: 700, color: pending ? 'var(--muted)' : 'var(--ok)' }}>
+                {pending ? 'Pending' : netToIncome.toLocaleString()}
+              </div>
+            </div>
+          )}
 
           <div className="txnDetailRow">
             <div className="txnDetailLabel">{type === 'allocation' ? 'Source Account' : 'Account'}</div>

@@ -47,6 +47,9 @@ function SegmentedPie({ segments, size = 132 }) {
               key={seg.name}
               d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
               fill={seg.color}
+              stroke="#fff"
+              strokeWidth={2}
+              strokeLinejoin="round"
             />
           )
         })}

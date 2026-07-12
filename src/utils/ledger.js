@@ -24,26 +24,45 @@ export function normalizeAccountsWithGroups(inputAccounts, groups) {
 }
 
 export const GROWTH_POOL_DEFS = [
-  { id: 'upkeep-buffer', name: 'Upkeep Buffer', priority: 1 },
-  { id: 'family-projects', name: 'Family Projects', priority: 2 },
-  { id: 'investments', name: 'Investments', priority: 3 }
+  { name: 'Upkeep Buffer', priority: 1 },
+  { name: 'Family Projects', priority: 2 },
+  { name: 'Investments', priority: 3 }
 ]
 
-function resolvePipeline(pipeline) {
-  const src = pipeline && typeof pipeline === 'object' ? pipeline : {}
-  const upkeepTarget = Number.isFinite(Number(src.upkeepTarget)) ? Number(src.upkeepTarget) : 0
-  const srcPools = Array.isArray(src.growthPools) ? src.growthPools : []
-  // Growth pools are a user-editable list (like Family Happiness buckets), not a
-  // fixed set — only seed the 3 starter pools when none exist yet, never force-sync.
-  const growthPools = srcPools.length > 0
-    ? srcPools.map((p, i) => ({
-      id: p?.id || uid(),
+// Growth pools are now first-class categories (like Lifestyle/allocation buckets)
+// so real transactions can be logged against them via CategoryDetail. Migrates the
+// old standalone pipeline.growthPools array on first load, then never touches it again.
+function resolveGrowthCategories(growthCategories, growthMeta, legacyPipeline) {
+  if (Array.isArray(growthCategories) && growthCategories.length > 0) {
+    const meta = growthMeta && typeof growthMeta === 'object' ? { ...growthMeta } : {}
+    growthCategories.forEach((name, i) => {
+      const existing = meta[name] && typeof meta[name] === 'object' ? meta[name] : {}
+      const priority = Number.isFinite(Number(existing.priority)) ? Number(existing.priority) : i + 1
+      const percent = Number.isFinite(Number(existing.percent)) ? Number(existing.percent) : 0
+      meta[name] = { budget: 0, subs: [], ...existing, priority, percent }
+    })
+    return { categories: growthCategories, meta }
+  }
+
+  const legacyPools = Array.isArray(legacyPipeline?.growthPools) ? legacyPipeline.growthPools : []
+  const source = legacyPools.length > 0
+    ? legacyPools.map((p, i) => ({
       name: p?.name || `Pool ${i + 1}`,
       priority: Number.isFinite(Number(p?.priority)) ? Number(p.priority) : i + 1,
       percent: Number.isFinite(Number(p?.percent)) ? Number(p.percent) : 0
     }))
     : GROWTH_POOL_DEFS.map(def => ({ ...def, percent: 0 }))
-  return { upkeepTarget, growthPools }
+
+  const categories = []
+  const meta = {}
+  source.forEach(p => {
+    let name = p.name
+    let n = 2
+    while (meta[name]) { name = `${p.name} (${n})`; n += 1 }
+    categories.push(name)
+    meta[name] = { budget: 0, subs: [], priority: p.priority, percent: p.percent }
+  })
+  return { categories, meta }
 }
 
 function resolveAllocationMeta(allocationCategories, allocationMeta) {
@@ -117,12 +136,15 @@ export function createLedger({
   const incomeDefaults = type === 'business' ? [...DEFAULT_BUSINESS_INCOME_CATEGORIES] : [...DEFAULT_INCOME_CATEGORIES]
   const allocationDefaults = [...DEFAULT_ALLOCATION_CATEGORIES]
 
+  const resolvedGrowth = resolveGrowthCategories(categories?.growth, categoryMeta?.growth, pipeline)
+
   const resolvedCategories = {
     expense: Array.isArray(categories?.expense) ? categories.expense : expenseDefaults,
     income: Array.isArray(categories?.income) ? categories.income : incomeDefaults,
     cos: Array.isArray(categories?.cos) ? categories.cos : (type === 'business' ? [...DEFAULT_COS_CATEGORIES] : []),
     opps: Array.isArray(categories?.opps) ? categories.opps : (type === 'business' ? [...DEFAULT_OPPS_CATEGORIES] : []),
-    allocation: Array.isArray(categories?.allocation) ? categories.allocation : allocationDefaults
+    allocation: Array.isArray(categories?.allocation) ? categories.allocation : allocationDefaults,
+    growth: resolvedGrowth.categories
   }
 
   const resolvedMeta = {
@@ -130,7 +152,8 @@ export function createLedger({
     income: categoryMeta?.income && typeof categoryMeta.income === 'object' ? categoryMeta.income : {},
     cos: categoryMeta?.cos && typeof categoryMeta.cos === 'object' ? categoryMeta.cos : {},
     opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {},
-    allocation: resolveAllocationMeta(resolvedCategories.allocation, categoryMeta?.allocation)
+    allocation: resolveAllocationMeta(resolvedCategories.allocation, categoryMeta?.allocation),
+    growth: resolvedGrowth.meta
   }
 
   return {
@@ -140,8 +163,7 @@ export function createLedger({
     txns: Array.isArray(txns) ? txns : [],
     categories: resolvedCategories,
     categoryMeta: resolvedMeta,
-    groups: normalizedGroups,
-    pipeline: resolvePipeline(pipeline)
+    groups: normalizedGroups
   }
 }
 

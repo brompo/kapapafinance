@@ -2,25 +2,19 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, calculateAssetMetrics, monthKey, todayISO, fmtCompact } from '../money'
 import { CategoryDetail } from './CategoryDetail'
-import { PipelineHomeScreen } from './PipelineHomeScreen'
+import { computePipeline } from '../utils/pipeline'
 
+// Transactions tab: the single system of record for every real transaction (income,
+// expenses, allocations, and — when Flow is enabled — collections/growth too).
+// The Flow tab (separate, opt-in) is a read-only budget plan layered on top.
 export function HomeScreen() {
-  const { activeLedger, settings } = useAppContext()
-
-  // The 5-stage pipeline is opt-in (Settings → Features → Money Flow Pipeline) and only
-  // ever applies to personal ledgers; business ledgers always get the classic screen.
-  // Branching here (before ClassicHomeScreen's own hooks run) keeps hook call order
-  // stable when the active ledger's type or the setting changes between renders.
-  if (activeLedger.type === 'personal' && settings.moneyPipelineEnabled) {
-    return <PipelineHomeScreen />
-  }
   return <ClassicHomeScreen />
 }
 
 function ClassicHomeScreen() {
   const {
     month, shiftMonth, formatMonthLabel,
-    activeLedger, accounts, accountTxns,
+    activeLedger, accounts, accountTxns, settings,
     filteredTxns, expenseCats, incomeCats, categories, categoryMeta,
     kpis, persistActiveLedger, show, selectedCategory, setSelectedCategory,
     showAddForm, setShowAddForm, highlightId, setHighlightId,
@@ -28,6 +22,14 @@ function ClassicHomeScreen() {
     handleUpdateLedger, handleDeleteLedger, handleAddPersonalLedger, handleAddBusinessLedger,
     clients, addQuickTxn
   } = useAppContext()
+
+  // Flow Pipeline (Settings → Features), personal ledgers only: swaps the plain
+  // Income section for Collections (with compliance tracking) and adds a Growth section
+  // of linkable spend categories. The Flow tab reads the same data as a report.
+  const pipelineMode = activeLedger.type === 'personal' && !!settings.moneyPipelineEnabled
+  // Collections/allocation reuse the Income/Lifestyle category+meta lists — there's no
+  // separate categoryMeta bucket for Collections, so route reads/writes through 'income'.
+  const metaTypeFor = (type) => type === 'collection' ? 'income' : type
 
   const monthLabel = useMemo(() => formatMonthLabel(month), [month, formatMonthLabel])
 
@@ -116,6 +118,34 @@ function ClassicHomeScreen() {
     return map
   }, [filteredTxns, incomeCats, accounts, activeLedger.groups, accountTxns, month])
 
+  const pipeline = useMemo(() => pipelineMode ? computePipeline(filteredTxns, activeLedger, month) : null, [pipelineMode, filteredTxns, activeLedger, month])
+
+  const collectionTotals = useMemo(() => {
+    const map = new Map()
+    for (const c of incomeCats) map.set(c, 0)
+    for (const r of (pipeline?.collectionRows || [])) {
+      const key = r.category || 'Other'
+      map.set(key, (map.get(key) || 0) + Number(r.amount || 0))
+    }
+    return map
+  }, [pipeline, incomeCats])
+
+  const growthCats = categories.growth || []
+  const growthTotals = useMemo(() => {
+    const map = new Map()
+    for (const c of growthCats) map.set(c, 0)
+    for (const t of filteredTxns) {
+      if (t.type === 'growth') {
+        const key = t.category || 'Other'
+        map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
+      }
+    }
+    return map
+  }, [filteredTxns, growthCats])
+
+  const [collapseGrowth, setCollapseGrowth] = useState(() => localStorage.getItem('collapse_growth') === 'true')
+  useEffect(() => { localStorage.setItem('collapse_growth', collapseGrowth) }, [collapseGrowth])
+
   useEffect(() => { localStorage.setItem('collapse_expense', collapseExpense) }, [collapseExpense])
   useEffect(() => { localStorage.setItem('collapse_income', collapseIncome) }, [collapseIncome])
   useEffect(() => { localStorage.setItem('collapse_cos', collapseCos) }, [collapseCos])
@@ -152,16 +182,20 @@ function ClassicHomeScreen() {
         cosCats={cosCats}
         oppsCats={oppsCats}
         allocationCats={allocationCats}
-        meta={categoryMeta[selectedCategory.type]?.[selectedCategory.name]}
+        growthCats={growthCats}
+        meta={categoryMeta[metaTypeFor(selectedCategory.type)]?.[selectedCategory.name]}
         total={
           selectedCategory.type === 'expense' ? (expenseTotals.get(selectedCategory.name) || 0) :
           selectedCategory.type === 'income' ? (incomeTotals.get(selectedCategory.name) || 0) :
+          selectedCategory.type === 'collection' ? (collectionTotals.get(selectedCategory.name) || 0) :
           selectedCategory.type === 'cos' ? (cosTotals.get(selectedCategory.name) || 0) :
           selectedCategory.type === 'opps' ? (oppsTotals.get(selectedCategory.name) || 0) :
+          selectedCategory.type === 'growth' ? (growthTotals.get(selectedCategory.name) || 0) :
           (allocationTotals.get(selectedCategory.name) || 0)
         }
         onUpdateMeta={(next) => {
-          const nextMeta = { ...categoryMeta, [selectedCategory.type]: { ...categoryMeta[selectedCategory.type], [selectedCategory.name]: next } }
+          const metaType = metaTypeFor(selectedCategory.type)
+          const nextMeta = { ...categoryMeta, [metaType]: { ...categoryMeta[metaType], [selectedCategory.name]: next } }
           persistActiveLedger({ ...activeLedger, categoryMeta: nextMeta })
         }}
       />
@@ -209,13 +243,16 @@ function ClassicHomeScreen() {
       {/* Ledger picker now global in App.jsx */}
 
       {[
-        { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
+        pipelineMode
+          ? { title: 'Collections', type: 'collection', list: incomeCats, totals: collectionTotals, kpi: incomeCats.reduce((s, c) => s + (collectionTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4, note: pipeline?.isLegacyFallback ? 'No Collections recorded yet this month — totals include legacy income entries shown as already-clean.' : null }
+          : { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
         { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
+        ...(pipelineMode ? [{ title: 'Growth', type: 'growth', list: growthCats, totals: growthTotals, kpi: growthCats.reduce((s, c) => s + (growthTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4 }] : []),
         { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
         { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
       ].map(sec => {
-        if (sec.list.length === 0 && (sec.type === 'cos' || sec.type === 'opps' || sec.type === 'allocation')) return null;
+        if (sec.list.length === 0 && (sec.type === 'cos' || sec.type === 'opps' || sec.type === 'allocation' || sec.type === 'growth')) return null;
         return (
           <div className="ledgerSection" key={sec.type}>
             <div className="ledgerSectionHead">
@@ -225,6 +262,9 @@ function ClassicHomeScreen() {
                 <button className="ledgerCollapseBtn" onClick={() => sec.setCollapse(!sec.collapse)}>{sec.collapse ? '▸' : '▾'}</button>
               </div>
             </div>
+            {sec.note && (
+              <div style={{ padding: '0 12px 8px', fontSize: 11, color: '#8b90b2' }}>{sec.note}</div>
+            )}
             {!sec.collapse && (
               <div className="ledgerGrid">
                 {sec.list.map((c, i) => (

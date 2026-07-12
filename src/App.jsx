@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { AppProvider, useAppContext } from './context/AppContext'
 import { GlobalToast } from './components/GlobalToast'
 import { HomeScreen } from './screens/HomeScreen'
@@ -6,6 +6,7 @@ import { FinanceInsightsScreen } from './screens/FinanceInsightsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import AccountsScreen from './screens/Accounts'
 import DSEWatchScreen from './screens/DSEWatchScreen'
+import { FlowScreen } from './screens/FlowScreen'
 import BottomNav from './components/BottomNav'
 import { LedgerPicker } from './components/LedgerPicker'
 
@@ -24,6 +25,15 @@ function VaultApp() {
     handleSaveNewLedger, showAddLedgerModal, setShowAddLedgerModal, addLedgerName, setAddLedgerName
   } = useAppContext()
 
+  // Flow tab is only visible for personal ledgers with the setting on — if the
+  // user switches ledgers (or the setting) while on it, fall back to Transactions
+  // rather than leaving the tab bar pointed at a screen that's no longer rendered.
+  useEffect(() => {
+    if (tab === 'flow' && !(activeLedger.type === 'personal' && settings.moneyPipelineEnabled)) {
+      setTab('tx')
+    }
+  }, [tab, activeLedger.type, settings.moneyPipelineEnabled, setTab])
+
   if (stage === 'loading') return <div className="loading">Kapapa Finance...</div>
   if (stage === 'landing') return <LandingStage />
   if (stage === 'setpin') return <PinStage mode="set" />
@@ -34,6 +44,7 @@ function VaultApp() {
     <div className="appContainer">
       <main className="mainContent">
         {tab === 'tx' && <HomeScreen />}
+        {tab === 'flow' && activeLedger.type === 'personal' && settings.moneyPipelineEnabled && <FlowScreen />}
         {tab === 'insights' && <FinanceInsightsScreen />}
         {tab === 'accounts' && (
           <AccountsScreen

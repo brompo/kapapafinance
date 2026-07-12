@@ -2,7 +2,7 @@ import React from 'react'
 import { useAppContext } from '../context/AppContext'
 
 export default function BottomNav({ tab, setTab, variant }) {
-  const { settings } = useAppContext()
+  const { settings, activeLedger } = useAppContext()
   const isLight = variant === 'light'
   const activeColor = '#5a5fb0'
   const inactiveColor = '#9aa0bf'
@@ -25,6 +25,16 @@ export default function BottomNav({ tab, setTab, variant }) {
       label: 'Transactions',
       content: (active) => (
         <span style={{ fontSize: 28, filter: active ? 'none' : 'grayscale(0.4)' }}>📄</span>
+      )
+    },
+    {
+      id: 'flow',
+      label: 'Flow',
+      content: (active) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 9c1.4 0 1.4-3 2.8-3s1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M2 15c1.4 0 1.4-3 2.8-3s1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       )
     },
     {
@@ -53,7 +63,11 @@ export default function BottomNav({ tab, setTab, variant }) {
     }
   ]
 
-  const visibleIcons = icons.filter(i => i.id !== 'dse' || settings.dseEnabled)
+  const visibleIcons = icons.filter(i => {
+    if (i.id === 'dse') return settings.dseEnabled
+    if (i.id === 'flow') return activeLedger.type === 'personal' && settings.moneyPipelineEnabled
+    return true
+  })
 
   return (
     <div className={`bottomNav ${isLight ? 'light' : ''}`} style={{ borderTop: '1px solid #f1f1f4' }}>

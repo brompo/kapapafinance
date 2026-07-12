@@ -72,8 +72,8 @@ export function SettingsScreen() {
           <div className="stgRow" style={{ cursor: 'default' }}>
             <div className="stgRowIcon">🌊</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
-              <div className="stgRowText">Money Flow Pipeline</div>
-              <div className="stgRowSub">New Transactions screen: Collections → Income → Upkeep → Lifestyle → Growth (personal ledgers only)</div>
+              <div className="stgRowText">Flow Pipeline</div>
+              <div className="stgRowSub">Adds a Flow tab (budget plan: Budget vs Allocated) and Collections/Growth sections to Transactions (personal ledgers only)</div>
             </div>
             <label className="toggle" style={{ marginLeft: 'auto' }}>
               <input
@@ -81,7 +81,7 @@ export function SettingsScreen() {
                 checked={!!settings.moneyPipelineEnabled}
                 onChange={e => {
                   updateSettings({ ...settings, moneyPipelineEnabled: e.target.checked })
-                  show(e.target.checked ? 'Money Flow Pipeline enabled.' : 'Money Flow Pipeline disabled.')
+                  show(e.target.checked ? 'Flow Pipeline enabled.' : 'Flow Pipeline disabled.')
                 }}
               />
               <span className="toggleTrack" />

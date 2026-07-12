@@ -15,6 +15,7 @@ export function CategoryDetail({
   cosCats = [],
   oppsCats = [],
   allocationCats = [],
+  growthCats = [],
   showAddForm,
   setShowAddForm
 }) {
@@ -89,6 +90,7 @@ export function CategoryDetail({
   const [editColor, setEditColor] = useState(meta?.color || '')
   const [editNeedsCompliance, setEditNeedsCompliance] = useState(!!meta?.needsCompliance)
   const [editBudget, setEditBudget] = useState(String(meta?.budget || 0))
+  const [editPercent, setEditPercent] = useState(String(meta?.percent || 0))
   const budget = meta?.budget || 0
   const subcats = meta?.subs?.length ? meta.subs : (CATEGORY_SUBS[category.name] || [])
   const colorOptions = ['#ffe8b6', '#ffe0cf', '#ffd9ec', '#e8dcff', '#dbeaff', '#e6f3ff', '#dff5e1', '#fff1c9', '#f0efe9']
@@ -193,6 +195,7 @@ export function CategoryDetail({
         cosCats={cosCats}
         oppsCats={oppsCats}
         allocationCats={allocationCats}
+        growthCats={growthCats}
         settings={settings}
         show={show}
         categoryMeta={categoryMeta}
@@ -268,10 +271,16 @@ export function CategoryDetail({
                   </label>
                 </div>
               )}
-              {category.type === 'allocation' && (
+              {(category.type === 'allocation' || category.type === 'expense') && (
                 <div>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Monthly Target (TZS)</div>
                   <input className="input" inputMode="decimal" value={editBudget} onChange={e => setEditBudget(e.target.value)} placeholder="e.g. 100000" />
+                </div>
+              )}
+              {category.type === 'growth' && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Target % of Surplus</div>
+                  <input className="input" inputMode="decimal" value={editPercent} onChange={e => setEditPercent(e.target.value)} placeholder="e.g. 30" />
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
@@ -291,7 +300,8 @@ export function CategoryDetail({
                           ...(activeLedger.categoryMeta[metaType]?.[category.name] || {}),
                           color: editColor,
                           ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
-                          ...(category.type === 'allocation' && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 })
+                          ...((category.type === 'allocation' || category.type === 'expense') && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 }),
+                          ...(category.type === 'growth' && { percent: Number(String(editPercent).replace(/,/g, '')) || 0 })
                         }
                       }
                     }
@@ -339,18 +349,18 @@ export function CategoryDetail({
               <div style={{ fontSize: 35 }}>{formatCommas(amount || '0')}</div>
             </div>
 
-            <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: category.type === 'allocation' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 6 }}>
+            <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: (category.type === 'allocation' || category.type === 'growth') ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 6 }}>
               <div style={{ position: 'relative' }}>
                 <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
-                  <option value="">{category.type === 'allocation' ? 'From' : 'Account'}</option>
+                  <option value="">{(category.type === 'allocation' || category.type === 'growth') ? 'From' : 'Account'}</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
                 <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11 }}>
-                  <span style={{ fontSize: 16 }}>🏦</span> <br /> {accountId ? accounts.find(a => a.id === accountId)?.name : (category.type === 'allocation' ? 'From' : 'Account')}
+                  <span style={{ fontSize: 16 }}>🏦</span> <br /> {accountId ? accounts.find(a => a.id === accountId)?.name : ((category.type === 'allocation' || category.type === 'growth') ? 'From' : 'Account')}
                 </div>
               </div>
 
-              {category.type === 'allocation' && (
+              {(category.type === 'allocation' || category.type === 'growth') && (
                 <div style={{ position: 'relative' }}>
                   <select value={toAccountId} onChange={e => setToAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
                     <option value="">To Account</option>
@@ -520,7 +530,7 @@ export function CategoryDetail({
         </div>
       ) : (
         <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
-          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : 'Expense'}</button>
+          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
 
           <div className="modeSegmented" style={{
             display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12,

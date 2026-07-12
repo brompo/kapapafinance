@@ -1,5 +1,3 @@
-import { GROWTH_POOL_DEFS } from './ledger.js'
-
 export function collectionStatus(t) {
   const amount = Number(t.amount || 0)
   const needsCompliance = !!t.needsCompliance
@@ -9,9 +7,11 @@ export function collectionStatus(t) {
   return { pending, complianceAmount, net }
 }
 
-// Pure derivation of the 5-stage pipeline for one month's filtered ledger transactions.
-// Nothing here is persisted — Collections are the only real transactions; everything
-// downstream is recomputed live from Collections + the ledger's pipeline/bucket config.
+// Pure derivation of the Flow budget plan for one month: given this month's
+// Income, cascade it through Upkeep -> Lifestyle -> Growth in priority order, each
+// segment capped by its own budget/target, so "Allocated" always answers "how much
+// of my income is spoken for by this segment" — not "what did I actually spend"
+// (real spend tracking lives in the Transactions tab / CategoryDetail instead).
 export function computePipeline(filteredTxns, ledger, month) {
   const realCollections = filteredTxns.filter(t => t.type === 'collection')
   const legacyIncome = filteredTxns.filter(t => t.type === 'income' && !t.reimbursementOf)
@@ -30,16 +30,19 @@ export function computePipeline(filteredTxns, ledger, month) {
   const complianceHeld = collectionRows.reduce((s, r) => s + (r.pending ? 0 : r.complianceAmount), 0)
   const income = collectionRows.reduce((s, r) => s + r.net, 0)
 
-  // Upkeep's real deduction is actual spend against the Expense categories (Food,
-  // Transportation, ...) — the target is kept only as a budget to compare against.
-  const upkeepTarget = Number(ledger?.pipeline?.upkeepTarget || 0)
-  const upkeepActual = filteredTxns.reduce((s, t) => {
-    if (t.type !== 'expense') return s
-    const reimbursed = (t.reimbursedBy || []).reduce((rs, r) => rs + Number(r.amount || 0), 0)
-    return s + Number(t.amount || 0) - reimbursed
-  }, 0)
-  const remainder = income - upkeepActual
+  let available = Math.max(0, income)
 
+  // --- Upkeep: sum of each Expense category's budget. If Income covers it, it's
+  // allocated in full (100%); otherwise it only gets whatever Income is available. ---
+  const expenseCats = ledger?.categories?.expense || []
+  const expenseMeta = ledger?.categoryMeta?.expense || {}
+  const upkeepTarget = expenseCats.reduce((s, name) => s + Number(expenseMeta[name]?.budget || 0), 0)
+  const upkeepAllocated = Math.min(upkeepTarget, available)
+  const upkeepPercent = upkeepTarget > 0 ? Math.min(100, (upkeepAllocated / upkeepTarget) * 100) : 100
+  available -= upkeepAllocated
+
+  // --- Lifestyle: buckets draw from what's left after Upkeep, in priority order,
+  // each capped by its own budget. ---
   const bucketNames = ledger?.categories?.allocation || []
   const allocationMeta = ledger?.categoryMeta?.allocation || {}
   const buckets = bucketNames
@@ -50,23 +53,33 @@ export function computePipeline(filteredTxns, ledger, month) {
     }))
     .sort((a, b) => a.priority - b.priority)
 
-  let pool = Math.max(0, remainder)
   const bucketResults = buckets.map(b => {
-    const filled = Math.min(b.target, pool)
-    pool -= filled
-    return { ...b, filled, fullyFunded: b.target > 0 ? filled >= b.target : true }
+    const allocated = Math.min(b.target, available)
+    available -= allocated
+    const percent = b.target > 0 ? Math.min(100, (allocated / b.target) * 100) : 100
+    return { ...b, allocated, percent }
   })
-  const familyHappinessSpent = bucketResults.reduce((s, b) => s + b.filled, 0)
-  const allBucketsFunded = bucketResults.every(b => b.fullyFunded)
+  const lifestyleTargetTotal = buckets.reduce((s, b) => s + b.target, 0)
+  const lifestyleAllocatedTotal = bucketResults.reduce((s, b) => s + b.allocated, 0)
 
-  const growthSurplus = allBucketsFunded ? pool : 0
-  const growthPools = (ledger?.pipeline?.growthPools || GROWTH_POOL_DEFS.map(d => ({ ...d, percent: 0 })))
-    .slice()
+  // --- Growth: whatever's left after Upkeep + Lifestyle, split across pools by
+  // their own percent. ---
+  const growthPoolAmount = available
+  const growthNames = ledger?.categories?.growth || []
+  const growthMeta = ledger?.categoryMeta?.growth || {}
+  const growthPools = growthNames
+    .map(name => ({
+      name,
+      priority: Number.isFinite(Number(growthMeta[name]?.priority)) ? Number(growthMeta[name].priority) : Infinity,
+      percent: Number(growthMeta[name]?.percent || 0)
+    }))
     .sort((a, b) => a.priority - b.priority)
+
   const growthResults = growthPools.map(p => ({
     ...p,
-    amount: growthSurplus * (Number(p.percent || 0) / 100)
+    contributed: growthPoolAmount * (p.percent / 100)
   }))
+  const growthContributedTotal = growthResults.reduce((s, p) => s + p.contributed, 0)
   const growthPercentTotal = growthPools.reduce((s, p) => s + Number(p.percent || 0), 0)
 
   return {
@@ -75,13 +88,14 @@ export function computePipeline(filteredTxns, ledger, month) {
     complianceHeld,
     income,
     upkeepTarget,
-    upkeepActual,
-    remainder,
+    upkeepAllocated,
+    upkeepPercent,
     bucketResults,
-    familyHappinessSpent,
-    allBucketsFunded,
-    growthSurplus,
+    lifestyleTargetTotal,
+    lifestyleAllocatedTotal,
+    growthPoolAmount,
     growthResults,
+    growthContributedTotal,
     growthPercentTotal,
     isLegacyFallback
   }

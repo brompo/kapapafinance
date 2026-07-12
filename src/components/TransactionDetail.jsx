@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { todayISO, uid } from '../money'
 import { CATEGORY_SUBS } from '../constants'
 
-export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], allocationCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
+export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats = [], cosCats = [], oppsCats = [], allocationCats = [], growthCats = [], onSave, onClose, onDelete, onReimburse, clients = [], settings = {}, show, categoryMeta = {} }) {
   const isEditable = !txn.kind || txn.kind === 'txn'
   const isCollection = txn.type === 'collection'
   const [type, setType] = useState(txn.type || 'expense')
@@ -44,12 +44,14 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
     type === 'collection' ? 'Collection' :
     type === 'cos' ? 'Cost of Sales' :
       type === 'opps' ? 'Operating Expenses' :
-        type === 'allocation' ? 'Allocation' : 'Expense'
+        type === 'allocation' ? 'Allocation' :
+          type === 'growth' ? 'Growth' : 'Expense'
   const categoryOptions = type === 'income' ? incomeCats :
     type === 'collection' ? incomeCats :
     type === 'cos' ? cosCats :
       type === 'opps' ? oppsCats :
-        type === 'allocation' ? allocationCats : expenseCats
+        type === 'allocation' ? allocationCats :
+          type === 'growth' ? growthCats : expenseCats
 
   const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
 
@@ -147,6 +149,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
                 {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
                 {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
                 <option value="allocation">Allocation</option>
+                {growthCats && growthCats.length > 0 && <option value="growth">Growth</option>}
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>
@@ -226,7 +229,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
           )}
 
           <div className="txnDetailRow">
-            <div className="txnDetailLabel">{type === 'allocation' ? 'Source Account' : 'Account'}</div>
+            <div className="txnDetailLabel">{(type === 'allocation' || type === 'growth') ? 'Source Account' : 'Account'}</div>
             {isEditable ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <select className="txnDetailSelect" value={accountId} onChange={e => {
@@ -242,7 +245,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
             )}
           </div>
 
-          {type === 'allocation' && (
+          {(type === 'allocation' || type === 'growth') && (
             <div className="txnDetailRow">
               <div className="txnDetailLabel">Destination Account</div>
               {isEditable ? (

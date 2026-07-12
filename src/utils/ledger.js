@@ -33,15 +33,16 @@ function resolvePipeline(pipeline) {
   const src = pipeline && typeof pipeline === 'object' ? pipeline : {}
   const upkeepTarget = Number.isFinite(Number(src.upkeepTarget)) ? Number(src.upkeepTarget) : 0
   const srcPools = Array.isArray(src.growthPools) ? src.growthPools : []
-  const growthPools = GROWTH_POOL_DEFS.map(def => {
-    const existing = srcPools.find(p => p && p.id === def.id)
-    return {
-      id: def.id,
-      name: def.name,
-      priority: def.priority,
-      percent: existing && Number.isFinite(Number(existing.percent)) ? Number(existing.percent) : 0
-    }
-  })
+  // Growth pools are a user-editable list (like Family Happiness buckets), not a
+  // fixed set — only seed the 3 starter pools when none exist yet, never force-sync.
+  const growthPools = srcPools.length > 0
+    ? srcPools.map((p, i) => ({
+      id: p?.id || uid(),
+      name: p?.name || `Pool ${i + 1}`,
+      priority: Number.isFinite(Number(p?.priority)) ? Number(p.priority) : i + 1,
+      percent: Number.isFinite(Number(p?.percent)) ? Number(p.percent) : 0
+    }))
+    : GROWTH_POOL_DEFS.map(def => ({ ...def, percent: 0 }))
   return { upkeepTarget, growthPools }
 }
 

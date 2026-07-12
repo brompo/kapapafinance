@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "2.3.0",
+        date: "2026-07-12",
+        changes: [
+            'Growth pools are no longer fixed to 3 — added "+ Add" and per-pool delete to the Growth section, so you can add/remove your own pools alongside the percentage split.',
+            'Fixed Growth pool cards rendering left-aligned instead of centered.',
+        ]
+    },
+    {
         version: "2.2.0",
         date: "2026-07-11",
         changes: [

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useAppContext } from '../context/AppContext'
-import { fmtTZS } from '../money'
+import { fmtTZS, uid } from '../money'
 import { CategoryDetail } from './CategoryDetail'
 import { computePipeline } from '../utils/pipeline'
 
@@ -146,6 +146,31 @@ export function PipelineHomeScreen() {
         ...activeLedger.pipeline,
         growthPools: activeLedger.pipeline.growthPools.map(p => p.id === id ? { ...p, percent: n } : p)
       }
+    })
+  }
+
+  const addGrowthPool = () => {
+    const name = prompt('New Growth pool name?')
+    if (!name?.trim()) return
+    const pools = activeLedger.pipeline.growthPools
+    const nextPriority = pools.reduce((max, p) => Math.max(max, Number(p.priority) || 0), 0) + 1
+    persistActiveLedger({
+      ...activeLedger,
+      pipeline: {
+        ...activeLedger.pipeline,
+        growthPools: [...pools, { id: uid(), name: name.trim(), percent: 0, priority: nextPriority }]
+      }
+    })
+  }
+
+  const deleteGrowthPool = (id) => {
+    const pools = activeLedger.pipeline.growthPools
+    const pool = pools.find(p => p.id === id)
+    if (!pool) return
+    if (!window.confirm(`Delete "${pool.name}" from Growth?`)) return
+    persistActiveLedger({
+      ...activeLedger,
+      pipeline: { ...activeLedger.pipeline, growthPools: pools.filter(p => p.id !== id) }
     })
   }
 
@@ -349,6 +374,7 @@ export function PipelineHomeScreen() {
         <div className="ledgerSectionHead">
           <div className="ledgerSectionTitle">Growth <span className="ledgerSectionTotal">{fmtTZS(pipeline.growthSurplus)}</span></div>
           <div className="ledgerSectionActions">
+            <button className="ledgerAddBtn" onClick={addGrowthPool}>+ Add</button>
             <button className="ledgerCollapseBtn" onClick={() => toggleCollapse('growth')}>{collapse.growth ? '▸' : '▾'}</button>
           </div>
         </div>
@@ -356,10 +382,17 @@ export function PipelineHomeScreen() {
           <>
             <div className="ledgerGrid">
               {pipeline.growthResults.map((p, i) => (
-                <div key={p.id} className={`ledgerCard theme-${(i % 6) + 4}`} onClick={() => editGrowthPercent(p.id)}>
-                  <div className="ledgerCardTitle">{p.name}</div>
-                  <div className="ledgerCardIcon">{p.percent}%</div>
-                  <div className="ledgerCardValue">{fmtTZS(p.amount)}</div>
+                <div key={p.id} className={`ledgerCard theme-${(i % 6) + 4}`} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); deleteGrowthPool(p.id) }}
+                    style={{ position: 'absolute', top: 5, right: 5, border: 'none', background: 'rgba(255,255,255,0.7)', borderRadius: 5, width: 17, height: 17, fontSize: 10, lineHeight: '17px' }}
+                  >×</button>
+                  <div onClick={() => editGrowthPercent(p.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                    <div className="ledgerCardTitle">{p.name}</div>
+                    <div className="ledgerCardIcon">{p.percent}%</div>
+                    <div className="ledgerCardValue">{fmtTZS(p.amount)}</div>
+                  </div>
                 </div>
               ))}
             </div>

@@ -286,7 +286,7 @@ export function FinanceInsightsScreen() {
     const zeroOffset = cumMax / cumRange
 
     const openMonth = (monthKey, type, category, label) => {
-      setBreakdownModal({ month: monthKey, type, category, title: `${label} ${type === 'all' ? 'Overview' : type === 'allocation' ? (category === ALLOC_OTHER_KEY ? 'Other Allocations' : (category || 'Allocation')) : type[0].toUpperCase()+type.slice(1)}` })
+      setBreakdownModal({ month: monthKey, type, category, title: `${label} ${type === 'all' ? 'Overview' : type === 'allocation' ? (category === ALLOC_OTHER_KEY ? 'Other Lifestyle' : (category || 'Lifestyle')) : type[0].toUpperCase()+type.slice(1)}` })
     }
 
     return (
@@ -572,7 +572,7 @@ export function FinanceInsightsScreen() {
                       {st.label}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{t.category || t.note || (kind === 'income' ? 'Income' : kind === 'allocation' ? 'Allocation' : 'Expense')}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{t.category || t.note || (kind === 'income' ? 'Income' : kind === 'allocation' ? 'Lifestyle' : 'Expense')}</div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(t.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} {t.note && `• ${t.note}`}</div>
                     </div>
                   </div>
@@ -694,7 +694,7 @@ export function FinanceInsightsScreen() {
                     <th style={{ textAlign: 'left', paddingBottom: 8 }}>Month</th>
                     <th style={{ textAlign: 'right', paddingBottom: 8 }}>Income</th>
                     <th style={{ textAlign: 'right', paddingBottom: 8 }}>Expenses</th>
-                    <th style={{ textAlign: 'right', paddingBottom: 8 }}>Allocations</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 8 }}>Lifestyle</th>
                     <th style={{ textAlign: 'right', paddingBottom: 8 }}>Total</th>
                   </tr>
                 </thead>
@@ -721,7 +721,7 @@ export function FinanceInsightsScreen() {
                         </td>
                         <td 
                           style={{ textAlign: 'right', color: '#6366f1', cursor: 'pointer' }}
-                          onClick={() => setBreakdownModal({ month: m.key, type: 'allocation', title: `${m.label} Allocation` })}
+                          onClick={() => setBreakdownModal({ month: m.key, type: 'allocation', title: `${m.label} Lifestyle` })}
                         >
                           {fmtCompact(all)}
                         </td>

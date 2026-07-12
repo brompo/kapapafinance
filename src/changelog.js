@@ -3,10 +3,10 @@ export const CHANGELOG = [
         version: "2.2.0",
         date: "2026-07-11",
         changes: [
-            'New: Money Flow Pipeline — an opt-in Transactions screen for personal ledgers (Settings → Features) that replaces Income/Expenses/Allocations with a 5-stage flow: Collections → Income → Upkeep → Family Happiness → Growth.',
+            'New: Money Flow Pipeline — an opt-in Transactions screen for personal ledgers (Settings → Features) that replaces Income/Expenses/Allocations with a 5-stage flow: Collections → Income → Upkeep → Lifestyle → Growth.',
             'Collections: log gross receipts against the same categories as Income, with a per-category "Needs Compliance" setting — entries stay Pending (excluded from Income) until a compliance amount is cleared.',
             'Upkeep now reflects actual spend against your Expense categories, shown against an editable budget target.',
-            'Family Happiness buckets fill in strict priority order (reorderable) with a visual fill indicator per card; Growth splits the remaining surplus by percentage across three pools once every bucket is fully funded.',
+            'Lifestyle buckets (formerly "Allocations") fill in strict priority order (reorderable) with a visual fill indicator per card; Growth splits the remaining surplus by percentage across three pools once every bucket is fully funded.',
             'Classic screen stays the default for everyone — the pipeline is opt-in and never applies to business ledgers.',
             'Added category deletion (Edit Card → Delete Category) — previously categories could only be added, never removed.',
         ]

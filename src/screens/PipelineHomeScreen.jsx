@@ -5,7 +5,7 @@ import { CategoryDetail } from './CategoryDetail'
 import { computePipeline } from '../utils/pipeline'
 
 // Matches the accent colors of .ledgerCard.theme-2 .. theme-7 in styles.css (the
-// themes Family Happiness cards cycle through), so the fill tint matches each card.
+// themes Lifestyle cards cycle through), so the fill tint matches each card.
 const FAMILY_THEME_FILL_COLORS = ['#a87dfb', '#fb923c', '#38bdf8', '#f472b6', '#4ade80', '#fbbf24']
 
 export function PipelineHomeScreen() {
@@ -78,7 +78,7 @@ export function PipelineHomeScreen() {
   }
 
   const addBucket = () => {
-    const name = prompt('New Family Happiness bucket name?')
+    const name = prompt('New Lifestyle bucket name?')
     if (!name?.trim()) return
     const trimmed = name.trim()
     const nextPriority = allocationCats.reduce((max, n) => Math.max(max, Number(categoryMeta.allocation?.[n]?.priority) || 0), 0) + 1
@@ -220,7 +220,7 @@ export function PipelineHomeScreen() {
           </div>
           <div className="ledgerSummaryDivider" />
           <div className="ledgerSummaryStat">
-            <span className="ledgerStatLabel">Fam. Happiness</span>
+            <span className="ledgerStatLabel">Lifestyle</span>
             <span className="ledgerStatValue kpi-alloc">{fmtTZS(pipeline.familyHappinessSpent)}</span>
           </div>
           <div className="ledgerSummaryDivider" />
@@ -285,7 +285,7 @@ export function PipelineHomeScreen() {
           {' • '}Actual spend: <strong>{fmtTZS(pipeline.upkeepActual)}</strong>
           <br />
           Surplus after upkeep: <strong style={{ color: pipeline.remainder < 0 ? '#e05260' : '#2bb06a' }}>{fmtTZS(pipeline.remainder)}</strong>
-          {pipeline.remainder < 0 && ' — Upkeep spend exceeds Income, nothing flows to Family Happiness or Growth.'}
+          {pipeline.remainder < 0 && ' — Upkeep spend exceeds Income, nothing flows to Lifestyle or Growth.'}
         </div>
         {!collapse.upkeep && (
           <div className="ledgerGrid">
@@ -300,10 +300,10 @@ export function PipelineHomeScreen() {
         )}
       </div>
 
-      {/* 4. Family Happiness */}
+      {/* 4. Lifestyle (Family Happiness buckets) */}
       <div className="ledgerSection">
         <div className="ledgerSectionHead">
-          <div className="ledgerSectionTitle">Family Happiness <span className="ledgerSectionTotal">{fmtTZS(pipeline.familyHappinessSpent)}</span></div>
+          <div className="ledgerSectionTitle">Lifestyle <span className="ledgerSectionTotal">{fmtTZS(pipeline.familyHappinessSpent)}</span></div>
           <div className="ledgerSectionActions">
             <button className="ledgerAddBtn" onClick={addBucket}>+ Add</button>
             <button className="ledgerCollapseBtn" onClick={() => toggleCollapse('family')}>{collapse.family ? '▸' : '▾'}</button>
@@ -370,7 +370,7 @@ export function PipelineHomeScreen() {
             )}
             {!pipeline.allBucketsFunded && (
               <div style={{ padding: '0 12px 12px', fontSize: 11, color: '#8b90b2' }}>
-                Growth stays at 0 until all Family Happiness buckets are fully funded.
+                Growth stays at 0 until all Lifestyle buckets are fully funded.
               </div>
             )}
           </>

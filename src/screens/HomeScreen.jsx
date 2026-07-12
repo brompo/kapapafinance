@@ -211,7 +211,7 @@ function ClassicHomeScreen() {
       {[
         { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
-        { title: 'Allocations', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
+        { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
         { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
         { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
       ].map(sec => {

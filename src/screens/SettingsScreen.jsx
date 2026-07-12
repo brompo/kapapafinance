@@ -73,7 +73,7 @@ export function SettingsScreen() {
             <div className="stgRowIcon">🌊</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
               <div className="stgRowText">Money Flow Pipeline</div>
-              <div className="stgRowSub">New Transactions screen: Collections → Income → Upkeep → Family Happiness → Growth (personal ledgers only)</div>
+              <div className="stgRowSub">New Transactions screen: Collections → Income → Upkeep → Lifestyle → Growth (personal ledgers only)</div>
             </div>
             <label className="toggle" style={{ marginLeft: 'auto' }}>
               <input

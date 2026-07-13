@@ -50,7 +50,6 @@ export default function Accounts({
   onUpdateGroups,
   onUpdateAccounts,
   onReallocateBuckets,
-  onWithdraw,
   settings = {},
   onUpdateSettings,
   categories = {}, // { income: [], expense: [] }
@@ -82,23 +81,6 @@ export default function Accounts({
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountBalance, setNewAccountBalance] = useState("");
   const [editMetaCategory, setEditMetaCategory] = useState("");
-
-  // Upkeep/Lifestyle/Growth funding happens automatically from recognized Income
-  // (see src/utils/envelopes.js) — the only manual, virtual money-event left here
-  // is withdrawing money back out of a Growth pool.
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [withdrawCategory, setWithdrawCategory] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawDate, setWithdrawDate] = useState(() => todayISO());
-  const [withdrawNote, setWithdrawNote] = useState("");
-
-  const openWithdrawModal = () => {
-    setWithdrawCategory('')
-    setWithdrawAmount('')
-    setWithdrawDate(todayISO())
-    setWithdrawNote('')
-    setShowWithdrawModal(true)
-  }
 
   function renderMetaSection(label, type, total, groups) {
     const isCollapsed = !!collapsedMetaSections[type];
@@ -926,64 +908,6 @@ export default function Accounts({
           <span style={{ fontSize: '1.2rem', opacity: 0.6 }}>{showOverview ? '▾' : '▸'}</span>
         </div>
       </div>
-
-      {viewMode === 'accounts' && onWithdraw && (categories.growth || []).length > 0 && (
-        <button
-          type="button"
-          className="btn primary"
-          style={{ width: '100%', margin: '8px 0 4px' }}
-          onClick={openWithdrawModal}
-        >
-          Withdraw from Growth
-        </button>
-      )}
-
-      {showWithdrawModal && (
-        <div className="modalBackdrop" onClick={() => setShowWithdrawModal(false)}>
-          <div className="modalCard" onClick={e => e.stopPropagation()}>
-            <div className="modalTitle">Withdraw from Growth</div>
-            <div className="field">
-              <label>Growth pool</label>
-              <select value={withdrawCategory} onChange={e => setWithdrawCategory(e.target.value)}>
-                <option value="">Select one</option>
-                {(categories.growth || []).map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Amount (TZS)</label>
-              <input inputMode="decimal" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="e.g. 100000" />
-            </div>
-            <div className="field">
-              <label>Date</label>
-              <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Note</label>
-              <input value={withdrawNote} onChange={e => setWithdrawNote(e.target.value)} placeholder="Optional" />
-            </div>
-            <div className="modalActions">
-              <button className="btn" onClick={() => setShowWithdrawModal(false)}>Cancel</button>
-              <button
-                className="btn primary"
-                onClick={async () => {
-                  if (!withdrawCategory) return onToast?.('Pick a Growth pool.')
-                  await onWithdraw({
-                    kind: 'withdraw',
-                    categoryType: 'growth',
-                    category: withdrawCategory,
-                    amount: withdrawAmount,
-                    date: withdrawDate,
-                    note: withdrawNote
-                  })
-                  setShowWithdrawModal(false)
-                }}
-              >Save</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showOverview && (
         <>

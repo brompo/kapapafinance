@@ -82,12 +82,15 @@ function RingLegendItem({ color, label, percent }) {
   )
 }
 
-function FlowRow({ name, sub, amount, tag, tagColor, color }) {
+function FlowRow({ name, sub, amount, tag, tagColor, color, onClick }) {
   return (
-    <div style={{
-      padding: '10px 12px', borderRadius: 16, background: `${color}0f`, border: `1px solid ${color}33`,
-      display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        padding: '10px 12px', borderRadius: 16, background: `${color}0f`, border: `1px solid ${color}33`,
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, cursor: onClick ? 'pointer' : 'default'
+      }}
+    >
       <div style={{
         width: 36, height: 36, borderRadius: 18, background: color,
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#fff', flexShrink: 0
@@ -102,6 +105,7 @@ function FlowRow({ name, sub, amount, tag, tagColor, color }) {
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
         {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagColor || '#94a3b8' }}>{tag}</div>}
       </div>
+      {onClick && <div style={{ fontSize: 13, color: '#94a3b8', marginLeft: 4, flexShrink: 0 }}>✎</div>}
     </div>
   )
 }
@@ -124,8 +128,36 @@ function SectionDivider({ title, total, color }) {
 export function FlowScreen() {
   const {
     formatMonthLabel,
-    activeLedger, setShowLedgerPicker
+    activeLedger, setShowLedgerPicker, persistActiveLedger, show
   } = useAppContext()
+
+  // Budget/percent aren't transactions — they're just category settings — so
+  // editing them here (unlike adding a transaction) doesn't break Flow's
+  // read-only-report rule.
+  const [editTarget, setEditTarget] = useState(null) // { metaType: 'allocation'|'growth', name, field: 'budget'|'percent' }
+  const [editValue, setEditValue] = useState('')
+
+  const openEdit = (metaType, name, field, currentValue) => {
+    setEditTarget({ metaType, name, field })
+    setEditValue(String(currentValue || 0))
+  }
+
+  const saveEdit = () => {
+    const { metaType, name, field } = editTarget
+    const nextValue = Number(String(editValue).replace(/,/g, '')) || 0
+    persistActiveLedger({
+      ...activeLedger,
+      categoryMeta: {
+        ...activeLedger.categoryMeta,
+        [metaType]: {
+          ...activeLedger.categoryMeta[metaType],
+          [name]: { ...activeLedger.categoryMeta[metaType]?.[name], [field]: nextValue }
+        }
+      }
+    })
+    show('Updated.')
+    setEditTarget(null)
+  }
 
   // Own period state, independent of the global month (same pattern Insights
   // uses) — Year and Month only, since the underlying cascade is computed per
@@ -155,6 +187,11 @@ export function FlowScreen() {
 
   const lifestyleDistributed = envelopeSummary.lifestyle.reduce((s, b) => s + b.distributedThisPeriod, 0)
   const growthDistributed = envelopeSummary.growth.reduce((s, p) => s + p.distributedThisPeriod, 0)
+  // Higher-percent pools carry more priority, so they surface first.
+  const growthSorted = useMemo(
+    () => [...envelopeSummary.growth].sort((a, b) => b.percent - a.percent),
+    [envelopeSummary]
+  )
   const totalDistributed = envelopeSummary.upkeep.distributedThisPeriod + lifestyleDistributed + growthDistributed
 
   const ringSegments = [
@@ -248,7 +285,9 @@ export function FlowScreen() {
             name={b.name}
             sub={`Balance ${fmtTZS(b.balance)}`}
             amount={b.distributedThisPeriod}
+            tag={`Budget ${fmtTZS(b.budget)}`}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
+            onClick={() => openEdit('allocation', b.name, 'budget', b.budget)}
           />
         ))}
         {envelopeSummary.lifestyle.length === 0 && (
@@ -256,19 +295,36 @@ export function FlowScreen() {
         )}
 
         <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} />
-        {envelopeSummary.growth.map((p, i) => (
+        {growthSorted.map((p, i) => (
           <FlowRow
             key={p.name}
-            name={p.name}
-            sub={`Balance ${fmtTZS(p.balance)} • Withdrawn ${fmtTZS(p.withdrawnThisPeriod)} this period`}
+            name={`${p.name} (${p.percent}%)`}
+            sub={`Balance ${fmtTZS(p.balance)} • Spent ${fmtTZS(p.spentThisPeriod)} this period`}
             amount={p.distributedThisPeriod}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
+            onClick={() => openEdit('growth', p.name, 'percent', p.percent)}
           />
         ))}
         {envelopeSummary.growth.length === 0 && (
           <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Growth pools yet.</div>
         )}
       </div>
+
+      {editTarget && (
+        <div className="modalBackdrop" onClick={() => setEditTarget(null)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">{editTarget.name}</div>
+            <div className="field">
+              <label>{editTarget.field === 'percent' ? 'Target % of Surplus' : 'Monthly Target (TZS)'}</label>
+              <input inputMode="decimal" value={editValue} onChange={e => setEditValue(e.target.value)} placeholder={editTarget.field === 'percent' ? 'e.g. 30' : 'e.g. 100000'} autoFocus />
+            </div>
+            <div className="modalActions">
+              <button className="btn" onClick={() => setEditTarget(null)}>Cancel</button>
+              <button className="btn primary" onClick={saveEdit}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -151,9 +151,9 @@ function ClassicHomeScreen() {
     for (const b of envelopeSummary.lifestyle) map.set(b.name, b.spentTotal)
     return map
   }, [envelopeSummary])
-  const growthWithdrawnTotals = useMemo(() => {
+  const growthSpentTotals = useMemo(() => {
     const map = new Map()
-    for (const p of envelopeSummary.growth) map.set(p.name, p.withdrawnTotal)
+    for (const p of envelopeSummary.growth) map.set(p.name, p.spentTotal)
     return map
   }, [envelopeSummary])
   // Card grid shows Total Expenditure as the headline figure; CategoryDetail's
@@ -267,7 +267,7 @@ function ClassicHomeScreen() {
           : { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
         { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: lifestyleCardTotals, kpi: allocationCats.reduce((s, c) => s + (lifestyleCardTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2, secondaryTotals: pipelineMode ? lifestyleBalances : null },
-        ...(pipelineMode ? [{ title: 'Growth', type: 'growth', list: growthCats, totals: growthWithdrawnTotals, kpi: growthCats.reduce((s, c) => s + (growthWithdrawnTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4, secondaryTotals: growthBalances }] : []),
+        ...(pipelineMode ? [{ title: 'Growth', type: 'growth', list: growthCats, totals: growthSpentTotals, kpi: growthCats.reduce((s, c) => s + (growthSpentTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4, secondaryTotals: growthBalances }] : []),
         { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
         { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
       ].map(sec => {

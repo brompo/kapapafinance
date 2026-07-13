@@ -5,8 +5,8 @@ import { computeIncome } from './pipeline.js'
 // order, each capped by its own budget) -> Growth pools (split by percent of
 // whatever's left) — same math as the original budget cascade, just computed fresh
 // for each month of history so it can feed a rolling Balance. None of this touches
-// any real Account — only real Expenditures (and, for Growth, a manual virtual
-// Withdrawal) do that.
+// any real Account — only real Expenditure (type 'expense'/'allocation'/'growth'
+// ledger transactions, entered in Transactions) does that.
 function cascadeForMonth(ledger, monthKey) {
   const monthTxns = (ledger?.txns || []).filter(t => (t.date || '').startsWith(monthKey))
   const { income } = computeIncome(monthTxns)
@@ -53,7 +53,6 @@ function cascadeForMonth(ledger, monthKey) {
 // since Balance rolls over regardless of which granularity you're viewing.
 export function computeEnvelopeSummary(ledger, period) {
   const txns = ledger?.txns || []
-  const envelopes = ledger?.envelopes || [] // only ever holds Growth Withdrawal events now
   const cutoffMonth = period.length === 4 ? `${period}-12` : period
   const inPeriod = (d) => !!d && d.slice(0, period.length) === period
   const thruPeriod = (d) => !!d && d.slice(0, 7) <= cutoffMonth
@@ -63,11 +62,6 @@ export function computeEnvelopeSummary(ledger, period) {
     txns
       .filter(t => t.type === type && (category == null || t.category === category) && dateFilter(t.date))
       .reduce((s, t) => s + Number(t.amount || 0), 0)
-
-  const sumWithdrawn = (name, dateFilter) =>
-    envelopes
-      .filter(e => e.categoryType === 'growth' && e.category === name && e.kind === 'withdraw' && dateFilter(e.date))
-      .reduce((s, e) => s + Number(e.amount || 0), 0)
 
   // Only months that actually recognized some income can contribute a non-zero
   // cascade result, so this is safe to use as the full set of months to sum.
@@ -104,10 +98,12 @@ export function computeEnvelopeSummary(ledger, period) {
     balance: upkeepDistributedCum - upkeepSpentTotal
   }
 
+  const allocationMetaForBudget = ledger?.categoryMeta?.allocation || {}
   const lifestyle = (ledger?.categories?.allocation || []).map(name => {
     const spentTotal = sumTxn('allocation', name, thruPeriod)
     return {
       name,
+      budget: Number(allocationMetaForBudget[name]?.budget || 0),
       distributedThisPeriod: lifestyleThisPeriod[name] || 0,
       spentThisPeriod: sumTxn('allocation', name, inPeriod),
       spentTotal,
@@ -115,14 +111,16 @@ export function computeEnvelopeSummary(ledger, period) {
     }
   })
 
+  const growthMetaForPercent = ledger?.categoryMeta?.growth || {}
   const growth = (ledger?.categories?.growth || []).map(name => {
-    const withdrawnTotal = sumWithdrawn(name, thruPeriod)
+    const spentTotal = sumTxn('growth', name, thruPeriod)
     return {
       name,
+      percent: Number(growthMetaForPercent[name]?.percent || 0),
       distributedThisPeriod: growthThisPeriod[name] || 0,
-      withdrawnThisPeriod: sumWithdrawn(name, inPeriod),
-      withdrawnTotal,
-      balance: (growthCum[name] || 0) - withdrawnTotal
+      spentThisPeriod: sumTxn('growth', name, inPeriod),
+      spentTotal,
+      balance: (growthCum[name] || 0) - spentTotal
     }
   })
 

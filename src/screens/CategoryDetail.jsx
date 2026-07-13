@@ -340,7 +340,7 @@ export function CategoryDetail({
         </div>
       )}
 
-      {(showAddForm && category.type !== 'growth') ? (
+      {showAddForm ? (
         <div className="catDetailForm" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <div style={{ textAlign: 'center', margin: '0 0 10px', fontWeight: 700, color: '#111827', display: 'flex', flexDirection: 'column' }}>
@@ -518,13 +518,7 @@ export function CategoryDetail({
         </div>
       ) : (
         <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
-          {category.type === 'growth' ? (
-            <div style={{ padding: '10px 12px', marginBottom: 15, marginTop: 12, background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 12, fontSize: 12, color: '#166534', textAlign: 'center' }}>
-              Growth pools are funded automatically from surplus each month. Use Accounts → Withdraw from Growth to draw money out.
-            </div>
-          ) : (
-            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : 'Expense'}</button>
-          )}
+          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
 
           <div className="modeSegmented" style={{
             display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12,

@@ -1,5 +1,16 @@
 export const CHANGELOG = [
     {
+        version: "2.5.0",
+        date: "2026-07-13",
+        changes: [
+            'Growth pools can now be spent from directly — tap a pool in Transactions and add a real Expenditure (with an account), exactly like Lifestyle buckets, instead of only being auto-funded.',
+            'Removed the virtual "Withdraw from Growth" action in Accounts — real Expenditure covers that need directly, so there\'s no separate bookkeeping-only event to keep track of anymore.',
+            'Growth pool Balance and Spent totals now come from real transactions, and show up again in Insights\' cash flow/Breakeven views.',
+            'Growth rows in Flow now show their name with percent inline (e.g. "Investments (50%)"), and are sorted by percent so the highest-priority pool is always on top.',
+            'Lifestyle and Growth rows in Flow can be tapped to edit their Budget/Percent directly, without needing to go to Transactions.',
+        ]
+    },
+    {
         version: "2.4.0",
         date: "2026-07-13",
         changes: [

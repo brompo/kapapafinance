@@ -149,6 +149,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
                 {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
                 {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
                 <option value="allocation">Allocation</option>
+                {growthCats && growthCats.length > 0 && <option value="growth">Growth</option>}
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>

@@ -1,16 +1,16 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS } from '../money'
-import { computePipeline } from '../utils/pipeline'
+import { computeIncome } from '../utils/pipeline'
+import { computeEnvelopeSummary } from '../utils/envelopes'
 
 const UPKEEP_COLOR = '#fb923c'
 const LIFESTYLE_PALETTE = ['#a87dfb', '#38bdf8', '#f472b6', '#fbbf24', '#818cf8', '#fb7185']
 const GROWTH_PALETTE = ['#2bb06a', '#22c55e', '#34d399', '#10b981', '#4ade80', '#059669']
 
 // Pie split into one solid wedge per segment (Upkeep / Lifestyle / Growth), sized by
-// each segment's share of Income — the three always sum to a full circle since every
-// shilling of Income lands in exactly one of the three (see computePipeline). Each
-// wedge carries its own % label, skipped when a slice is too thin to hold text.
+// each segment's share of this period's total Distributed amount. Each wedge carries
+// its own % label, skipped when a slice is too thin to hold text.
 function SegmentedPie({ segments, size = 132 }) {
   const cx = size / 2
   const cy = size / 2
@@ -117,28 +117,50 @@ function SectionDivider({ title, total, color }) {
   )
 }
 
-// Simple read-only budget plan: Income cascades through Upkeep -> Lifestyle -> Growth,
-// each segment showing its Budget vs how much of Income was Allocated to it. No
-// transaction entry happens here — that lives in the Transactions tab.
+// Read-only budget report: for each category (Upkeep lump, Lifestyle buckets, Growth
+// pools), shows how much was Distributed this period and the running Balance
+// (Distributed minus real spend, carried over month to month). No transaction entry
+// happens here — Distribution happens in Accounts, Expenditure in Transactions.
 export function FlowScreen() {
   const {
-    month, shiftMonth, formatMonthLabel,
-    activeLedger, filteredTxns, setShowLedgerPicker
+    formatMonthLabel,
+    activeLedger, setShowLedgerPicker
   } = useAppContext()
 
-  const monthLabel = useMemo(() => formatMonthLabel(month), [month, formatMonthLabel])
-  const pipeline = useMemo(() => computePipeline(filteredTxns, activeLedger, month), [filteredTxns, activeLedger, month])
+  // Own period state, independent of the global month (same pattern Insights
+  // uses) — Year and Month only, since the underlying cascade is computed per
+  // calendar month and a weekly view wouldn't have anything meaningful to show.
+  const [viewGranularity, setViewGranularity] = useState('month')
+  const [statPeriod, setStatPeriod] = useState(() => new Date().toISOString().slice(0, 7))
+  const [showGranularityMenu, setShowGranularityMenu] = useState(false)
 
-  const coreTarget = pipeline.upkeepTarget + pipeline.lifestyleTargetTotal
-  const coreAllocated = pipeline.upkeepAllocated + pipeline.lifestyleAllocatedTotal
-  const remaining = Math.max(0, coreTarget - coreAllocated)
+  const shiftPeriod = (delta) => {
+    if (viewGranularity === 'year') {
+      setStatPeriod(String(Number(statPeriod) + delta))
+    } else {
+      const d = new Date(statPeriod + '-01')
+      d.setMonth(d.getMonth() + delta)
+      setStatPeriod(d.toISOString().slice(0, 7))
+    }
+  }
 
-  // Upkeep + Lifestyle + Growth always add up to Income exactly, so these three
-  // shares always fill the ring completely.
+  const periodLabel = viewGranularity === 'year' ? statPeriod : formatMonthLabel(statPeriod)
+
+  const periodTxns = useMemo(
+    () => (activeLedger?.txns || []).filter(t => t.date && t.date.slice(0, statPeriod.length) === statPeriod),
+    [activeLedger, statPeriod]
+  )
+  const incomeInfo = useMemo(() => computeIncome(periodTxns), [periodTxns])
+  const envelopeSummary = useMemo(() => computeEnvelopeSummary(activeLedger, statPeriod), [activeLedger, statPeriod])
+
+  const lifestyleDistributed = envelopeSummary.lifestyle.reduce((s, b) => s + b.distributedThisPeriod, 0)
+  const growthDistributed = envelopeSummary.growth.reduce((s, p) => s + p.distributedThisPeriod, 0)
+  const totalDistributed = envelopeSummary.upkeep.distributedThisPeriod + lifestyleDistributed + growthDistributed
+
   const ringSegments = [
-    { name: 'Upkeep', value: pipeline.upkeepAllocated, color: UPKEEP_COLOR },
-    { name: 'Lifestyle', value: pipeline.lifestyleAllocatedTotal, color: LIFESTYLE_PALETTE[0] },
-    { name: 'Growth', value: pipeline.growthPoolAmount, color: GROWTH_PALETTE[0] }
+    { name: 'Upkeep', value: envelopeSummary.upkeep.distributedThisPeriod, color: UPKEEP_COLOR },
+    { name: 'Lifestyle', value: lifestyleDistributed, color: LIFESTYLE_PALETTE[0] },
+    { name: 'Growth', value: growthDistributed, color: GROWTH_PALETTE[0] }
   ]
   const ringTotal = ringSegments.reduce((s, seg) => s + Math.max(0, seg.value), 0)
   const percentOf = (v) => ringTotal > 0 ? (Math.max(0, v) / ringTotal) * 100 : 0
@@ -147,17 +169,51 @@ export function FlowScreen() {
     <div className="ledgerScreen">
       <div className="ledgerHeader">
         <button className="ledgerGhost" onClick={() => setShowLedgerPicker(true)}>{activeLedger.name || 'Personal'} ▾</button>
-        <div className="ledgerPeriod">
-          <button className="ledgerNavBtn" onClick={() => shiftMonth(-1)}>‹</button>
-          <div className="ledgerPeriodLabel">{monthLabel}</div>
-          <button className="ledgerNavBtn" onClick={() => shiftMonth(1)}>›</button>
+        <div className="ledgerPeriod" style={{ position: 'relative' }}>
+          <button className="ledgerNavBtn" onClick={() => shiftPeriod(-1)}>‹</button>
+          <div className="ledgerPeriodLabel" style={{ cursor: 'pointer' }} onClick={() => setShowGranularityMenu(v => !v)}>{periodLabel}</div>
+          <button className="ledgerNavBtn" onClick={() => shiftPeriod(1)}>›</button>
+
+          {showGranularityMenu && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 100 }} onClick={() => setShowGranularityMenu(false)} />
+              <div style={{
+                position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)',
+                background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                padding: 8, zIndex: 101, minWidth: 120, border: '1px solid #f1f5f9'
+              }}>
+                {['Year', 'Month'].map(g => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      const low = g.toLowerCase()
+                      setViewGranularity(low)
+                      setShowGranularityMenu(false)
+                      const now = new Date()
+                      setStatPeriod(low === 'year' ? String(now.getFullYear()) : now.toISOString().slice(0, 7))
+                    }}
+                    style={{
+                      display: 'block', width: '100%', padding: '10px 12px', border: 'none',
+                      background: viewGranularity === g.toLowerCase() ? '#eff6ff' : 'transparent',
+                      borderRadius: 8, textAlign: 'left', fontWeight: 600, fontSize: 13,
+                      color: viewGranularity === g.toLowerCase() ? '#3b82f6' : '#64748b'
+                    }}
+                  >
+                    {g}ly
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
         <div style={{ width: 40 }} />
       </div>
 
       <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
-        <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(pipeline.income)}</div>
-        <div style={{ fontSize: 12, color: '#94a3b8' }}>Income this month</div>
+        <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(totalDistributed)}</div>
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>Distributed this {viewGranularity}</div>
+        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
@@ -165,67 +221,52 @@ export function FlowScreen() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(pipeline.upkeepAllocated)} />
-        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(pipeline.lifestyleAllocatedTotal)} />
-        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(pipeline.growthPoolAmount)} />
+        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(envelopeSummary.upkeep.distributedThisPeriod)} />
+        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
+        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
       </div>
 
-      {remaining > 0 && (
-        <div style={{ textAlign: 'center', padding: '0 16px 8px', fontSize: 12, color: '#e05260' }}>
-          Income falls short of your Upkeep + Lifestyle budget by {fmtTZS(remaining)}.
-        </div>
-      )}
-
-      {pipeline.isLegacyFallback && (
+      {incomeInfo.isLegacyFallback && (
         <div style={{ padding: '4px 16px 0', fontSize: 11, color: '#8b90b2' }}>
-          No Collections recorded yet this month — Income includes legacy entries shown as already-clean.
+          No Collections recorded yet this {viewGranularity} — Income includes legacy entries shown as already-clean.
         </div>
       )}
 
       <div style={{ padding: '10px 16px 40px' }}>
-        <SectionDivider title="UPKEEP" total={pipeline.upkeepTarget} color={UPKEEP_COLOR} />
+        <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} />
         <FlowRow
           name="Upkeep"
-          sub={`Budget ${fmtTZS(pipeline.upkeepTarget)}`}
-          amount={pipeline.upkeepAllocated}
-          tag={`${pipeline.upkeepPercent.toFixed(0)}% Allocated`}
-          tagColor={pipeline.upkeepPercent >= 100 ? '#15803d' : '#b45309'}
+          sub={`Balance ${fmtTZS(envelopeSummary.upkeep.balance)}`}
+          amount={envelopeSummary.upkeep.distributedThisPeriod}
           color={UPKEEP_COLOR}
         />
 
-        <SectionDivider title="LIFESTYLE" total={pipeline.lifestyleAllocatedTotal} color={LIFESTYLE_PALETTE[0]} />
-        {pipeline.bucketResults.map((b, i) => (
+        <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} />
+        {envelopeSummary.lifestyle.map((b, i) => (
           <FlowRow
             key={b.name}
             name={b.name}
-            sub={`Budget ${fmtTZS(b.target)}`}
-            amount={b.allocated}
-            tag={`${b.percent.toFixed(0)}% Allocated`}
-            tagColor={b.percent >= 100 ? '#15803d' : b.percent > 0 ? '#b45309' : '#94a3b8'}
+            sub={`Balance ${fmtTZS(b.balance)}`}
+            amount={b.distributedThisPeriod}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
           />
         ))}
-        {pipeline.bucketResults.length === 0 && (
+        {envelopeSummary.lifestyle.length === 0 && (
           <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Lifestyle buckets yet.</div>
         )}
 
-        <SectionDivider title="GROWTH" total={pipeline.growthContributedTotal} color={GROWTH_PALETTE[0]} />
-        {pipeline.growthResults.map((p, i) => (
+        <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} />
+        {envelopeSummary.growth.map((p, i) => (
           <FlowRow
             key={p.name}
             name={p.name}
-            sub={`${p.percent}% of surplus`}
-            amount={p.contributed}
+            sub={`Balance ${fmtTZS(p.balance)} • Withdrawn ${fmtTZS(p.withdrawnThisPeriod)} this period`}
+            amount={p.distributedThisPeriod}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
           />
         ))}
-        {pipeline.growthResults.length === 0 && (
+        {envelopeSummary.growth.length === 0 && (
           <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Growth pools yet.</div>
-        )}
-        {pipeline.growthPercentTotal !== 100 && pipeline.growthResults.length > 0 && (
-          <div style={{ padding: '0 12px', fontSize: 11, color: '#b45309' }}>
-            Unallocated: {(100 - pipeline.growthPercentTotal).toFixed(0)}% — pool percentages don't sum to 100. Edit in Transactions → Growth.
-          </div>
         )}
       </div>
     </div>

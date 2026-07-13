@@ -1,5 +1,18 @@
 export const CHANGELOG = [
     {
+        version: "2.4.0",
+        date: "2026-07-13",
+        changes: [
+            'Renamed Money Flow to Flow, and split it from Transactions: Transactions is now the single place to log real Expenditures; Flow is a read-only report showing how Income automatically distributes across Upkeep, Lifestyle, and Growth.',
+            'Distribution is automatic — recognizing Income cascades it through Upkeep (sum of Expense budgets) → Lifestyle buckets (priority order) → Growth pools (percent of surplus), same math as before but now feeding a running Balance per category that rolls over month to month.',
+            'Growth pools can be withdrawn from (Accounts → Withdraw from Growth) — the only manual, purely virtual money event; nothing here ever touches a real Account balance.',
+            'Lifestyle and Growth cards in Transactions now show both Total Spent/Withdrawn and current Balance, so you can see what you have left before adding a transaction.',
+            'Flow now has its own Year/Month view switcher (tap the period label), independent of the Transactions month picker.',
+            'Flow\'s chart is now a solid, color-coded pie (Upkeep/Lifestyle/Growth) with on-slice percentages, replacing the earlier plain ring.',
+            'Redesigned the bottom navigation icons for visual consistency across all five tabs.',
+        ]
+    },
+    {
         version: "2.3.0",
         date: "2026-07-12",
         changes: [

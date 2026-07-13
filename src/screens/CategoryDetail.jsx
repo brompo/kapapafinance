@@ -340,7 +340,7 @@ export function CategoryDetail({
         </div>
       )}
 
-      {showAddForm ? (
+      {(showAddForm && category.type !== 'growth') ? (
         <div className="catDetailForm" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <div style={{ textAlign: 'center', margin: '0 0 10px', fontWeight: 700, color: '#111827', display: 'flex', flexDirection: 'column' }}>
@@ -349,28 +349,16 @@ export function CategoryDetail({
               <div style={{ fontSize: 35 }}>{formatCommas(amount || '0')}</div>
             </div>
 
-            <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: (category.type === 'allocation' || category.type === 'growth') ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 6 }}>
+            <div className="catDetailFormGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
               <div style={{ position: 'relative' }}>
                 <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
-                  <option value="">{(category.type === 'allocation' || category.type === 'growth') ? 'From' : 'Account'}</option>
+                  <option value="">Account</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
                 <div style={{ padding: '6px 4px', border: accountError ? '1px solid #f8a5a5' : '1px solid #eef2ff', background: accountId ? '#fef08a' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11 }}>
-                  <span style={{ fontSize: 16 }}>🏦</span> <br /> {accountId ? accounts.find(a => a.id === accountId)?.name : ((category.type === 'allocation' || category.type === 'growth') ? 'From' : 'Account')}
+                  <span style={{ fontSize: 16 }}>🏦</span> <br /> {accountId ? accounts.find(a => a.id === accountId)?.name : 'Account'}
                 </div>
               </div>
-
-              {(category.type === 'allocation' || category.type === 'growth') && (
-                <div style={{ position: 'relative' }}>
-                  <select value={toAccountId} onChange={e => setToAccountId(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }}>
-                    <option value="">To Account</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                  <div style={{ padding: '6px 4px', border: '1px solid #eef2ff', background: toAccountId ? '#dcfce7' : '#fff', borderRadius: 12, textAlign: 'center', fontSize: 11 }}>
-                    <span style={{ fontSize: 16 }}>🎯</span> <br /> {toAccountId ? accounts.find(a => a.id === toAccountId)?.name : 'To'}
-                  </div>
-                </div>
-              )}
 
               <div style={{ position: 'relative' }}>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 10 }} />
@@ -530,7 +518,13 @@ export function CategoryDetail({
         </div>
       ) : (
         <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
-          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
+          {category.type === 'growth' ? (
+            <div style={{ padding: '10px 12px', marginBottom: 15, marginTop: 12, background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 12, fontSize: 12, color: '#166534', textAlign: 'center' }}>
+              Growth pools are funded automatically from surplus each month. Use Accounts → Withdraw from Growth to draw money out.
+            </div>
+          ) : (
+            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : 'Expense'}</button>
+          )}
 
           <div className="modeSegmented" style={{
             display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12,

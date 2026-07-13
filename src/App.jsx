@@ -20,6 +20,7 @@ function VaultApp() {
     show, upsertAccount, deleteAccount, addAccountTxn, issueLoan,
     transferAccount, payCreditBack, updateAccountTxn, updateAccountTxnMeta,
     deleteAccountTxn, updateAccountGroups, updateAccounts, reallocateBuckets,
+    addEnvelopeEvent,
     updateSettings, handleSwitchLedgerToAccounts, setShowLedgerPicker,
     showLedgerPicker, handleSelectLedger, handleAddPersonalLedger, handleAddBusinessLedger,
     handleSaveNewLedger, showAddLedgerModal, setShowAddLedgerModal, addLedgerName, setAddLedgerName
@@ -72,6 +73,7 @@ function VaultApp() {
             onTransferAccount={transferAccount}
             onPayCreditBack={payCreditBack}
             onReallocateBuckets={reallocateBuckets}
+            onWithdraw={addEnvelopeEvent}
             onUpdateAccountTxn={updateAccountTxn}
             onToast={show}
             onSwitchLedger={handleSwitchLedgerToAccounts}

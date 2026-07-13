@@ -208,7 +208,7 @@ export function FinanceInsightsScreen() {
 
   const monthlyStats = useMemo(() => {
     const stats = new Map()
-    const emptyStat = () => ({ inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0, allocByCat: {}, actualAllocByCat: {}, growth: 0, actualGrowth: 0 })
+    const emptyStat = () => ({ inc: 0, exp: 0, actualInc: 0, actualExp: 0, all: 0, actualAll: 0, allocByCat: {}, actualAllocByCat: {} })
     txns.forEach(t => {
       const date = t.date || todayISO()
       if (viewGranularity === 'month' && !date.startsWith(statPeriod)) return
@@ -225,10 +225,6 @@ export function FinanceInsightsScreen() {
         const cat = t.category || 'Uncategorized'
         e.all += amt; e.allocByCat[cat] = (e.allocByCat[cat] || 0) + amt
         if (act) { e.actualAll += amt; e.actualAllocByCat[cat] = (e.actualAllocByCat[cat] || 0) + amt }
-      }
-      else if (t.type === 'growth') {
-        e.growth += amt
-        if (act) e.actualGrowth += amt
       }
     })
     const res = []
@@ -255,7 +251,7 @@ export function FinanceInsightsScreen() {
 
     // Chronological Jan->Dec, each row annotated with its stacked segments.
     const chartData = useMemo(() => monthlyStats.map(m => {
-      const total = m.inc - m.exp - m.all - m.growth
+      const total = m.inc - m.exp - m.all
       const isPositive = total >= 0
       const row = { key: m.key, label: m.label, total, isProjected: m.key > todayKey }
       let otherAlloc = 0
@@ -513,7 +509,6 @@ export function FinanceInsightsScreen() {
     income: { bg: '#ecfdf5', fg: '#059669', label: 'IN', amtColor: '#10b981', sign: '+' },
     expense: { bg: '#fef2f2', fg: '#dc2626', label: 'OUT', amtColor: '#ef4444', sign: '-' },
     allocation: { bg: '#eef2ff', fg: '#4f46e5', label: 'ALC', amtColor: '#6366f1', sign: '-' },
-    growth: { bg: '#ecfdf5', fg: '#15803d', label: 'GRW', amtColor: '#2bb06a', sign: '-' },
   }
 
   const BreakdownModal = ({ month, type, category, title }) => {
@@ -529,7 +524,7 @@ export function FinanceInsightsScreen() {
           if (category === ALLOC_OTHER_KEY) return !allocCategoryOrder.includes(t.category)
           return t.category === category
         }
-        if (type === 'all') return ['income', 'collection', 'expense', 'cos', 'opps', 'allocation', 'growth'].includes(t.type)
+        if (type === 'all') return ['income', 'collection', 'expense', 'cos', 'opps', 'allocation'].includes(t.type)
         return false
       })
       // Category-filtered allocation drill-downs only cover categorized ledger
@@ -549,7 +544,6 @@ export function FinanceInsightsScreen() {
       if (t.source === 'account') return t.direction === 'in' ? 'income' : 'expense'
       if (isIncomeType(t)) return 'income'
       if (t.type === 'allocation') return 'allocation'
-      if (t.type === 'growth') return 'growth'
       return 'expense'
     }
 
@@ -709,8 +703,7 @@ export function FinanceInsightsScreen() {
                     const inc = monthlyViewMode === 'actual' ? m.actualInc : m.inc;
                     const exp = monthlyViewMode === 'actual' ? m.actualExp : m.exp;
                     const all = monthlyViewMode === 'actual' ? m.actualAll : m.all;
-                    const growth = monthlyViewMode === 'actual' ? m.actualGrowth : m.growth;
-                    if (inc === 0 && exp === 0 && all === 0 && growth === 0) return null;
+                    if (inc === 0 && exp === 0 && all === 0) return null;
                     return (
                       <tr key={m.key} style={{ borderBottom: '1px solid #f8fafc' }}>
                         <td style={{ padding: '12px 0', fontWeight: 700 }}>{m.label}</td>
@@ -732,7 +725,7 @@ export function FinanceInsightsScreen() {
                         >
                           {fmtCompact(all)}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 800 }}>{fmtCompact(inc - exp - all - growth)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 800 }}>{fmtCompact(inc - exp - all)}</td>
                       </tr>
                     )
                   })}

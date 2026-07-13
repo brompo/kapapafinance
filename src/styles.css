@@ -2284,7 +2284,7 @@ label {
 .ledgerCard {
   border-radius: 24px;
   padding: 16px 8px;
-  height: 130px;
+  min-height: 130px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;

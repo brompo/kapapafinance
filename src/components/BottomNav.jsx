@@ -7,16 +7,15 @@ export default function BottomNav({ tab, setTab, variant }) {
   const activeColor = '#5a5fb0'
   const inactiveColor = '#9aa0bf'
 
+  // One consistent flat line-icon style across every tab — single-color stroke,
+  // no fill, no emoji — only the active/inactive color differs.
   const icons = [
     {
       id: 'insights',
       label: 'Insights',
       content: (active) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* 3 sloping bars as seen in screenshot */}
-          <rect x="4" y="14" width="4" height="6" rx="1.5" fill={active ? "#f97316" : "#f97316"} />
-          <rect x="10" y="10" width="4" height="10" rx="1.5" fill={active ? "#f97316" : "#f97316"} />
-          <rect x="16" y="6" width="4" height="14" rx="1.5" fill={active ? "#f97316" : "#f97316"} />
+          <path d="M6 20V13M12 20V9M18 20V5" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       )
     },
@@ -24,7 +23,10 @@ export default function BottomNav({ tab, setTab, variant }) {
       id: 'tx',
       label: 'Transactions',
       content: (active) => (
-        <span style={{ fontSize: 28, filter: active ? 'none' : 'grayscale(0.4)' }}>📄</span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 3h9l3 3v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinejoin="round"/>
+          <path d="M9 10h6M9 14h6M9 18h3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
+        </svg>
       )
     },
     {
@@ -41,7 +43,11 @@ export default function BottomNav({ tab, setTab, variant }) {
       id: 'accounts',
       label: 'Accounts',
       content: (active) => (
-        <span style={{ fontSize: 24, filter: active ? 'none' : 'grayscale(0.4)' }}>💳</span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="6" width="18" height="13" rx="2" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
+          <path d="M3 10.5h18" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
+          <path d="M6.5 15h4" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
+        </svg>
       )
     },
     {
@@ -49,8 +55,8 @@ export default function BottomNav({ tab, setTab, variant }) {
       label: 'DSE',
       content: (active) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 17L9 11L13 15L21 7" stroke={active ? '#5a5fb0' : '#9aa0bf'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M17 7H21V11" stroke={active ? '#5a5fb0' : '#9aa0bf'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M3 17L9 11L13 15L21 7" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M17 7H21V11" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       )
     },
@@ -58,7 +64,10 @@ export default function BottomNav({ tab, setTab, variant }) {
       id: 'settings',
       label: 'Settings',
       content: (active) => (
-        <span style={{ fontSize: 24, filter: active ? 'none' : 'grayscale(0.8)' }}>⚙️</span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="3" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
+          <path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
+        </svg>
       )
     }
   ]

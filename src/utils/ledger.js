@@ -90,7 +90,8 @@ export function createLedger({
   categories,
   categoryMeta,
   groups,
-  pipeline
+  pipeline,
+  envelopes
 } = {}) {
   const fallbackGroups = [
     { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
@@ -163,7 +164,8 @@ export function createLedger({
     txns: Array.isArray(txns) ? txns : [],
     categories: resolvedCategories,
     categoryMeta: resolvedMeta,
-    groups: normalizedGroups
+    groups: normalizedGroups,
+    envelopes: Array.isArray(envelopes) ? envelopes : []
   }
 }
 
@@ -177,7 +179,8 @@ export function normalizeLedger(data) {
     categories: data.categories,
     categoryMeta: data.categoryMeta,
     groups: data.groups,
-    pipeline: data.pipeline
+    pipeline: data.pipeline,
+    envelopes: data.envelopes
   })
 }
 

@@ -956,6 +956,38 @@ export function AppProvider({ children }) {
     show('Reallocated.')
   }
 
+  // Envelope budgeting: Upkeep/Lifestyle/Growth funding happens automatically from
+  // recognized Income (see src/utils/envelopes.js's cascade) — the one remaining
+  // manual, purely virtual event is withdrawing money back out of a Growth pool
+  // (no real Account balance changes either way). Real spend against these
+  // categories is tracked via normal 'expense'/'allocation' ledger transactions.
+  async function addEnvelopeEvent({ kind, categoryType, category, amount, date, note }) {
+    const amt = Number(amount || 0)
+    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    const entry = {
+      id: uid(),
+      kind: kind === 'withdraw' ? 'withdraw' : 'distribute',
+      categoryType,
+      category: categoryType === 'expense' ? null : (category || ''),
+      amount: amt,
+      date: date || todayISO(),
+      note: note || ''
+    }
+    persistActiveLedger({ ...activeLedger, envelopes: [entry, ...(activeLedger.envelopes || [])] })
+    show(entry.kind === 'withdraw' ? 'Withdrawal recorded.' : 'Distributed.')
+  }
+
+  async function updateEnvelopeEvent(id, fields) {
+    const nextEnvelopes = (activeLedger.envelopes || []).map(e => e.id === id ? { ...e, ...fields } : e)
+    persistActiveLedger({ ...activeLedger, envelopes: nextEnvelopes })
+    show('Updated.')
+  }
+
+  async function deleteEnvelopeEvent(id) {
+    persistActiveLedger({ ...activeLedger, envelopes: (activeLedger.envelopes || []).filter(e => e.id !== id) })
+    show('Deleted.')
+  }
+
   const clients = vault.clients || []
 
   // Context value
@@ -998,6 +1030,12 @@ export function AppProvider({ children }) {
     updateAccountTxn,
     deleteAccountTxn,
     reallocateBuckets,
+
+    // Envelope Helpers
+    envelopes: activeLedger?.envelopes || [],
+    addEnvelopeEvent,
+    updateEnvelopeEvent,
+    deleteEnvelopeEvent,
 
     // Transaction Helpers
     addQuickTxn,

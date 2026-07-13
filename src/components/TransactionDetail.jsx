@@ -149,7 +149,6 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
                 {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
                 {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
                 <option value="allocation">Allocation</option>
-                {growthCats && growthCats.length > 0 && <option value="growth">Growth</option>}
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>
@@ -229,7 +228,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
           )}
 
           <div className="txnDetailRow">
-            <div className="txnDetailLabel">{(type === 'allocation' || type === 'growth') ? 'Source Account' : 'Account'}</div>
+            <div className="txnDetailLabel">Account</div>
             {isEditable ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <select className="txnDetailSelect" value={accountId} onChange={e => {
@@ -244,22 +243,6 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
               <div className="txnDetailValue">{accountName || 'None'}</div>
             )}
           </div>
-
-          {(type === 'allocation' || type === 'growth') && (
-            <div className="txnDetailRow">
-              <div className="txnDetailLabel">Destination Account</div>
-              {isEditable ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <select className="txnDetailSelect" value={toAccountId} onChange={e => setToAccountId(e.target.value)}>
-                    <option value="">None</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
-              ) : (
-                <div className="txnDetailValue">{accounts.find(a => a.id === toAccountId)?.name || 'None'}</div>
-              )}
-            </div>
-          )}
 
           {type === 'income' && (
             <div className="txnDetailRow">

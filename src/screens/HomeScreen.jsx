@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, calculateAssetMetrics, monthKey, todayISO, fmtCompact } from '../money'
 import { CategoryDetail } from './CategoryDetail'
-import { computePipeline } from '../utils/pipeline'
+import { computeIncome } from '../utils/pipeline'
+import { computeEnvelopeSummary } from '../utils/envelopes'
 
 // Transactions tab: the single system of record for every real transaction (income,
 // expenses, allocations, and — when Flow is enabled — collections/growth too).
@@ -118,30 +119,48 @@ function ClassicHomeScreen() {
     return map
   }, [filteredTxns, incomeCats, accounts, activeLedger.groups, accountTxns, month])
 
-  const pipeline = useMemo(() => pipelineMode ? computePipeline(filteredTxns, activeLedger, month) : null, [pipelineMode, filteredTxns, activeLedger, month])
+  const incomeInfo = useMemo(() => pipelineMode ? computeIncome(filteredTxns) : null, [pipelineMode, filteredTxns])
 
   const collectionTotals = useMemo(() => {
     const map = new Map()
     for (const c of incomeCats) map.set(c, 0)
-    for (const r of (pipeline?.collectionRows || [])) {
+    for (const r of (incomeInfo?.collectionRows || [])) {
       const key = r.category || 'Other'
       map.set(key, (map.get(key) || 0) + Number(r.amount || 0))
     }
     return map
-  }, [pipeline, incomeCats])
+  }, [incomeInfo, incomeCats])
 
   const growthCats = categories.growth || []
-  const growthTotals = useMemo(() => {
+  const envelopeSummary = useMemo(() => computeEnvelopeSummary(activeLedger, month), [activeLedger, month])
+  const growthBalances = useMemo(() => {
     const map = new Map()
-    for (const c of growthCats) map.set(c, 0)
-    for (const t of filteredTxns) {
-      if (t.type === 'growth') {
-        const key = t.category || 'Other'
-        map.set(key, (map.get(key) || 0) + Number(t.amount || 0))
-      }
-    }
+    for (const p of envelopeSummary.growth) map.set(p.name, p.balance)
     return map
-  }, [filteredTxns, growthCats])
+  }, [envelopeSummary])
+  // Total Expenditure (all-time spend against the bucket/pool) is the headline
+  // figure on each card, with the running Balance (Distributed minus that spend,
+  // rolled over) shown underneath — both matter when you're about to spend more.
+  const lifestyleBalances = useMemo(() => {
+    const map = new Map()
+    for (const b of envelopeSummary.lifestyle) map.set(b.name, b.balance)
+    return map
+  }, [envelopeSummary])
+  const lifestyleSpentTotals = useMemo(() => {
+    const map = new Map()
+    for (const b of envelopeSummary.lifestyle) map.set(b.name, b.spentTotal)
+    return map
+  }, [envelopeSummary])
+  const growthWithdrawnTotals = useMemo(() => {
+    const map = new Map()
+    for (const p of envelopeSummary.growth) map.set(p.name, p.withdrawnTotal)
+    return map
+  }, [envelopeSummary])
+  // Card grid shows Total Expenditure as the headline figure; CategoryDetail's
+  // header (what you see right before adding a transaction) shows Balance instead,
+  // since that's the number that answers "how much do I have left."
+  const lifestyleCardTotals = pipelineMode ? lifestyleSpentTotals : allocationTotals
+  const lifestyleDetailTotal = pipelineMode ? lifestyleBalances : allocationTotals
 
   const [collapseGrowth, setCollapseGrowth] = useState(() => localStorage.getItem('collapse_growth') === 'true')
   useEffect(() => { localStorage.setItem('collapse_growth', collapseGrowth) }, [collapseGrowth])
@@ -190,8 +209,8 @@ function ClassicHomeScreen() {
           selectedCategory.type === 'collection' ? (collectionTotals.get(selectedCategory.name) || 0) :
           selectedCategory.type === 'cos' ? (cosTotals.get(selectedCategory.name) || 0) :
           selectedCategory.type === 'opps' ? (oppsTotals.get(selectedCategory.name) || 0) :
-          selectedCategory.type === 'growth' ? (growthTotals.get(selectedCategory.name) || 0) :
-          (allocationTotals.get(selectedCategory.name) || 0)
+          selectedCategory.type === 'growth' ? (growthBalances.get(selectedCategory.name) || 0) :
+          (lifestyleDetailTotal.get(selectedCategory.name) || 0)
         }
         onUpdateMeta={(next) => {
           const metaType = metaTypeFor(selectedCategory.type)
@@ -244,11 +263,11 @@ function ClassicHomeScreen() {
 
       {[
         pipelineMode
-          ? { title: 'Collections', type: 'collection', list: incomeCats, totals: collectionTotals, kpi: incomeCats.reduce((s, c) => s + (collectionTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4, note: pipeline?.isLegacyFallback ? 'No Collections recorded yet this month — totals include legacy income entries shown as already-clean.' : null }
+          ? { title: 'Collections', type: 'collection', list: incomeCats, totals: collectionTotals, kpi: incomeCats.reduce((s, c) => s + (collectionTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4, note: incomeInfo?.isLegacyFallback ? 'No Collections recorded yet this month — totals include legacy income entries shown as already-clean.' : null }
           : { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
-        { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: allocationTotals, kpi: allocationCats.reduce((s, c) => s + (allocationTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2 },
-        ...(pipelineMode ? [{ title: 'Growth', type: 'growth', list: growthCats, totals: growthTotals, kpi: growthCats.reduce((s, c) => s + (growthTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4 }] : []),
+        { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: lifestyleCardTotals, kpi: allocationCats.reduce((s, c) => s + (lifestyleCardTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2, secondaryTotals: pipelineMode ? lifestyleBalances : null },
+        ...(pipelineMode ? [{ title: 'Growth', type: 'growth', list: growthCats, totals: growthWithdrawnTotals, kpi: growthCats.reduce((s, c) => s + (growthWithdrawnTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4, secondaryTotals: growthBalances }] : []),
         { title: 'Cost of Sales', type: 'cos', list: cosCats, totals: cosTotals, kpi: cosCats.reduce((s, c) => s + (cosTotals.get(c) || 0), 0), collapse: collapseCos, setCollapse: setCollapseCos, theme: 3 },
         { title: 'Operating Expenses', type: 'opps', list: oppsCats, totals: oppsTotals, kpi: oppsCats.reduce((s, c) => s + (oppsTotals.get(c) || 0), 0), collapse: collapseOpps, setCollapse: setCollapseOpps, theme: 5 },
       ].map(sec => {
@@ -272,6 +291,9 @@ function ClassicHomeScreen() {
                     <div className="ledgerCardTitle">{c}</div>
                     <div className="ledgerCardIcon">{(c || '').slice(0, 1).toUpperCase()}</div>
                     <div className="ledgerCardValue">{fmtTZS(sec.totals.get(c) || 0)}</div>
+                    {sec.secondaryTotals && (
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 2 }}>Bal: {fmtTZS(sec.secondaryTotals.get(c) || 0)}</div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,4 +1,5 @@
 import { computeIncome } from './pipeline.js'
+import { getGrowthPercentForMonth } from './ledger.js'
 
 // Distribution is automatic: whenever Income is recognized (a Collection), it
 // cascades through Upkeep (sum of Expense budgets) -> Lifestyle buckets (priority
@@ -39,12 +40,17 @@ function cascadeForMonth(ledger, monthKey) {
   const growthNames = ledger?.categories?.growth || []
   const growthMeta = ledger?.categoryMeta?.growth || {}
   const growthDistributed = {}
+  let growthUsedPercent = 0
   for (const name of growthNames) {
-    const percent = Number(growthMeta[name]?.percent || 0)
+    const percent = getGrowthPercentForMonth(growthMeta[name], monthKey)
     growthDistributed[name] = growthPoolAmount * (percent / 100)
+    growthUsedPercent += percent
   }
+  // Whatever fraction of Growth pools' percentages doesn't add up to 100% sits
+  // here unassigned — same money, just not yet routed to a pool.
+  const growthUnallocated = growthPoolAmount * (Math.max(0, 100 - growthUsedPercent) / 100)
 
-  return { upkeepDistributed, lifestyleDistributed, growthDistributed }
+  return { upkeepDistributed, lifestyleDistributed, growthDistributed, growthUnallocated }
 }
 
 // `period` is either a month key ("2026-07") or a year key ("2026") — its length
@@ -75,9 +81,10 @@ export function computeEnvelopeSummary(ledger, period) {
   let upkeepDistributedThisPeriod = 0
   const lifestyleCum = {}, lifestyleThisPeriod = {}
   const growthCum = {}, growthThisPeriod = {}
+  let growthUnallocatedCum = 0, growthUnallocatedThisPeriod = 0
 
   for (const m of months) {
-    const { upkeepDistributed, lifestyleDistributed, growthDistributed } = cascadeForMonth(ledger, m)
+    const { upkeepDistributed, lifestyleDistributed, growthDistributed, growthUnallocated } = cascadeForMonth(ledger, m)
     upkeepDistributedCum += upkeepDistributed
     if (monthInPeriod(m)) upkeepDistributedThisPeriod += upkeepDistributed
     for (const [name, amt] of Object.entries(lifestyleDistributed)) {
@@ -88,6 +95,8 @@ export function computeEnvelopeSummary(ledger, period) {
       growthCum[name] = (growthCum[name] || 0) + amt
       if (monthInPeriod(m)) growthThisPeriod[name] = (growthThisPeriod[name] || 0) + amt
     }
+    growthUnallocatedCum += growthUnallocated
+    if (monthInPeriod(m)) growthUnallocatedThisPeriod += growthUnallocated
   }
 
   const upkeepSpentTotal = sumTxn('expense', null, thruPeriod)
@@ -116,7 +125,7 @@ export function computeEnvelopeSummary(ledger, period) {
     const spentTotal = sumTxn('growth', name, thruPeriod)
     return {
       name,
-      percent: Number(growthMetaForPercent[name]?.percent || 0),
+      percent: getGrowthPercentForMonth(growthMetaForPercent[name], cutoffMonth),
       distributedThisPeriod: growthThisPeriod[name] || 0,
       spentThisPeriod: sumTxn('growth', name, inPeriod),
       spentTotal,
@@ -124,5 +133,12 @@ export function computeEnvelopeSummary(ledger, period) {
     }
   })
 
-  return { upkeep, lifestyle, growth }
+  const growthUsedPercent = growth.reduce((s, p) => s + p.percent, 0)
+  const growthUnallocated = {
+    percent: Math.max(0, 100 - growthUsedPercent),
+    distributedThisPeriod: growthUnallocatedThisPeriod,
+    balance: growthUnallocatedCum
+  }
+
+  return { upkeep, lifestyle, growth, growthUnallocated }
 }

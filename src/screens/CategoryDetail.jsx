@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { todayISO, fmtTZS, fmtCompact, calculateAssetMetrics, uid } from '../money'
 import { CATEGORY_SUBS } from '../constants'
+import { getGrowthPercentForMonth, withGrowthPercentForMonth } from '../utils/ledger'
 import { TransactionDetail } from '../components/TransactionDetail'
 
 export function CategoryDetail({
@@ -90,7 +91,18 @@ export function CategoryDetail({
   const [editColor, setEditColor] = useState(meta?.color || '')
   const [editNeedsCompliance, setEditNeedsCompliance] = useState(!!meta?.needsCompliance)
   const [editBudget, setEditBudget] = useState(String(meta?.budget || 0))
-  const [editPercent, setEditPercent] = useState(String(meta?.percent || 0))
+  const [editPercent, setEditPercent] = useState(String(getGrowthPercentForMonth(meta, todayISO().slice(0, 7)) || 0))
+  // Growth percentages should sum to 100% — this is what the other pools
+  // already claim as of today, so Save can warn/block before this one pushes
+  // the total over.
+  const otherGrowthPercentTotal = category.type === 'growth'
+    ? growthCats
+      .filter(name => name !== category.name)
+      .reduce((s, name) => s + getGrowthPercentForMonth(categoryMeta.growth?.[name], todayISO().slice(0, 7)), 0)
+    : 0
+  const enteredGrowthPercent = Number(String(editPercent).replace(/,/g, '')) || 0
+  const projectedGrowthTotal = otherGrowthPercentTotal + enteredGrowthPercent
+  const growthOverBy = category.type === 'growth' ? projectedGrowthTotal - 100 : 0
   const budget = meta?.budget || 0
   const subcats = meta?.subs?.length ? meta.subs : (CATEGORY_SUBS[category.name] || [])
   const colorOptions = ['#ffe8b6', '#ffe0cf', '#ffd9ec', '#e8dcff', '#dbeaff', '#e6f3ff', '#dff5e1', '#fff1c9', '#f0efe9']
@@ -281,11 +293,23 @@ export function CategoryDetail({
                 <div>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Target % of Surplus</div>
                   <input className="input" inputMode="decimal" value={editPercent} onChange={e => setEditPercent(e.target.value)} placeholder="e.g. 30" />
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>Applies from this month onward — earlier months keep their existing %.</div>
+                  <div style={{ fontSize: 11, marginTop: 6, fontWeight: 700, color: growthOverBy > 0 ? '#ef4444' : '#94a3b8' }}>
+                    {growthOverBy > 0
+                      ? `Growth pools would total ${projectedGrowthTotal}% — ${growthOverBy}% over 100%.`
+                      : projectedGrowthTotal < 100
+                        ? `Growth pools would total ${projectedGrowthTotal}% — ${100 - projectedGrowthTotal}% left unallocated.`
+                        : 'Growth pools total 100%.'}
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                 <button className="btn" style={{ flex: 1 }} onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button className="btn primary" style={{ flex: 1 }} onClick={() => {
+                <button className="btn primary" style={{ flex: 1 }} disabled={growthOverBy > 0} onClick={() => {
+                  const existingGrowthMeta = activeLedger.categoryMeta[metaType]?.[category.name]
+                  const growthUpdate = category.type === 'growth'
+                    ? withGrowthPercentForMonth(existingGrowthMeta, todayISO().slice(0, 7), Number(String(editPercent).replace(/,/g, '')) || 0)
+                    : null
                   const updatedLedger = {
                     ...activeLedger,
                     categories: {
@@ -301,7 +325,7 @@ export function CategoryDetail({
                           color: editColor,
                           ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
                           ...((category.type === 'allocation' || category.type === 'expense') && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 }),
-                          ...(category.type === 'growth' && { percent: Number(String(editPercent).replace(/,/g, '')) || 0 })
+                          ...(category.type === 'growth' && { percentHistory: growthUpdate.percentHistory })
                         }
                       }
                     }

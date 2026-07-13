@@ -29,6 +29,36 @@ export const GROWTH_POOL_DEFS = [
   { name: 'Investments', priority: 3 }
 ]
 
+// Growth percent can change month to month without rewriting history: each edit
+// appends a `{ month, percent }` entry rather than overwriting a flat value, and
+// resolving a given month walks the (ascending) list for the last entry that
+// started on or before it. Months before the earliest entry fall back to the
+// legacy flat `percent`, so ledgers saved before this feature existed need no
+// migration.
+export function getGrowthPercentForMonth(meta, monthKey) {
+  const history = Array.isArray(meta?.percentHistory) ? meta.percentHistory : []
+  let effective = null
+  for (const entry of history) {
+    if (entry.month <= monthKey) effective = entry.percent
+    else break
+  }
+  if (effective === null) effective = meta?.percent
+  return Number(effective || 0)
+}
+
+// Upserts (by month) into the percent history. The legacy flat `percent` is
+// left untouched — it's the floor value for any month before the earliest
+// history entry, so it must never be overwritten by a later edit or it would
+// retroactively change months that predate all recorded history.
+export function withGrowthPercentForMonth(meta, monthKey, percent) {
+  const existing = meta && typeof meta === 'object' ? meta : {}
+  const history = (Array.isArray(existing.percentHistory) ? existing.percentHistory : [])
+    .filter(entry => entry.month !== monthKey)
+  history.push({ month: monthKey, percent })
+  history.sort((a, b) => a.month.localeCompare(b.month))
+  return { ...existing, percentHistory: history }
+}
+
 // Growth pools are now first-class categories (like Lifestyle/allocation buckets)
 // so real transactions can be logged against them via CategoryDetail. Migrates the
 // old standalone pipeline.growthPools array on first load, then never touches it again.

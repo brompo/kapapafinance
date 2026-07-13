@@ -2913,7 +2913,7 @@ label {
   left: 0;
   right: 0;
   bottom: 0;
-  /*padding: 10px 10px calc(10px + env(safe-area-inset-bottom));*/
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
   background: rgba(11, 18, 32, .92);
   border-top: 1px solid var(--border);
   display: flex;

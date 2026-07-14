@@ -83,7 +83,7 @@ function RingLegendItem({ color, label, percent }) {
   )
 }
 
-function FlowRow({ name, sub, expense, amount, tag, tagColor, color, onClick }) {
+function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -100,11 +100,12 @@ function FlowRow({ name, sub, expense, amount, tag, tagColor, color, onClick }) 
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
         {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Expense: {fmtTZS(expense)}</div>}
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
+        {note && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{note}</div>}
         {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagColor || '#94a3b8' }}>{tag}</div>}
       </div>
       {onClick && <div style={{ fontSize: 13, color: '#94a3b8', marginLeft: 4, flexShrink: 0 }}>✎</div>}
@@ -221,15 +222,21 @@ export function FlowScreen() {
   const lifestyleDistributed = envelopeSummary.lifestyle.reduce((s, b) => s + b.distributedThisPeriod, 0)
   const growthDistributed = envelopeSummary.growth.reduce((s, p) => s + p.distributedThisPeriod, 0)
     + envelopeSummary.growthUnallocated.distributedThisPeriod
+  const fundsUpkeepPoolName = envelopeSummary.growth.find(p => p.fundsUpkeep)?.name
   // Higher-percent pools carry more priority, so they surface first.
   const growthSorted = useMemo(
     () => [...envelopeSummary.growth].sort((a, b) => b.percent - a.percent),
     [envelopeSummary]
   )
-  const totalDistributed = envelopeSummary.upkeep.distributedThisPeriod + lifestyleDistributed + growthDistributed
+  // Upkeep's own displayed "Distribution" line stays budget-only (see FlowRow
+  // below), but the pie/headline total still needs to account for every
+  // shilling actually distributed this period, including what a fundsUpkeep
+  // pool redirected in.
+  const upkeepDistributedTotal = envelopeSummary.upkeep.distributedThisPeriod + envelopeSummary.upkeep.fundedByGrowthThisPeriod
+  const totalDistributed = upkeepDistributedTotal + lifestyleDistributed + growthDistributed
 
   const ringSegments = [
-    { name: 'Upkeep', value: envelopeSummary.upkeep.distributedThisPeriod, color: UPKEEP_COLOR },
+    { name: 'Upkeep', value: upkeepDistributedTotal, color: UPKEEP_COLOR },
     { name: 'Lifestyle', value: lifestyleDistributed, color: LIFESTYLE_PALETTE[0] },
     { name: 'Growth', value: growthDistributed, color: GROWTH_PALETTE[0] }
   ]
@@ -292,7 +299,7 @@ export function FlowScreen() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(envelopeSummary.upkeep.distributedThisPeriod)} />
+        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
         <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
         <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
       </div>
@@ -309,6 +316,9 @@ export function FlowScreen() {
           name="Upkeep"
           sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}
           expense={envelopeSummary.upkeep.spentThisPeriod}
+          note={envelopeSummary.upkeep.fundedByGrowthThisPeriod > 0
+            ? `${fundsUpkeepPoolName || 'Growth'}: ${fmtTZS(envelopeSummary.upkeep.fundedByGrowthThisPeriod)}`
+            : null}
           amount={envelopeSummary.upkeep.distributedThisPeriod}
           tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
           color={UPKEEP_COLOR}
@@ -338,8 +348,8 @@ export function FlowScreen() {
             name={`${p.name} (${p.percent}%)`}
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
             expense={p.spentThisPeriod}
-            amount={p.distributedThisPeriod}
-            tag={`Balance: ${fmtTZS(p.balance)}`}
+            amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
+            tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
             onClick={() => openEdit('growth', p.name, 'percent', p.percent)}
           />

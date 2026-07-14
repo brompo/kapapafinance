@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "2.9.2",
+        date: "2026-07-14",
+        changes: [
+            'Growth pools can now be flagged "Funds Upkeep" (Edit Category, Growth type) — the pool goes silent (no more transactions against it) and its monthly distribution redirects into Upkeep\'s Balance instead of its own, so Upkeep\'s Flow card now shows Distribution, the funding pool\'s amount, and Balance (Distribution + funded amount − Expense) as three separate lines.',
+            'Flipping the flag on immediately folds the pool\'s entire accumulated Balance into Upkeep (no manual transfer needed), and only one Growth pool can hold the flag at a time.',
+        ]
+    },
+    {
         version: "2.9.1",
         date: "2026-07-14",
         changes: [

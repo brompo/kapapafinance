@@ -40,17 +40,29 @@ function cascadeForMonth(ledger, monthKey) {
   const growthNames = ledger?.categories?.growth || []
   const growthMeta = ledger?.categoryMeta?.growth || {}
   const growthDistributed = {}
+  // A Growth pool flagged fundsUpkeep is a silent backstop: its share of the
+  // surplus never accumulates in its own balance — it's tracked separately as
+  // a Balance component of Upkeep instead (Upkeep's Balance = Distribution +
+  // this redirected amount - Expenditure), rather than folded into Upkeep's
+  // own Distribution figure, so the two stay visible as separate lines.
+  const growthFundingUpkeep = {}
   let growthUsedPercent = 0
   for (const name of growthNames) {
     const percent = getGrowthPercentForMonth(growthMeta[name], monthKey)
-    growthDistributed[name] = growthPoolAmount * (percent / 100)
+    const amt = growthPoolAmount * (percent / 100)
+    if (growthMeta[name]?.fundsUpkeep) {
+      growthDistributed[name] = 0
+      growthFundingUpkeep[name] = amt
+    } else {
+      growthDistributed[name] = amt
+    }
     growthUsedPercent += percent
   }
   // Whatever fraction of Growth pools' percentages doesn't add up to 100% sits
   // here unassigned — same money, just not yet routed to a pool.
   const growthUnallocated = growthPoolAmount * (Math.max(0, 100 - growthUsedPercent) / 100)
 
-  return { upkeepDistributed, lifestyleDistributed, growthDistributed, growthUnallocated }
+  return { upkeepDistributed, lifestyleDistributed, growthDistributed, growthFundingUpkeep, growthUnallocated }
 }
 
 // `period` is either a month key ("2026-07") or a year key ("2026") — its length
@@ -81,10 +93,11 @@ export function computeEnvelopeSummary(ledger, period) {
   let upkeepDistributedThisPeriod = 0
   const lifestyleCum = {}, lifestyleThisPeriod = {}
   const growthCum = {}, growthThisPeriod = {}
+  const growthFundingUpkeepCum = {}, growthFundingUpkeepThisPeriod = {}
   let growthUnallocatedCum = 0, growthUnallocatedThisPeriod = 0
 
   for (const m of months) {
-    const { upkeepDistributed, lifestyleDistributed, growthDistributed, growthUnallocated } = cascadeForMonth(ledger, m)
+    const { upkeepDistributed, lifestyleDistributed, growthDistributed, growthFundingUpkeep, growthUnallocated } = cascadeForMonth(ledger, m)
     upkeepDistributedCum += upkeepDistributed
     if (monthInPeriod(m)) upkeepDistributedThisPeriod += upkeepDistributed
     for (const [name, amt] of Object.entries(lifestyleDistributed)) {
@@ -95,19 +108,37 @@ export function computeEnvelopeSummary(ledger, period) {
       growthCum[name] = (growthCum[name] || 0) + amt
       if (monthInPeriod(m)) growthThisPeriod[name] = (growthThisPeriod[name] || 0) + amt
     }
+    for (const [name, amt] of Object.entries(growthFundingUpkeep)) {
+      growthFundingUpkeepCum[name] = (growthFundingUpkeepCum[name] || 0) + amt
+      if (monthInPeriod(m)) growthFundingUpkeepThisPeriod[name] = (growthFundingUpkeepThisPeriod[name] || 0) + amt
+    }
     growthUnallocatedCum += growthUnallocated
     if (monthInPeriod(m)) growthUnallocatedThisPeriod += growthUnallocated
   }
 
+  const growthMeta = ledger?.categoryMeta?.growth || {}
+  const flaggedGrowthNames = (ledger?.categories?.growth || []).filter(n => !!growthMeta[n]?.fundsUpkeep)
+
+  // A fundsUpkeep pool's real spend (e.g. legacy transactions recorded before
+  // it was flagged) counts against Upkeep's spend too, not its own — the pool
+  // no longer keeps an independent balance once flagged.
   const upkeepSpentTotal = sumTxn('expense', null, thruPeriod)
+    + flaggedGrowthNames.reduce((s, name) => s + sumTxn('growth', name, thruPeriod), 0)
   const upkeepSpentThisPeriod = sumTxn('expense', null, inPeriod)
-  const upkeepBalance = upkeepDistributedCum - upkeepSpentTotal
+    + flaggedGrowthNames.reduce((s, name) => s + sumTxn('growth', name, inPeriod), 0)
+  const upkeepFundedByGrowthCum = flaggedGrowthNames.reduce((s, name) => s + (growthFundingUpkeepCum[name] || 0), 0)
+  const upkeepFundedByGrowthThisPeriod = flaggedGrowthNames.reduce((s, name) => s + (growthFundingUpkeepThisPeriod[name] || 0), 0)
+  // Balance = Distribution (Upkeep's own budget-based cascade) + the flagged
+  // Growth pool's redirected amount - Expenditure. Both feed the same rolling
+  // Balance, but stay separate, individually-displayed lines going in.
+  const upkeepBalance = upkeepDistributedCum + upkeepFundedByGrowthCum - upkeepSpentTotal
   const upkeep = {
     distributedThisPeriod: upkeepDistributedThisPeriod,
+    fundedByGrowthThisPeriod: upkeepFundedByGrowthThisPeriod,
     spentThisPeriod: upkeepSpentThisPeriod,
     spentTotal: upkeepSpentTotal,
     balance: upkeepBalance,
-    broughtForward: upkeepBalance - upkeepDistributedThisPeriod + upkeepSpentThisPeriod
+    broughtForward: upkeepBalance - (upkeepDistributedThisPeriod + upkeepFundedByGrowthThisPeriod) + upkeepSpentThisPeriod
   }
 
   const allocationMetaForBudget = ledger?.categoryMeta?.allocation || {}
@@ -131,21 +162,26 @@ export function computeEnvelopeSummary(ledger, period) {
     }
   })
 
-  const growthMetaForPercent = ledger?.categoryMeta?.growth || {}
   const growth = (ledger?.categories?.growth || []).map(name => {
+    const fundsUpkeep = !!growthMeta[name]?.fundsUpkeep
     const spentTotal = sumTxn('growth', name, thruPeriod)
     const spentThisPeriod = sumTxn('growth', name, inPeriod)
     const distributedThisPeriod = growthThisPeriod[name] || 0
-    const openingBalance = Number(growthMetaForPercent[name]?.openingBalance || 0)
-    const balance = openingBalance + (growthCum[name] || 0) - spentTotal
+    const openingBalance = Number(growthMeta[name]?.openingBalance || 0)
+    // A fundsUpkeep pool's growthCum is always 0 (its share is redirected to
+    // Upkeep at the cascade level), and its spend counts against Upkeep too —
+    // so its own Balance is frozen at just its Opening Balance.
+    const balance = fundsUpkeep ? openingBalance : openingBalance + (growthCum[name] || 0) - spentTotal
     return {
       name,
-      percent: getGrowthPercentForMonth(growthMetaForPercent[name], cutoffMonth),
+      percent: getGrowthPercentForMonth(growthMeta[name], cutoffMonth),
       distributedThisPeriod,
       spentThisPeriod,
       spentTotal,
       balance,
-      broughtForward: balance - distributedThisPeriod + spentThisPeriod
+      broughtForward: balance - distributedThisPeriod + spentThisPeriod,
+      fundsUpkeep,
+      redirectedToUpkeepThisPeriod: growthFundingUpkeepThisPeriod[name] || 0
     }
   })
 

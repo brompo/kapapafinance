@@ -46,12 +46,15 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
       type === 'opps' ? 'Operating Expenses' :
         type === 'allocation' ? 'Allocation' :
           type === 'growth' ? 'Growth' : 'Expense'
+  // A Growth pool flagged fundsUpkeep is silent — its transactions live under
+  // Upkeep now, so it shouldn't be re-selectable here either.
+  const selectableGrowthCats = growthCats.filter(name => !categoryMeta.growth?.[name]?.fundsUpkeep)
   const categoryOptions = type === 'income' ? incomeCats :
     type === 'collection' ? incomeCats :
     type === 'cos' ? cosCats :
       type === 'opps' ? oppsCats :
         type === 'allocation' ? allocationCats :
-          type === 'growth' ? growthCats : expenseCats
+          type === 'growth' ? selectableGrowthCats : expenseCats
 
   const subOptions = (categoryMeta[type]?.[category]?.subs) || CATEGORY_SUBS[category] || []
 
@@ -149,7 +152,7 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
                 {cosCats && cosCats.length > 0 && <option value="cos">Cost of Sales</option>}
                 {oppsCats && oppsCats.length > 0 && <option value="opps">Operating Expenses</option>}
                 <option value="allocation">Allocation</option>
-                {growthCats && growthCats.length > 0 && <option value="growth">Growth</option>}
+                {selectableGrowthCats.length > 0 && <option value="growth">Growth</option>}
               </select>
             ) : (
               <div className="txnDetailValue">{labelType}</div>

@@ -287,16 +287,26 @@ function ClassicHomeScreen() {
             )}
             {!sec.collapse && (
               <div className="ledgerGrid">
-                {sec.list.map((c, i) => (
-                  <div key={c} className={`ledgerCard theme-${(i % 6) + sec.theme}`} onClick={() => setSelectedCategory({ type: sec.type, name: c, theme: `theme-${(i % 6) + sec.theme}` })}>
-                    <div className="ledgerCardTitle">{c}</div>
-                    <div className="ledgerCardIcon">{(c || '').slice(0, 1).toUpperCase()}</div>
-                    <div className="ledgerCardValue">{fmtTZS(sec.totals.get(c) || 0)}</div>
-                    {sec.secondaryTotals && (
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 2 }}>Bal: {fmtTZS(sec.secondaryTotals.get(c) || 0)}</div>
-                    )}
-                  </div>
-                ))}
+                {sec.list.map((c, i) => {
+                  const fundsUpkeep = sec.type === 'growth' && !!categoryMeta.growth?.[c]?.fundsUpkeep
+                  return (
+                    <div
+                      key={c}
+                      className={`ledgerCard theme-${(i % 6) + sec.theme}`}
+                      style={fundsUpkeep ? { opacity: 0.55 } : undefined}
+                      onClick={() => setSelectedCategory({ type: sec.type, name: c, theme: `theme-${(i % 6) + sec.theme}` })}
+                    >
+                      <div className="ledgerCardTitle">{c}</div>
+                      <div className="ledgerCardIcon">{(c || '').slice(0, 1).toUpperCase()}</div>
+                      <div className="ledgerCardValue">{fmtTZS(sec.totals.get(c) || 0)}</div>
+                      {fundsUpkeep ? (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 2 }}>→ Upkeep</div>
+                      ) : sec.secondaryTotals && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 2 }}>Bal: {fmtTZS(sec.secondaryTotals.get(c) || 0)}</div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

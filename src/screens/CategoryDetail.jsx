@@ -92,10 +92,18 @@ export function CategoryDetail({
   // so edits made while viewing December land on December, not on today.
   const editMonthKey = month || todayISO().slice(0, 7)
 
+  // A Growth pool flagged fundsUpkeep is silent: it no longer accepts new
+  // transactions (its distribution is redirected to Upkeep instead), so the
+  // Add-transaction keypad is forced off regardless of the showAddForm prop
+  // (which AppContext's handleSelectCategory defaults to true on every tap).
+  const isSilentGrowth = category.type === 'growth' && !!meta?.fundsUpkeep
+  const effectiveShowAddForm = showAddForm && !isSilentGrowth
+
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState(category.name)
   const [editColor, setEditColor] = useState(meta?.color || '')
   const [editNeedsCompliance, setEditNeedsCompliance] = useState(!!meta?.needsCompliance)
+  const [editFundsUpkeep, setEditFundsUpkeep] = useState(!!meta?.fundsUpkeep)
   const [editBudget, setEditBudget] = useState(String(
     category.type === 'allocation' ? getBudgetForMonth(meta, editMonthKey) : (meta?.budget || 0)
   ))
@@ -242,7 +250,7 @@ export function CategoryDetail({
         justifyContent: 'space-between',
         padding: '24px 16px 12px', /* Standardized header padding */
         background: meta?.color || '#fff',
-        borderBottom: meta?.color || showAddForm ? 'none' : '1px solid #dcfce7',
+        borderBottom: meta?.color || effectiveShowAddForm ? 'none' : '1px solid #dcfce7',
         position: 'sticky',
         top: 0,
         zIndex: 105
@@ -254,8 +262,8 @@ export function CategoryDetail({
             <button type="button" onClick={() => setShowEditModal(true)} style={{ background: 'none', border: 'none', color: '#4b5563', fontSize: 11, textDecoration: 'underline', padding: 0 }}>Edit Card</button>
           </div>
         </div>
-        {!showAddForm && <div style={{ fontSize: 23, fontWeight: 800 }}>{fmtTZS(total)}</div>}
-        {showAddForm && (
+        {!effectiveShowAddForm && <div style={{ fontSize: 23, fontWeight: 800 }}>{fmtTZS(total)}</div>}
+        {effectiveShowAddForm && (
           <button type="button" onClick={() => setShowAddForm(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none' }}>
             <div style={{ background: '#eef2ff', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📋</div>
             <span style={{ fontSize: 9, color: '#4b5563', fontWeight: 600 }}>View Transactions</span>
@@ -315,6 +323,18 @@ export function CategoryDetail({
                   </div>
                 </div>
               )}
+              {category.type === 'growth' && (
+                <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>Funds Upkeep</div>
+                    <div className="small">Makes this pool silent — no more transactions here — and redirects its monthly distribution into Upkeep's Balance instead. Only one Growth pool can hold this at a time.</div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={editFundsUpkeep} onChange={e => setEditFundsUpkeep(e.target.checked)} />
+                    <span className="toggleTrack" />
+                  </label>
+                </div>
+              )}
               {(category.type === 'allocation' || category.type === 'growth') && (
                 <div>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Opening Balance (TZS)</div>
@@ -335,6 +355,15 @@ export function CategoryDetail({
                   const nameChanged = editName !== category.name
                   const nextMetaForType = { ...(activeLedger.categoryMeta[metaType] || {}) }
                   if (nameChanged) delete nextMetaForType[category.name]
+                  // Only one Growth pool may fund Upkeep at a time — clear the flag on
+                  // every other pool in the same save so it stays exclusive.
+                  if (category.type === 'growth' && editFundsUpkeep) {
+                    for (const n of Object.keys(nextMetaForType)) {
+                      if (n !== category.name && nextMetaForType[n]?.fundsUpkeep) {
+                        nextMetaForType[n] = { ...nextMetaForType[n], fundsUpkeep: false }
+                      }
+                    }
+                  }
                   const updatedLedger = {
                     ...activeLedger,
                     categories: {
@@ -351,7 +380,7 @@ export function CategoryDetail({
                           ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
                           ...(category.type === 'expense' && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 }),
                           ...(category.type === 'allocation' && { budgetHistory: budgetUpdate.budgetHistory }),
-                          ...(category.type === 'growth' && { percentHistory: growthUpdate.percentHistory }),
+                          ...(category.type === 'growth' && { percentHistory: growthUpdate.percentHistory, fundsUpkeep: editFundsUpkeep }),
                           ...((category.type === 'allocation' || category.type === 'growth') && { openingBalance: Number(String(editOpeningBalance).replace(/,/g, '')) || 0 })
                         }
                       }
@@ -399,7 +428,7 @@ export function CategoryDetail({
         </div>
       )}
 
-      {showAddForm ? (
+      {effectiveShowAddForm ? (
         <div className="catDetailForm" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <div style={{ textAlign: 'center', margin: '0 0 10px', fontWeight: 700, color: '#111827', display: 'flex', flexDirection: 'column' }}>
@@ -577,7 +606,13 @@ export function CategoryDetail({
         </div>
       ) : (
         <div className="catDetailHistory" style={{ padding: '4px 16px 40px' }}>
-          <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
+          {isSilentGrowth ? (
+            <div style={{ width: '100%', marginBottom: 15, marginTop: 12, padding: '12px 14px', borderRadius: 12, background: '#f1f5f9', fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+              This pool funds Upkeep — add transactions there instead.
+            </div>
+          ) : (
+            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
+          )}
 
           <div className="modeSegmented" style={{
             display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 12,

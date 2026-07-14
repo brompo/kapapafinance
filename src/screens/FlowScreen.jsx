@@ -299,8 +299,9 @@ export function FlowScreen() {
         <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} />
         <FlowRow
           name="Upkeep"
-          sub={`Balance ${fmtTZS(envelopeSummary.upkeep.balance)}`}
+          sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}
           amount={envelopeSummary.upkeep.distributedThisPeriod}
+          tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
           color={UPKEEP_COLOR}
         />
 
@@ -309,9 +310,9 @@ export function FlowScreen() {
           <FlowRow
             key={b.name}
             name={b.name}
-            sub={`Balance ${fmtTZS(b.balance)}`}
+            sub={`B/F: ${fmtTZS(b.broughtForward)}`}
             amount={b.distributedThisPeriod}
-            tag={`Budget ${fmtTZS(b.budget)}`}
+            tag={`Balance: ${fmtTZS(b.balance)}`}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
             onClick={() => openEdit('allocation', b.name, 'budget', b.budget)}
           />
@@ -325,8 +326,9 @@ export function FlowScreen() {
           <FlowRow
             key={p.name}
             name={`${p.name} (${p.percent}%)`}
-            sub={`Balance ${fmtTZS(p.balance)} • Spent ${fmtTZS(p.spentThisPeriod)} this period`}
+            sub={`B/F: ${fmtTZS(p.broughtForward)}`}
             amount={p.distributedThisPeriod}
+            tag={`Balance: ${fmtTZS(p.balance)}`}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
             onClick={() => openEdit('growth', p.name, 'percent', p.percent)}
           />
@@ -337,8 +339,9 @@ export function FlowScreen() {
         {Math.round(envelopeSummary.growthUnallocated.percent) > 0 && (
           <FlowRow
             name={`Unallocated (${Math.round(envelopeSummary.growthUnallocated.percent)}%)`}
-            sub={`Balance ${fmtTZS(envelopeSummary.growthUnallocated.balance)} • Not yet assigned to a pool`}
+            sub={`B/F: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
             amount={envelopeSummary.growthUnallocated.distributedThisPeriod}
+            tag={`Balance: ${fmtTZS(envelopeSummary.growthUnallocated.balance)}`}
             color="#94a3b8"
           />
         )}

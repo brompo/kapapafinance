@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "2.7.0",
+        date: "2026-07-14",
+        changes: [
+            'Flow cards now show "B/F" (balance brought forward from last period) under the name, and "Balance" (the running balance after this period\'s distribution) under the amount — replacing the old single "Balance" line and, on Lifestyle cards, the "Budget" tag.',
+        ]
+    },
+    {
         version: "2.5.0",
         date: "2026-07-13",
         changes: [

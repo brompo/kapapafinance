@@ -100,36 +100,47 @@ export function computeEnvelopeSummary(ledger, period) {
   }
 
   const upkeepSpentTotal = sumTxn('expense', null, thruPeriod)
+  const upkeepSpentThisPeriod = sumTxn('expense', null, inPeriod)
+  const upkeepBalance = upkeepDistributedCum - upkeepSpentTotal
   const upkeep = {
     distributedThisPeriod: upkeepDistributedThisPeriod,
-    spentThisPeriod: sumTxn('expense', null, inPeriod),
+    spentThisPeriod: upkeepSpentThisPeriod,
     spentTotal: upkeepSpentTotal,
-    balance: upkeepDistributedCum - upkeepSpentTotal
+    balance: upkeepBalance,
+    broughtForward: upkeepBalance - upkeepDistributedThisPeriod + upkeepSpentThisPeriod
   }
 
   const allocationMetaForBudget = ledger?.categoryMeta?.allocation || {}
   const lifestyle = (ledger?.categories?.allocation || []).map(name => {
     const spentTotal = sumTxn('allocation', name, thruPeriod)
+    const spentThisPeriod = sumTxn('allocation', name, inPeriod)
+    const distributedThisPeriod = lifestyleThisPeriod[name] || 0
+    const balance = (lifestyleCum[name] || 0) - spentTotal
     return {
       name,
       budget: Number(allocationMetaForBudget[name]?.budget || 0),
-      distributedThisPeriod: lifestyleThisPeriod[name] || 0,
-      spentThisPeriod: sumTxn('allocation', name, inPeriod),
+      distributedThisPeriod,
+      spentThisPeriod,
       spentTotal,
-      balance: (lifestyleCum[name] || 0) - spentTotal
+      balance,
+      broughtForward: balance - distributedThisPeriod + spentThisPeriod
     }
   })
 
   const growthMetaForPercent = ledger?.categoryMeta?.growth || {}
   const growth = (ledger?.categories?.growth || []).map(name => {
     const spentTotal = sumTxn('growth', name, thruPeriod)
+    const spentThisPeriod = sumTxn('growth', name, inPeriod)
+    const distributedThisPeriod = growthThisPeriod[name] || 0
+    const balance = (growthCum[name] || 0) - spentTotal
     return {
       name,
       percent: getGrowthPercentForMonth(growthMetaForPercent[name], cutoffMonth),
-      distributedThisPeriod: growthThisPeriod[name] || 0,
-      spentThisPeriod: sumTxn('growth', name, inPeriod),
+      distributedThisPeriod,
+      spentThisPeriod,
       spentTotal,
-      balance: (growthCum[name] || 0) - spentTotal
+      balance,
+      broughtForward: balance - distributedThisPeriod + spentThisPeriod
     }
   })
 
@@ -137,7 +148,8 @@ export function computeEnvelopeSummary(ledger, period) {
   const growthUnallocated = {
     percent: Math.max(0, 100 - growthUsedPercent),
     distributedThisPeriod: growthUnallocatedThisPeriod,
-    balance: growthUnallocatedCum
+    balance: growthUnallocatedCum,
+    broughtForward: growthUnallocatedCum - growthUnallocatedThisPeriod
   }
 
   return { upkeep, lifestyle, growth, growthUnallocated }

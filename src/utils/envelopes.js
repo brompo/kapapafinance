@@ -1,5 +1,5 @@
 import { computeIncome } from './pipeline.js'
-import { getGrowthPercentForMonth } from './ledger.js'
+import { getGrowthPercentForMonth, getBudgetForMonth } from './ledger.js'
 
 // Distribution is automatic: whenever Income is recognized (a Collection), it
 // cascades through Upkeep (sum of Expense budgets) -> Lifestyle buckets (priority
@@ -24,7 +24,7 @@ function cascadeForMonth(ledger, monthKey) {
   const buckets = bucketNames
     .map(name => ({
       name,
-      target: Number(allocationMeta[name]?.budget || 0),
+      target: getBudgetForMonth(allocationMeta[name], monthKey),
       priority: Number.isFinite(Number(allocationMeta[name]?.priority)) ? Number(allocationMeta[name].priority) : Infinity
     }))
     .sort((a, b) => a.priority - b.priority)
@@ -115,10 +115,14 @@ export function computeEnvelopeSummary(ledger, period) {
     const spentTotal = sumTxn('allocation', name, thruPeriod)
     const spentThisPeriod = sumTxn('allocation', name, inPeriod)
     const distributedThisPeriod = lifestyleThisPeriod[name] || 0
-    const balance = (lifestyleCum[name] || 0) - spentTotal
+    // Opening Balance is a one-time correction for money that already existed
+    // in a bucket before this app started tracking distributions — it's just
+    // added on top of the cascade math rather than requiring backfilled txns.
+    const openingBalance = Number(allocationMetaForBudget[name]?.openingBalance || 0)
+    const balance = openingBalance + (lifestyleCum[name] || 0) - spentTotal
     return {
       name,
-      budget: Number(allocationMetaForBudget[name]?.budget || 0),
+      budget: getBudgetForMonth(allocationMetaForBudget[name], cutoffMonth),
       distributedThisPeriod,
       spentThisPeriod,
       spentTotal,
@@ -132,7 +136,8 @@ export function computeEnvelopeSummary(ledger, period) {
     const spentTotal = sumTxn('growth', name, thruPeriod)
     const spentThisPeriod = sumTxn('growth', name, inPeriod)
     const distributedThisPeriod = growthThisPeriod[name] || 0
-    const balance = (growthCum[name] || 0) - spentTotal
+    const openingBalance = Number(growthMetaForPercent[name]?.openingBalance || 0)
+    const balance = openingBalance + (growthCum[name] || 0) - spentTotal
     return {
       name,
       percent: getGrowthPercentForMonth(growthMetaForPercent[name], cutoffMonth),

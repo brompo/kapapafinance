@@ -59,6 +59,30 @@ export function withGrowthPercentForMonth(meta, monthKey, percent) {
   return { ...existing, percentHistory: history }
 }
 
+// Same month-scoped-history approach as growth percent, applied to a Lifestyle
+// bucket's Monthly Target: editing one month's target doesn't rewrite earlier
+// months, and later months keep inheriting the last-set value until they get
+// their own edit.
+export function getBudgetForMonth(meta, monthKey) {
+  const history = Array.isArray(meta?.budgetHistory) ? meta.budgetHistory : []
+  let effective = null
+  for (const entry of history) {
+    if (entry.month <= monthKey) effective = entry.budget
+    else break
+  }
+  if (effective === null) effective = meta?.budget
+  return Number(effective || 0)
+}
+
+export function withBudgetForMonth(meta, monthKey, budget) {
+  const existing = meta && typeof meta === 'object' ? meta : {}
+  const history = (Array.isArray(existing.budgetHistory) ? existing.budgetHistory : [])
+    .filter(entry => entry.month !== monthKey)
+  history.push({ month: monthKey, budget })
+  history.sort((a, b) => a.month.localeCompare(b.month))
+  return { ...existing, budgetHistory: history }
+}
+
 // Growth pools are now first-class categories (like Lifestyle/allocation buckets)
 // so real transactions can be logged against them via CategoryDetail. Migrates the
 // old standalone pipeline.growthPools array on first load, then never touches it again.

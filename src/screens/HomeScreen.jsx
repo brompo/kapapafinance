@@ -193,6 +193,7 @@ function ClassicHomeScreen() {
     return (
       <CategoryDetail
         category={selectedCategory}
+        month={month}
         onClose={() => setSelectedCategory(null)}
         showAddForm={showAddForm}
         setShowAddForm={setShowAddForm}

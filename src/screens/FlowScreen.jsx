@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext'
 import { fmtTZS } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
-import { withGrowthPercentForMonth, getGrowthPercentForMonth } from '../utils/ledger'
+import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth } from '../utils/ledger'
 
 const UPKEEP_COLOR = '#fb923c'
 const LIFESTYLE_PALETTE = ['#a87dfb', '#38bdf8', '#f472b6', '#fbbf24', '#818cf8', '#fb7185']
@@ -137,10 +137,12 @@ export function FlowScreen() {
   // read-only-report rule.
   const [editTarget, setEditTarget] = useState(null) // { metaType: 'allocation'|'growth', name, field: 'budget'|'percent' }
   const [editValue, setEditValue] = useState('')
+  const [editOpeningBalance, setEditOpeningBalance] = useState('')
 
   const openEdit = (metaType, name, field, currentValue) => {
     setEditTarget({ metaType, name, field })
     setEditValue(String(currentValue || 0))
+    setEditOpeningBalance(String(activeLedger.categoryMeta[metaType]?.[name]?.openingBalance || 0))
   }
 
   const saveEdit = () => {
@@ -151,11 +153,16 @@ export function FlowScreen() {
       return
     }
     const existingMeta = activeLedger.categoryMeta[metaType]?.[name]
-    // Growth percent is month-scoped: it takes effect from the viewed period
-    // forward without rewriting earlier months' percentages.
-    const nextMeta = metaType === 'growth' && field === 'percent'
-      ? withGrowthPercentForMonth(existingMeta, growthPercentMonthKey, nextValue)
-      : { ...existingMeta, [field]: nextValue }
+    // Growth percent and Lifestyle budget are both month-scoped: an edit takes
+    // effect from the viewed period forward without rewriting earlier months.
+    const nextMeta = {
+      ...(metaType === 'growth' && field === 'percent'
+        ? withGrowthPercentForMonth(existingMeta, editMonthKey, nextValue)
+        : metaType === 'allocation' && field === 'budget'
+          ? withBudgetForMonth(existingMeta, editMonthKey, nextValue)
+          : { ...existingMeta, [field]: nextValue }),
+      openingBalance: Number(String(editOpeningBalance).replace(/,/g, '')) || 0
+    }
     persistActiveLedger({
       ...activeLedger,
       categoryMeta: {
@@ -192,12 +199,12 @@ export function FlowScreen() {
   // Growth percentages should sum to 100% for the month being edited — this
   // computes what the other pools already claim so Save can warn/block before
   // a pool pushes the total over.
-  const growthPercentMonthKey = viewGranularity === 'year' ? `${statPeriod}-01` : statPeriod
+  const editMonthKey = viewGranularity === 'year' ? `${statPeriod}-01` : statPeriod
   const isEditingGrowthPercent = editTarget?.metaType === 'growth' && editTarget?.field === 'percent'
   const otherGrowthPercentTotal = isEditingGrowthPercent
     ? (activeLedger.categories.growth || [])
       .filter(n => n !== editTarget.name)
-      .reduce((s, n) => s + getGrowthPercentForMonth(activeLedger.categoryMeta.growth?.[n], growthPercentMonthKey), 0)
+      .reduce((s, n) => s + getGrowthPercentForMonth(activeLedger.categoryMeta.growth?.[n], editMonthKey), 0)
     : 0
   const enteredGrowthPercent = Number(String(editValue).replace(/,/g, '')) || 0
   const projectedGrowthTotal = otherGrowthPercentTotal + enteredGrowthPercent
@@ -354,9 +361,9 @@ export function FlowScreen() {
             <div className="field">
               <label>{editTarget.field === 'percent' ? 'Target % of Surplus' : 'Monthly Target (TZS)'}</label>
               <input inputMode="decimal" value={editValue} onChange={e => setEditValue(e.target.value)} placeholder={editTarget.field === 'percent' ? 'e.g. 30' : 'e.g. 100000'} autoFocus />
-              {editTarget.field === 'percent' && (
+              {(editTarget.field === 'percent' || editTarget.field === 'budget') && (
                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-                  Applies from {periodLabel} onward — earlier months keep their existing %.
+                  Applies from {periodLabel} onward — earlier months keep their existing {editTarget.field === 'percent' ? '%' : 'target'}.
                 </div>
               )}
               {isEditingGrowthPercent && (
@@ -368,6 +375,13 @@ export function FlowScreen() {
                       : 'Growth pools total 100%.'}
                 </div>
               )}
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Opening Balance (TZS)</label>
+              <input inputMode="decimal" value={editOpeningBalance} onChange={e => setEditOpeningBalance(e.target.value)} placeholder="e.g. 0" />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                One-time top-up added straight into Balance, for money this bucket already held before you started tracking it here.
+              </div>
             </div>
             <div className="modalActions">
               <button className="btn" onClick={() => setEditTarget(null)}>Cancel</button>

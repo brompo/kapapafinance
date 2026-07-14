@@ -1,5 +1,21 @@
 export const CHANGELOG = [
     {
+        version: "2.9.0",
+        date: "2026-07-14",
+        changes: [
+            'Lifestyle buckets and Growth pools now support an Opening Balance — a one-time top-up added straight into Balance, for money a bucket already held before you started tracking it here, so you don\'t have to backfill old transactions.',
+            'Opening Balance can be set from either the Flow tab\'s quick-edit (tap a card\'s pencil) or the "Edit Category" card, alongside the Monthly Target/Growth percent field.',
+        ]
+    },
+    {
+        version: "2.8.0",
+        date: "2026-07-14",
+        changes: [
+            'Lifestyle bucket Monthly Targets are now month-scoped, like Growth pool percentages already were — editing one month\'s target no longer rewrites every other month, and later months just inherit the last-set value until they get their own edit.',
+            'Fixed a bug where editing a category\'s Monthly Target or Growth percent from the "Edit Category" card always wrote to today\'s real calendar month instead of whichever month you were viewing — causing edits made while viewing one month (e.g. December) to silently overwrite edits made while viewing another (e.g. January).',
+        ]
+    },
+    {
         version: "2.7.0",
         date: "2026-07-14",
         changes: [

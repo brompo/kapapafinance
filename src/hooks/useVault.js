@@ -145,7 +145,7 @@ export function useVault({
     const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
     const vaultUpdate = { ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId }
     if (nextClients) vaultUpdate.clients = nextClients
-    persist(vaultUpdate)
+    return persist(vaultUpdate)
   }
 
   function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns, nextClients }) {
@@ -167,7 +167,7 @@ export function useVault({
       accountTxns: nextAccountTxns ?? allAccountTxns
     }
     if (nextClients) vaultUpdate.clients = nextClients
-    persist(vaultUpdate)
+    return persist(vaultUpdate)
   }
 
   function handleAddPersonalLedger() {

@@ -1,5 +1,14 @@
 export const CHANGELOG = [
     {
+        version: "2.9.1",
+        date: "2026-07-14",
+        changes: [
+            'Flow cards now show a red "Expense" line under B/F whenever a category had real spend in the viewed period, for Upkeep, Lifestyle buckets, and Growth pools.',
+            'Fixed a data-loss bug: a background app update could reload the page while an encrypted save was still writing to storage, silently discarding whatever you\'d just added (e.g. a transaction) — saves now finish before an update reload happens.',
+            'Fixed a bug where renaming a category (Edit Card → Category Name) orphaned all of its existing transactions — they kept the old category name and silently dropped out of Balance/Spent, which could look like the transactions had disappeared. Renaming now re-points them to the new name.',
+        ]
+    },
+    {
         version: "2.9.0",
         date: "2026-07-14",
         changes: [

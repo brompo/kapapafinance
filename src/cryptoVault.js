@@ -109,22 +109,49 @@ export async function loadVault(pin){
   return data
 }
 
+// A PWA update can swap the service worker and reload the page mid-session
+// (see main.jsx's controllerchange handler). saveVault is async (PBKDF2 +
+// AES-GCM), so a write that's in flight when that reload fires would never
+// reach localStorage — the app comes back up on the previous save, and
+// whatever was just added (a transaction, a budget edit) looks like it
+// "disappeared." Tracking in-flight writes here lets main.jsx wait for them
+// to settle before reloading.
+const pendingWrites = new Set()
+
+export function hasPendingWrites(){
+  return pendingWrites.size > 0
+}
+
+export async function flushPendingWrites(){
+  while (pendingWrites.size > 0) {
+    await Promise.allSettled(Array.from(pendingWrites))
+  }
+}
+
 export async function saveVault(pin, payload){
-  const meta = getMeta()
-  if (!meta) throw new Error('No PIN set.')
-  const key = await deriveKey(pin, meta.saltB64, meta.iterations || 200_000)
+  const write = (async () => {
+    const meta = getMeta()
+    if (!meta) throw new Error('No PIN set.')
+    const key = await deriveKey(pin, meta.saltB64, meta.iterations || 200_000)
 
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const plainText = JSON.stringify(payload)
-  const plainBuf = new TextEncoder().encode(plainText)
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const plainText = JSON.stringify(payload)
+    const plainBuf = new TextEncoder().encode(plainText)
 
-  const ctBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    plainBuf
-  )
+    const ctBuf = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      plainBuf
+    )
 
-  setVaultRaw({ ivB64: b64encode(iv), ctB64: b64encode(ctBuf) })
+    setVaultRaw({ ivB64: b64encode(iv), ctB64: b64encode(ctBuf) })
+  })()
+  pendingWrites.add(write)
+  try {
+    await write
+  } finally {
+    pendingWrites.delete(write)
+  }
 }
 
 export function loadVaultPlain(){

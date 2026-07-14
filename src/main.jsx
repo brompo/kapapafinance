@@ -24,13 +24,22 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
       }
     })
 
-    // When a new SW activates, it takes control of the page.
+    // When a new SW activates, it takes control of the page. Reloading
+    // immediately can race an in-flight encrypted vault write (see
+    // cryptoVault.js) and lose it, so wait for any pending save to settle
+    // first — capped so a stuck write can't block the update forever.
     let refreshing = false
     navigator.serviceWorker?.addEventListener('controllerchange', () => {
       if (refreshing) return
       refreshing = true
       localStorage.setItem('appUpdated', 'true')
-      window.location.reload()
+      import('./cryptoVault.js')
+        .then(({ flushPendingWrites }) => Promise.race([
+          flushPendingWrites(),
+          new Promise(resolve => setTimeout(resolve, 3000))
+        ]))
+        .catch(() => {})
+        .finally(() => window.location.reload())
     })
   }).catch((err) => {
     console.error('SW registration failed', err)

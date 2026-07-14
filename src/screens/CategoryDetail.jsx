@@ -332,6 +332,9 @@ export function CategoryDetail({
                   const budgetUpdate = category.type === 'allocation'
                     ? withBudgetForMonth(existingMeta, editMonthKey, Number(String(editBudget).replace(/,/g, '')) || 0)
                     : null
+                  const nameChanged = editName !== category.name
+                  const nextMetaForType = { ...(activeLedger.categoryMeta[metaType] || {}) }
+                  if (nameChanged) delete nextMetaForType[category.name]
                   const updatedLedger = {
                     ...activeLedger,
                     categories: {
@@ -341,7 +344,7 @@ export function CategoryDetail({
                     categoryMeta: {
                       ...activeLedger.categoryMeta,
                       [metaType]: {
-                        ...(activeLedger.categoryMeta[metaType] || {}),
+                        ...nextMetaForType,
                         [editName]: {
                           ...(activeLedger.categoryMeta[metaType]?.[category.name] || {}),
                           color: editColor,
@@ -352,7 +355,15 @@ export function CategoryDetail({
                           ...((category.type === 'allocation' || category.type === 'growth') && { openingBalance: Number(String(editOpeningBalance).replace(/,/g, '')) || 0 })
                         }
                       }
-                    }
+                    },
+                    // Renaming a category orphaned its existing transactions (they kept the old
+                    // category string and silently dropped out of every Balance/Spent total),
+                    // making it look like the transactions had vanished. Re-point them here.
+                    ...(nameChanged && {
+                      txns: (activeLedger.txns || []).map(t =>
+                        t.category === category.name && t.type === category.type ? { ...t, category: editName } : t
+                      )
+                    })
                   }
                   persistActiveLedger(updatedLedger)
                   setShowEditModal(false)

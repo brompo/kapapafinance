@@ -83,7 +83,7 @@ function RingLegendItem({ color, label, percent }) {
   )
 }
 
-function FlowRow({ name, sub, amount, tag, tagColor, color, onClick }) {
+function FlowRow({ name, sub, expense, amount, tag, tagColor, color, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -101,6 +101,7 @@ function FlowRow({ name, sub, amount, tag, tagColor, color, onClick }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
+        {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Expense: {fmtTZS(expense)}</div>}
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
@@ -307,6 +308,7 @@ export function FlowScreen() {
         <FlowRow
           name="Upkeep"
           sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}
+          expense={envelopeSummary.upkeep.spentThisPeriod}
           amount={envelopeSummary.upkeep.distributedThisPeriod}
           tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
           color={UPKEEP_COLOR}
@@ -318,6 +320,7 @@ export function FlowScreen() {
             key={b.name}
             name={b.name}
             sub={`B/F: ${fmtTZS(b.broughtForward)}`}
+            expense={b.spentThisPeriod}
             amount={b.distributedThisPeriod}
             tag={`Balance: ${fmtTZS(b.balance)}`}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
@@ -334,6 +337,7 @@ export function FlowScreen() {
             key={p.name}
             name={`${p.name} (${p.percent}%)`}
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
+            expense={p.spentThisPeriod}
             amount={p.distributedThisPeriod}
             tag={`Balance: ${fmtTZS(p.balance)}`}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}

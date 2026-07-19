@@ -5,6 +5,7 @@ export const CHANGELOG = [
         changes: [
             'Accounts can now belong to more than one ledger — edit an account and check every ledger that should see it (e.g. a shared Cash account visible in both Personal and Family). Shared accounts keep one combined balance; spending from either ledger draws from the same real total, and the account list shows a small badge (e.g. "Personal + Family") so it\'s obvious at a glance.',
             'Added a "Merge" action on the account detail screen for folding duplicate accounts together (e.g. two separate "Cash" accounts, one per ledger, that were really the same physical cash). Merging sums both balances onto the account you keep, unions the ledgers they were visible in, and re-points any category default-account settings — the absorbed account is archived rather than deleted, so its own transaction history stays intact as a record.',
+            'Fixed a bug where a Growth pool flagged "Funds Upkeep" (Flow tab) only counted its ongoing monthly redirect toward Upkeep\'s Balance, leaving whatever it had already accumulated (its Opening Balance) stranded — not spendable, not transferable, and not reflected in Upkeep\'s total. That standing reserve is now folded into Upkeep\'s Balance continuously, the same way it stays frozen in the pool\'s own Balance, so it acts as a real live backstop instead of dead weight.',
         ]
     },
     {

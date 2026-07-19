@@ -128,10 +128,17 @@ export function computeEnvelopeSummary(ledger, period) {
     + flaggedGrowthNames.reduce((s, name) => s + sumTxn('growth', name, inPeriod), 0)
   const upkeepFundedByGrowthCum = flaggedGrowthNames.reduce((s, name) => s + (growthFundingUpkeepCum[name] || 0), 0)
   const upkeepFundedByGrowthThisPeriod = flaggedGrowthNames.reduce((s, name) => s + (growthFundingUpkeepThisPeriod[name] || 0), 0)
+  // A fundsUpkeep pool's own Balance is frozen at its Opening Balance (see
+  // `growth` below) rather than accumulating — that standing reserve is a
+  // live backstop for Upkeep, not a one-time transfer, so it's folded into
+  // Upkeep's Balance on every recompute (not just the monthly redirected
+  // slice), the same way it stays folded into the pool's own frozen Balance.
+  const upkeepFundedByGrowthReserve = flaggedGrowthNames.reduce((s, name) => s + Number(growthMeta[name]?.openingBalance || 0), 0)
   // Balance = Distribution (Upkeep's own budget-based cascade) + the flagged
-  // Growth pool's redirected amount - Expenditure. Both feed the same rolling
-  // Balance, but stay separate, individually-displayed lines going in.
-  const upkeepBalance = upkeepDistributedCum + upkeepFundedByGrowthCum - upkeepSpentTotal
+  // Growth pool's redirected amount + its standing reserve - Expenditure.
+  // All feed the same rolling Balance, but stay separate, individually-displayed
+  // lines going in.
+  const upkeepBalance = upkeepDistributedCum + upkeepFundedByGrowthCum + upkeepFundedByGrowthReserve - upkeepSpentTotal
   const upkeep = {
     distributedThisPeriod: upkeepDistributedThisPeriod,
     fundedByGrowthThisPeriod: upkeepFundedByGrowthThisPeriod,

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react'
 import {
   uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
-  normalizeAccountsWithGroups
+  normalizeAccountsWithGroups, getAccountLedgerIds, accountVisibleInLedger
 } from '../utils/ledger.js'
 import { collectionStatus } from '../utils/pipeline.js'
 import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, fmtTZS } from '../money.js'
@@ -162,8 +162,8 @@ export function AppProvider({ children }) {
   const accounts = useMemo(() => {
     if (!activeLedger?.id) return []
     return allAccounts.filter(a => {
-      // Show if account belongs to ledger OR has a sub-account in this ledger
-      const isMain = !a.ledgerId || a.ledgerId === activeLedger.id
+      // Show if account belongs to this ledger OR has a sub-account in this ledger
+      const isMain = accountVisibleInLedger(a, activeLedger.id)
       const hasSub = a.subAccounts?.some(s => s.ledgerId === activeLedger.id)
       return isMain || hasSub
     })
@@ -174,7 +174,7 @@ export function AppProvider({ children }) {
     return allAccountTxns.filter(t => {
       const acct = allAccounts.find(a => a.id === t.accountId)
       if (!acct) return false
-      const isMain = !acct.ledgerId || acct.ledgerId === activeLedger.id
+      const isMain = accountVisibleInLedger(acct, activeLedger.id)
       const hasSub = acct.subAccounts?.some(s => s.ledgerId === activeLedger.id)
       return isMain || hasSub
     })
@@ -226,7 +226,7 @@ export function AppProvider({ children }) {
     }
     const monthlyBalance = inc - exp - monthlyAlloc;
 
-    const bal = accounts.reduce((s, a) => {
+    const bal = accounts.filter(a => !a.archived).reduce((s, a) => {
       let val = 0
       if (Array.isArray(a.subAccounts) && a.subAccounts.length > 0) {
         val = a.subAccounts.reduce((ss, sub) => ss + Number(sub.balance || 0), 0)
@@ -647,13 +647,85 @@ export function AppProvider({ children }) {
     persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
     show('Account deleted.')
   }
+
+  // Folds a duplicate account (e.g. "Cash" that used to live in a second ledger)
+  // into another one: their balances combine onto `intoAccountId`, the ledgers
+  // that could see either one can now see the survivor, and `fromAccountId` is
+  // archived (not deleted) rather than merging its transaction history, so both
+  // accounts keep their own full audit trail while the money itself is unified.
+  async function mergeAccounts(intoAccountId, fromAccountId) {
+    const intoAcc = allAccounts.find(a => a.id === intoAccountId)
+    const fromAcc = allAccounts.find(a => a.id === fromAccountId)
+    if (!intoAcc || !fromAcc || intoAcc.id === fromAcc.id) return
+
+    const amt = Number(fromAcc.balance || 0)
+    const today = todayISO()
+    const newEntries = amt ? [
+      {
+        id: `txn-${uid()}`, accountId: fromAcc.id, subAccountId: null,
+        amount: Math.abs(amt), direction: amt > 0 ? 'out' : 'in', kind: 'adjust',
+        note: `Merged into ${intoAcc.name}`, date: today
+      },
+      {
+        id: `txn-${uid()}`, accountId: intoAcc.id, subAccountId: null,
+        amount: Math.abs(amt), direction: amt > 0 ? 'in' : 'out', kind: 'adjust',
+        note: `Merged from ${fromAcc.name}`, date: today
+      }
+    ] : []
+
+    const mergedLedgerIds = Array.from(new Set([
+      ...getAccountLedgerIds(intoAcc),
+      ...getAccountLedgerIds(fromAcc)
+    ]))
+
+    const nextAccounts = allAccounts.map(a => {
+      if (a.id === intoAcc.id) {
+        const { ledgerId, ...rest } = a
+        return { ...rest, balance: Number(a.balance || 0) + amt, ledgerIds: mergedLedgerIds }
+      }
+      if (a.id === fromAcc.id) return { ...a, balance: 0, archived: true }
+      return a
+    })
+
+    // Re-point any category default-account settings that pointed at the
+    // absorbed account, in every ledger, so future quick-adds default to the
+    // surviving shared account instead of the now-archived one.
+    const nextLedgers = (vault.ledgers || []).map(l => {
+      const meta = l.categoryMeta || {}
+      let changed = false
+      const nextMeta = Object.fromEntries(Object.entries(meta).map(([type, byName]) => {
+        if (!byName || typeof byName !== 'object') return [type, byName]
+        const nextByName = Object.fromEntries(Object.entries(byName).map(([name, m]) => {
+          if (m?.defaultAccountId === fromAcc.id || m?.defaultToAccountId === fromAcc.id) {
+            changed = true
+            return [name, {
+              ...m,
+              defaultAccountId: m.defaultAccountId === fromAcc.id ? intoAcc.id : m.defaultAccountId,
+              defaultToAccountId: m.defaultToAccountId === fromAcc.id ? intoAcc.id : m.defaultToAccountId
+            }]
+          }
+          return [name, m]
+        }))
+        return [type, nextByName]
+      }))
+      return changed ? { ...l, categoryMeta: nextMeta } : l
+    })
+
+    await persist({
+      ...vault,
+      ledgers: nextLedgers,
+      accounts: nextAccounts,
+      accountTxns: [...newEntries, ...allAccountTxns]
+    })
+    show(`Merged ${fromAcc.name} into ${intoAcc.name}.`)
+  }
   async function updateAccounts(nextLedgerAccounts) {
     if (!Array.isArray(nextLedgerAccounts)) return
-    
-    // Merge Strategy: Keep other ledgers, replace current ledger accounts
-    const otherLedgerAccounts = allAccounts.filter(a => a.ledgerId && a.ledgerId !== activeLedger.id)
+
+    // Merge Strategy: keep accounts not visible in this ledger untouched, replace the rest
+    const otherLedgerAccounts = allAccounts.filter(a => !accountVisibleInLedger(a, activeLedger.id))
     const nextAccounts = [...otherLedgerAccounts, ...nextLedgerAccounts]
-    
+
     persistLedgerAndAccounts({ nextAccounts })
     show('Accounts reordered.')
   }
@@ -991,6 +1063,7 @@ export function AppProvider({ children }) {
     // Account Helpers
     upsertAccount,
     deleteAccount,
+    mergeAccounts,
     addAccountTxn,
     issueLoan,
     transferAccount,

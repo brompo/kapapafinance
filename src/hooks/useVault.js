@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { loadVault, loadVaultPlain, saveVault, saveVaultPlain, hasPin, setNewPin } from '../cryptoVault.js';
 import { PIN_FLOW_KEY, SEED_KEY, DEFAULT_TAB } from '../constants.js';
+import { getAccountLedgerIds } from '../utils/ledger.js';
 
 // We need to pass createLedger and normalizeVault because they are defined in App.jsx currently
 // Typically these would be extracted into utils/ledger.js as well.
@@ -211,9 +212,24 @@ export function useVault({
     const nextLedgers = ledgers.filter(l => l.id !== ledgerId)
     const nextActiveLedgerId = activeLedgerId === ledgerId ? nextLedgers[0].id : activeLedgerId
 
-    // Also remove associated accounts and their transactions
-    const accountsToRemove = new Set(allAccounts.filter(a => a.ledgerId === ledgerId).map(a => a.id))
-    const nextAccounts = allAccounts.filter(a => a.ledgerId !== ledgerId)
+    // Accounts shared with other ledgers just lose this ledger's tag; accounts
+    // that only belonged to this ledger are removed along with their transactions.
+    const accountsToRemove = new Set(
+      allAccounts.filter(a => {
+        const ids = getAccountLedgerIds(a)
+        return ids.length ? (ids.includes(ledgerId) && ids.length === 1) : false
+      }).map(a => a.id)
+    )
+    const nextAccounts = allAccounts
+      .filter(a => !accountsToRemove.has(a.id))
+      .map(a => {
+        const ids = getAccountLedgerIds(a)
+        if (ids.length > 1 && ids.includes(ledgerId)) {
+          const { ledgerId: _legacy, ...rest } = a
+          return { ...rest, ledgerIds: ids.filter(id => id !== ledgerId) }
+        }
+        return a
+      })
     const nextAccountTxns = allAccountTxns.filter(t => !accountsToRemove.has(t.accountId) && !accountsToRemove.has(t.relatedAccountId))
 
     persist({

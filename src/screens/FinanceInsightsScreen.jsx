@@ -7,6 +7,7 @@ import { useAppContext } from '../context/AppContext'
 import { fmtTZS, fmtCompact, todayISO, calculateAssetMetrics, monthsBetween, daysBetween } from '../money'
 import { TransactionDetail } from '../components/TransactionDetail'
 import { collectionStatus } from '../utils/pipeline'
+import { accountVisibleInLedger } from '../utils/ledger'
 
 // Categorical palette for allocation-category segments — green/red are reserved
 // for the breakeven status (bar/line color) and never reused as a category hue.
@@ -143,7 +144,7 @@ export function FinanceInsightsScreen() {
       }
     }
     if (subs.length > 0) return base;
-    if (activeLedgerId !== "all" && account.ledgerId !== activeLedgerId) return 0;
+    if (!accountVisibleInLedger(account, activeLedgerId)) return 0;
     return base;
   }
 

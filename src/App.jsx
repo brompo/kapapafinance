@@ -15,9 +15,9 @@ import { LandingStage, PinStage, UnlockStage } from './stages/AuthStages'
 function VaultApp() {
   const { 
     stage, tab, setTab, selectedCategory, showAddForm,
-    activeLedger, accounts, allAccountTxns, txns, clients,
+    activeLedger, accounts, allAccounts, allAccountTxns, txns, clients,
     ledgers, focusAccountId, settings, setFocusAccountId,
-    show, upsertAccount, deleteAccount, addAccountTxn, issueLoan,
+    show, upsertAccount, deleteAccount, mergeAccounts, addAccountTxn, issueLoan,
     transferAccount, payCreditBack, updateAccountTxn, updateAccountTxnMeta,
     deleteAccountTxn, updateAccountGroups, updateAccounts, reallocateBuckets,
     updateSettings, handleSwitchLedgerToAccounts, setShowLedgerPicker,
@@ -51,6 +51,7 @@ function VaultApp() {
             activeLedgerName={activeLedger.name || 'Personal'}
             onOpenLedgerPicker={() => setShowLedgerPicker(true)}
             accounts={accounts}
+            allAccounts={allAccounts}
             accountTxns={allAccountTxns}
             txns={txns}
             clients={clients}
@@ -67,6 +68,7 @@ function VaultApp() {
             onUpdateAccounts={updateAccounts}
             onUpsertAccount={upsertAccount}
             onDeleteAccount={deleteAccount}
+            onMergeAccounts={mergeAccounts}
             onAddAccountTxn={addAccountTxn}
             onIssueLoan={issueLoan}
             onTransferAccount={transferAccount}

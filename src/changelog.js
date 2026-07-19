@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "3.0.0",
+        date: "2026-07-19",
+        changes: [
+            'Accounts can now belong to more than one ledger — edit an account and check every ledger that should see it (e.g. a shared Cash account visible in both Personal and Family). Shared accounts keep one combined balance; spending from either ledger draws from the same real total, and the account list shows a small badge (e.g. "Personal + Family") so it\'s obvious at a glance.',
+            'Added a "Merge" action on the account detail screen for folding duplicate accounts together (e.g. two separate "Cash" accounts, one per ledger, that were really the same physical cash). Merging sums both balances onto the account you keep, unions the ledgers they were visible in, and re-points any category default-account settings — the absorbed account is archived rather than deleted, so its own transaction history stays intact as a record.',
+        ]
+    },
+    {
         version: "2.10.0",
         date: "2026-07-19",
         changes: [

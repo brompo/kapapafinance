@@ -3519,6 +3519,33 @@ label {
   font-size: 0.8rem;
 }
 
+.ledgerCheckboxList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ledgerCheckboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.sharedLedgerBadge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #6d5bd0;
+  background: rgba(109, 91, 208, 0.12);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-top: 2px;
+  display: inline-block;
+  width: fit-content;
+}
+
 .stdRight {
   display: flex;
   align-items: center;

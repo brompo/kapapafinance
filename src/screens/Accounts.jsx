@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fmtTZS, fmtCompact, calculateAssetMetrics, calculateSavingsMetrics } from "../money.js";
+import { getAccountLedgerIds, accountVisibleInLedger } from "../utils/ledger.js";
 
 function calculateBucketSpentYTD(subId, accountTxns) {
   const year = String(new Date().getFullYear())
@@ -28,6 +29,7 @@ function monthsBetween(a, b) {
 
 export default function Accounts({
   accounts,
+  allAccounts = [],
   accountTxns = [],
   groups = [],
   activeLedgerId = "",
@@ -40,6 +42,7 @@ export default function Accounts({
   onToast,
   onUpsertAccount,
   onDeleteAccount,
+  onMergeAccounts,
   onAddAccountTxn,
   onIssueLoan,
   onTransferAccount,
@@ -181,6 +184,7 @@ export default function Accounts({
                   onToggleAccountExpand={toggleAccountExpand}
                   activeLedgerId={activeLedgerId}
                   categories={categories}
+                  ledgers={ledgers}
                 />
               )
             })}
@@ -310,7 +314,7 @@ export default function Accounts({
     if (subs.length > 0) return base;
 
     // Otherwise, check if the parent account belongs to the active ledger
-    if (activeLedgerId !== "all" && account.ledgerId !== activeLedgerId) return 0;
+    if (!accountVisibleInLedger(account, activeLedgerId)) return 0;
     return base;
   }
 
@@ -579,7 +583,7 @@ export default function Accounts({
       balance,
       groupId: addingToGroup.id,
       groupType: addingToGroup.type,
-      ledgerId: activeLedgerId || addingToGroup.ledgerId,
+      ledgerIds: activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : [],
     });
     setAddingToGroup(null);
   }
@@ -752,6 +756,7 @@ export default function Accounts({
       <AccountDetail
         account={selected}
         accounts={visibleAccounts}
+        allAccounts={allAccounts}
         groups={groups}
         accountTxns={accountTxns}
         activeLedgerId={activeLedgerId}
@@ -766,6 +771,7 @@ export default function Accounts({
         onPayCreditBack={onPayCreditBack}
         onUpsertAccount={onUpsertAccount}
         onDeleteAccount={onDeleteAccount}
+        onMergeAccounts={onMergeAccounts}
         onUpdateAccountTxn={onUpdateAccountTxn}
         onUpdateAccountTxnMeta={onUpdateAccountTxnMeta}
         onDeleteAccountTxn={onDeleteAccountTxn}
@@ -1066,7 +1072,13 @@ function Section({
   activeLedgerId,
   metaCategory,
   accounts,
+  ledgers,
 }) {
+  function sharedLedgerLabel(a) {
+    const ids = getAccountLedgerIds(a)
+    if (ids.length < 2) return null
+    return ids.map(id => ledgers?.find(l => l.id === id)?.name || '?').join(' + ')
+  }
   return (
     <div
       className={`sectionCard ${isDragging ? "dragging" : ""} ${dragOver ? "dragOver" : ""}`}
@@ -1150,6 +1162,9 @@ function Section({
                         </div>
                         <div className="assetInfo">
                           <h4>{a.name}</h4>
+                          {sharedLedgerLabel(a) && (
+                            <div className="sharedLedgerBadge">{sharedLedgerLabel(a)}</div>
+                          )}
                           <div style={{ fontSize: '0.75rem', color: '#666' }}>
                             {(() => {
                               const info = calculateAssetMetrics(a, accountTxns, group.type)
@@ -1175,6 +1190,9 @@ function Section({
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                           <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
+                          {sharedLedgerLabel(a) && (
+                            <div className="sharedLedgerBadge">{sharedLedgerLabel(a)}</div>
+                          )}
                           {metaCategory === 'savings' && (
                             <div className="metricStack purple" style={{ alignItems: 'flex-start', marginTop: 2 }}>
                               <div className="metricLabel">PLANNED:</div>
@@ -1278,6 +1296,7 @@ function uid() {
 function AccountDetail({
   account,
   accounts,
+  allAccounts = [],
   groups,
   categories,
   accountTxns,
@@ -1296,6 +1315,7 @@ function AccountDetail({
   onPayCreditBack,
   onUpsertAccount,
   onDeleteAccount,
+  onMergeAccounts,
   onUpdateAccountTxn,
   onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
@@ -1380,13 +1400,18 @@ function AccountDetail({
   const [editInterestStartDate, setEditInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState(account.name || "");
-  const [editLedgerId, setEditLedgerId] = useState(account.ledgerId || activeLedgerId);
+  const [editLedgerIds, setEditLedgerIds] = useState(() => {
+    const ids = getAccountLedgerIds(account);
+    return ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []);
+  });
   const [editBalance, setEditBalance] = useState("");
   const [editGroupId, setEditGroupId] = useState("");
   const [editError, setEditError] = useState("");
   const [editingSubAccountId, setEditingSubAccountId] = useState(null)
   const [subEditName, setSubEditName] = useState("")
   const [subEditLedgerId, setSubEditLedgerId] = useState("")
+  const [showMergeModal, setShowMergeModal] = useState(false)
+  const [mergeFromId, setMergeFromId] = useState("")
   const [showAddBucketModal, setShowAddBucketModal] = useState(false)
   const [newBucketName, setNewBucketName] = useState('')
   const [newBucketAmount, setNewBucketAmount] = useState('')
@@ -1411,7 +1436,8 @@ function AccountDetail({
     selectedTxn ||
     editingSubAccountId ||
     showAddBucketModal ||
-    showReallocateModal
+    showReallocateModal ||
+    showMergeModal
   );
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
@@ -1450,8 +1476,9 @@ function AccountDetail({
 
   useEffect(() => {
     setEditName(account.name || "");
-    setEditLedgerId(account.ledgerId || activeLedgerId);
-  }, [account.id, account.name, account.ledgerId, activeLedgerId]);
+    const ids = getAccountLedgerIds(account);
+    setEditLedgerIds(ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []));
+  }, [account.id, account.name, account.ledgerId, account.ledgerIds, activeLedgerId]);
 
   useEffect(() => {
     if (!showCreditModal) return;
@@ -1902,6 +1929,21 @@ function AccountDetail({
     );
   }
 
+  const mergeCandidates = allAccounts.filter(a => a.id !== account.id && !a.archived);
+
+  function handleOpenMerge() {
+    setMergeFromId(mergeCandidates[0]?.id || "");
+    setShowMergeModal(true);
+  }
+
+  function handleConfirmMerge() {
+    const fromAcc = mergeCandidates.find(a => a.id === mergeFromId);
+    if (!fromAcc) return;
+    if (!window.confirm(`Merge "${fromAcc.name}" into "${account.name}"? Their balances will combine, and "${fromAcc.name}" will be archived.`)) return;
+    onMergeAccounts?.(account.id, fromAcc.id);
+    setShowMergeModal(false);
+  }
+
   function handleDelete() {
     const hasTxns = accountTxns.some((t) => t.accountId === account.id);
     if (!hasTxns) {
@@ -1920,12 +1962,17 @@ function AccountDetail({
 
   function handleEdit() {
     setEditName(account.name);
-    setEditLedgerId(account.ledgerId || activeLedgerId);
+    const ids = getAccountLedgerIds(account);
+    setEditLedgerIds(ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []));
     setEditBalance(account.balance || 0);
     setEditGroupId(account.groupId);
     setEditAccountType(account.accountType || '');
     setEditError("");
     setShowEditModal(true);
+  }
+
+  function toggleEditLedgerId(id) {
+    setEditLedgerIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
   async function handleSaveEdit() {
@@ -1934,33 +1981,24 @@ function AccountDetail({
       setEditError("Enter a name.");
       return;
     }
-    const nextLedgerId = editLedgerId || account.ledgerId || activeLedgerId;
-    const targetLedger = ledgers.find((l) => l.id === nextLedgerId);
-    const targetGroups = Array.isArray(targetLedger?.groups) ? targetLedger.groups : [];
+    if (!editLedgerIds.length) {
+      setEditError("Select at least one ledger.");
+      return;
+    }
     const newGroup = editGroupId ? groups.find(g => g.id === editGroupId) : null;
     const type = editAccountType || newGroup?.type || currentGroup?.type || account.groupType || "debit";
+    const prevLedgerIds = getAccountLedgerIds(account);
 
-    // Try to find a group in the target ledger that matches both Name and Type
-    let targetGroup = targetGroups.find((g) => g.name === (newGroup?.name || currentGroup?.name) && g.type === type);
-    // Fallback to matching by Type only
-    if (!targetGroup) targetGroup = targetGroups.find((g) => g.type === type);
-    // Final fallback
-    targetGroup = targetGroup || targetGroups[0] || currentGroup;
-
-    const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
-    // Do not overwrite subaccount ledger IDs when moving the parent account
-    const nextSubs = subs;
-
+    // Groups are shared across all ledgers already, so there's no per-ledger
+    // group to remap here — just keep the account's chosen group as-is.
+    const { ledgerId, ...accountRest } = account;
     await onUpsertAccount?.({
-      ...account,
+      ...accountRest,
       name,
-      ledgerId: nextLedgerId,
-      // Prioritize the explicitly selected editGroupId if we are in the same ledger context, 
-      // otherwise use the targetGroup found in the new ledger.
-      groupId: editGroupId || targetGroup?.id || account.groupId,
+      ledgerIds: editLedgerIds,
+      groupId: editGroupId || account.groupId,
       groupType: type,
       accountType: editAccountType || undefined,
-      subAccounts: nextSubs
     });
 
     // Balance update logic for Debit and Loan accounts
@@ -1982,9 +2020,10 @@ function AccountDetail({
     }
 
     setShowEditModal(false);
-    if (nextLedgerId && nextLedgerId !== activeLedgerId) {
-      const ledgerName = ledgers.find((l) => l.id === nextLedgerId)?.name || "selected ledger";
-      onToast?.(`Account moved to ${ledgerName}.`);
+    const ledgersChanged = prevLedgerIds.length !== editLedgerIds.length || editLedgerIds.some(id => !prevLedgerIds.includes(id));
+    if (ledgersChanged) {
+      const label = editLedgerIds.map((id) => ledgers.find((l) => l.id === id)?.name).filter(Boolean).join(' + ') || 'selected ledger';
+      onToast?.(editLedgerIds.length > 1 ? `Account shared with ${label}.` : `Account moved to ${label}.`);
     } else {
       onToast?.("Account updated.");
     }
@@ -2151,11 +2190,11 @@ function AccountDetail({
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-    const targetLedgerId = activeLedgerId === "all" ? account.ledgerId : activeLedgerId;
+    const targetLedgerId = activeLedgerId === "all" ? getAccountLedgerIds(account)[0] : activeLedgerId;
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = [
       ...subs,
-      { id: crypto.randomUUID(), name: trimmed, balance: 0, ledgerId: targetLedgerId || account.ledgerId },
+      { id: crypto.randomUUID(), name: trimmed, balance: 0, ledgerId: targetLedgerId },
     ];
     onUpsertAccount({ ...account, subAccounts: nextSubs });
     if (!subAccountId) setSubAccountId(nextSubs[0].id);
@@ -2165,7 +2204,7 @@ function AccountDetail({
     const name = newBucketName.trim()
     if (!name) return
     const amt = Number(newBucketAmount || 0)
-    const targetLedgerId = activeLedgerId === "all" ? account.ledgerId : activeLedgerId
+    const targetLedgerId = activeLedgerId === "all" ? getAccountLedgerIds(account)[0] : activeLedgerId
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
     const currentBalance = getAccountBalance(account, 'current', true)
 
@@ -2233,6 +2272,9 @@ function AccountDetail({
           <button className="miniActionBtn" onClick={onClose}>✕</button>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="miniActionBtn" onClick={handleEdit}>Edit</button>
+            {mergeCandidates.length > 0 && onMergeAccounts && (
+              <button className="miniActionBtn" onClick={handleOpenMerge}>Merge</button>
+            )}
             <button className="miniActionBtn" onClick={handleDelete} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#FCA5A5' }}>Delete</button>
           </div>
         </div>
@@ -2394,7 +2436,7 @@ function AccountDetail({
                                   e.stopPropagation()
                                   setEditingSubAccountId(s.id)
                                   setSubEditName(s.name)
-                                  setSubEditLedgerId(s.ledgerId || account.ledgerId || activeLedgerId)
+                                  setSubEditLedgerId(s.ledgerId || getAccountLedgerIds(account)[0] || activeLedgerId)
                                 }}>Edit</button>
                               )}
                             </div>
@@ -3249,7 +3291,7 @@ function AccountDetail({
                       setPaybackError(false);
                       const acct = accounts.find(a => a.id === e.target.value)
                       const subs = acct && Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-                      const ledger = activeLedgerId === 'all' ? account.ledgerId : activeLedgerId
+                      const ledger = activeLedgerId === 'all' ? getAccountLedgerIds(account)[0] : activeLedgerId
                       const match = subs.find(s => s.ledgerId === ledger)
                       setPaybackSubAccountId(match ? match.id : (subs[0]?.id || ''))
                     }}
@@ -3359,14 +3401,24 @@ function AccountDetail({
                   />
                 </div>
                 <div className="field">
-                  <label>Ledger</label>
-                  <select value={editLedgerId} onChange={(e) => setEditLedgerId(e.target.value)}>
+                  <label>Ledgers</label>
+                  <div className="ledgerCheckboxList">
                     {ledgers.map((l) => (
-                      <option key={l.id} value={l.id}>
+                      <label key={l.id} className="ledgerCheckboxRow">
+                        <input
+                          type="checkbox"
+                          checked={editLedgerIds.includes(l.id)}
+                          onChange={() => toggleEditLedgerId(l.id)}
+                        />
                         {l.name}
-                      </option>
+                      </label>
                     ))}
-                  </select>
+                  </div>
+                  {editLedgerIds.length > 1 && (
+                    <div className="small" style={{ marginTop: 4, color: '#8b90b2' }}>
+                      Shared: one balance, visible in all selected ledgers.
+                    </div>
+                  )}
                 </div>
                 <div className="field">
                   <label>Group</label>
@@ -3409,6 +3461,39 @@ function AccountDetail({
                   </button>
                   <button className="btn primary" type="button" onClick={handleSaveEdit}>
                     Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {
+          showMergeModal && (
+            <div className="modalBackdrop" onClick={() => setShowMergeModal(false)}>
+              <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+                <div className="modalTitle">Merge Into "{account.name}"</div>
+                <div className="small" style={{ color: '#8b90b2', marginBottom: 12 }}>
+                  Pick the duplicate account to fold in. Its balance moves onto "{account.name}", the ledgers
+                  either one was visible in will both be able to see the result, and the duplicate is archived
+                  (kept for history, not deleted).
+                </div>
+                <div className="field">
+                  <label>Merge this account in</label>
+                  <select value={mergeFromId} onChange={(e) => setMergeFromId(e.target.value)}>
+                    {mergeCandidates.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({fmtTZS(a.balance || 0)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="modalActions">
+                  <button className="btn" type="button" onClick={() => setShowMergeModal(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" type="button" onClick={handleConfirmMerge}>
+                    Merge
                   </button>
                 </div>
               </div>

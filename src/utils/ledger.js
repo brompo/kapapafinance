@@ -7,6 +7,23 @@ import {
   CATEGORY_SUBS, ALL_LEDGERS_ID, ALL_LEDGERS_TEMPLATE
 } from '../constants.js'
 
+// Accounts may belong to more than one ledger (e.g. a Cash account spent from
+// both a Personal and a Family ledger while sharing one real-world balance).
+// `ledgerIds` is the canonical field; `ledgerId` (single string) is kept only
+// as a read-compat shim for data saved before this feature existed.
+export function getAccountLedgerIds(account) {
+  if (Array.isArray(account?.ledgerIds) && account.ledgerIds.length) return account.ledgerIds
+  if (account?.ledgerId) return [account.ledgerId]
+  return []
+}
+
+export function accountVisibleInLedger(account, ledgerId) {
+  if (!ledgerId || ledgerId === 'all') return true
+  const ids = getAccountLedgerIds(account)
+  if (!ids.length) return true
+  return ids.includes(ledgerId)
+}
+
 export function normalizeAccountsWithGroups(inputAccounts, groups) {
   const accounts = Array.isArray(inputAccounts) ? inputAccounts : []
   const groupById = new Map((groups || []).map(g => [g.id, g]))
@@ -292,7 +309,7 @@ export function getSeedVault() {
       let groupId = GROUP_IDS.debit
       if (a.type === 'credit') groupId = GROUP_IDS.credit
       else if (a.type === 'asset') groupId = a.id === realEstateId ? GROUP_IDS.realEstate : GROUP_IDS.shares
-      return { ...a, groupType: a.type, groupId, ledgerId: ledger.id }
+      return { ...a, groupType: a.type, groupId, ledgerIds: [ledger.id] }
     }),
     accountTxns: [
       {
@@ -366,26 +383,30 @@ export function normalizeVault(data) {
     const ledgers = data.ledgers.length ? data.ledgers.map(l => normalizeLedger(l)) : [createLedger()]
     const activeLedgerId = ledgers.find(l => l.id === data.activeLedgerId)?.id || ledgers[0]?.id || ''
     
-    // Safety: ensure all accounts have a valid ledgerId and groupId
+    // Safety: ensure all accounts have valid ledgerIds and a groupId
     const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0]
-    
+
     // NEW: Synchronize groups across ALL ledgers
     const canonicalGroups = activeLedger.groups || []
     ledgers.forEach(l => {
       l.groups = [...canonicalGroups]
     })
-    
+
     const groupIds = new Set(canonicalGroups.map(g => g.id))
-    const ledgerIds = new Set(ledgers.map(l => l.id))
-    
+    const validLedgerIds = new Set(ledgers.map(l => l.id))
+
     const rawAccounts = (Array.isArray(data.accounts) ? data.accounts : [])
-    
-    // Recovery Phase 1: Re-link accounts to the active ledger
+
+    // Recovery Phase 1: Re-link accounts to known ledgers, dropping any ghost
+    // ledger ids (deleted ledgers). An account can legitimately belong to
+    // several ledgers at once (see getAccountLedgerIds); one that's left with
+    // none (new account, or all its ledgers were deleted) falls back to active.
     const migratedAccounts = rawAccounts.map(a => {
-      const isGhostLedger = a.ledgerId && !ledgerIds.has(a.ledgerId)
+      const survivingIds = getAccountLedgerIds(a).filter(id => validLedgerIds.has(id))
+      const { ledgerId, ...rest } = a
       return {
-        ...a,
-        ledgerId: (!a.ledgerId || isGhostLedger) ? activeLedgerId : a.ledgerId
+        ...rest,
+        ledgerIds: survivingIds.length ? survivingIds : [activeLedgerId]
       }
     })
     
@@ -454,11 +475,11 @@ export function normalizeVault(data) {
     groups: data.groups
   })
 
-  // Migration: set ledgerId for all accounts/txns to the new legacyLedger.id
-  const migratedAccounts = (Array.isArray(data.accounts) ? data.accounts : []).map(a => ({
-    ...a,
-    ledgerId: legacyLedger.id
-  }))
+  // Migration: assign all accounts to the new legacyLedger.id
+  const migratedAccounts = (Array.isArray(data.accounts) ? data.accounts : []).map(a => {
+    const { ledgerId, ...rest } = a
+    return { ...rest, ledgerIds: [legacyLedger.id] }
+  })
 
   return {
     ledgers: [legacyLedger],

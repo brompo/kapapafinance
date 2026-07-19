@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "2.10.0",
+        date: "2026-07-19",
+        changes: [
+            'Added "Transfer Between Buckets" to the Flow tab (bottom of the screen) — move Balance directly from one Lifestyle bucket or Growth pool to another, for when one runs dry and another is carrying a surplus.',
+            'Transfers shift each bucket\'s Opening Balance by the moved amount, so it\'s a clean, reversible move that doesn\'t touch any other month\'s numbers. Upkeep can\'t be a transfer endpoint since its Balance has no movable top-up.',
+        ]
+    },
+    {
         version: "2.9.2",
         date: "2026-07-14",
         changes: [

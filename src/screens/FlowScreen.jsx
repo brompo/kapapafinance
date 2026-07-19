@@ -141,6 +141,16 @@ export function FlowScreen() {
   const [editValue, setEditValue] = useState('')
   const [editOpeningBalance, setEditOpeningBalance] = useState('')
 
+  // Transfer moves Balance between Lifestyle buckets and Growth pools by shifting
+  // their openingBalance — the only term in each one's balance formula that isn't
+  // derived from the cascade, so this is a pure move with no effect on other months.
+  // Upkeep has no openingBalance term (its balance is cascade + funded-by-growth minus
+  // spend only), so it can't participate as a transfer endpoint.
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [transferFrom, setTransferFrom] = useState('')
+  const [transferTo, setTransferTo] = useState('')
+  const [transferAmount, setTransferAmount] = useState('')
+
   const openEdit = (metaType, name, field, currentValue) => {
     setEditTarget({ metaType, name, field })
     setEditValue(String(currentValue || 0))
@@ -218,6 +228,46 @@ export function FlowScreen() {
   )
   const incomeInfo = useMemo(() => computeIncome(periodTxns), [periodTxns])
   const envelopeSummary = useMemo(() => computeEnvelopeSummary(activeLedger, statPeriod), [activeLedger, statPeriod])
+
+  const transferBuckets = useMemo(() => [
+    ...envelopeSummary.lifestyle.map(b => ({ type: 'allocation', name: b.name, balance: b.balance })),
+    ...envelopeSummary.growth.map(p => ({ type: 'growth', name: p.name, balance: p.balance }))
+  ], [envelopeSummary])
+
+  const openTransfer = () => {
+    if (transferBuckets.length < 2) return show('Need at least two Lifestyle/Growth buckets to transfer between.')
+    setTransferFrom(`${transferBuckets[0].type}::${transferBuckets[0].name}`)
+    setTransferTo(`${transferBuckets[1].type}::${transferBuckets[1].name}`)
+    setTransferAmount('')
+    setShowTransferModal(true)
+  }
+
+  const transferFromBucket = transferBuckets.find(b => `${b.type}::${b.name}` === transferFrom)
+  const enteredTransferAmount = Number(String(transferAmount).replace(/,/g, '')) || 0
+  const transferExceedsBalance = !!transferFromBucket && enteredTransferAmount > transferFromBucket.balance
+
+  const saveTransfer = () => {
+    const amt = enteredTransferAmount
+    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    if (!transferFrom || !transferTo || transferFrom === transferTo) return show('Choose two different buckets.')
+    const [fromType, fromName] = transferFrom.split('::')
+    const [toType, toName] = transferTo.split('::')
+    const fromMeta = activeLedger.categoryMeta[fromType]?.[fromName] || {}
+    const toMeta = activeLedger.categoryMeta[toType]?.[toName] || {}
+    const nextCategoryMeta = { ...activeLedger.categoryMeta }
+    nextCategoryMeta[fromType] = {
+      ...nextCategoryMeta[fromType],
+      [fromName]: { ...fromMeta, openingBalance: Number(fromMeta.openingBalance || 0) - amt }
+    }
+    nextCategoryMeta[toType] = {
+      ...nextCategoryMeta[toType],
+      [toName]: { ...(nextCategoryMeta[toType]?.[toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) + amt }
+    }
+    persistActiveLedger({ ...activeLedger, categoryMeta: nextCategoryMeta })
+    show(`Moved ${fmtTZS(amt)}.`)
+    setShowTransferModal(false)
+    setTransferAmount('')
+  }
 
   const lifestyleDistributed = envelopeSummary.lifestyle.reduce((s, b) => s + b.distributedThisPeriod, 0)
   const growthDistributed = envelopeSummary.growth.reduce((s, p) => s + p.distributedThisPeriod, 0)
@@ -366,6 +416,10 @@ export function FlowScreen() {
             color="#94a3b8"
           />
         )}
+
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
+          <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>
+        </div>
       </div>
 
       {editTarget && (
@@ -400,6 +454,50 @@ export function FlowScreen() {
             <div className="modalActions">
               <button className="btn" onClick={() => setEditTarget(null)}>Cancel</button>
               <button className="btn primary" onClick={saveEdit} disabled={growthOverBy > 0}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTransferModal && (
+        <div className="modalBackdrop" onClick={() => setShowTransferModal(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Transfer Between Buckets</div>
+            <div className="field">
+              <label>From</label>
+              <select value={transferFrom} onChange={e => setTransferFrom(e.target.value)}>
+                {transferBuckets.map(b => (
+                  <option key={`from-${b.type}::${b.name}`} value={`${b.type}::${b.name}`}>
+                    {b.name} — Balance: {fmtTZS(b.balance)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>To</label>
+              <select value={transferTo} onChange={e => setTransferTo(e.target.value)}>
+                {transferBuckets.map(b => (
+                  <option key={`to-${b.type}::${b.name}`} value={`${b.type}::${b.name}`}>
+                    {b.name} — Balance: {fmtTZS(b.balance)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Amount (TZS)</label>
+              <input inputMode="decimal" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="e.g. 100000" autoFocus />
+              {transferExceedsBalance && (
+                <div style={{ fontSize: 11, marginTop: 6, fontWeight: 700, color: '#ef4444' }}>
+                  {transferFromBucket.name} only has {fmtTZS(transferFromBucket.balance)} — this will push it negative.
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                Upkeep can't be a transfer endpoint — its Balance is fixed spend-vs-distributed and holds no movable top-up.
+              </div>
+            </div>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowTransferModal(false)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={saveTransfer}>Move</button>
             </div>
           </div>
         </div>

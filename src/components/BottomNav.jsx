@@ -72,9 +72,14 @@ export default function BottomNav({ tab, setTab, variant }) {
     }
   ]
 
+  const pipelineMode = activeLedger.type === 'personal' && settings.moneyPipelineEnabled
   const visibleIcons = icons.filter(i => {
     if (i.id === 'dse') return settings.dseEnabled
-    if (i.id === 'flow') return activeLedger.type === 'personal' && settings.moneyPipelineEnabled
+    if (i.id === 'flow') return pipelineMode
+    // Flow takes over Transactions' job as the primary tab for pipeline mode —
+    // Transactions is still fully there, just reached via Settings instead of
+    // taking a bottom-nav slot (see SettingsScreen's Transactions row).
+    if (i.id === 'tx') return !pipelineMode
     return true
   })
 

@@ -1,11 +1,23 @@
 import { todayISO, uid } from '../money.js'
 export { uid }
-import { 
-  GROUP_IDS, META_CATEGORIES, 
+import {
+  GROUP_IDS, META_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES, DEFAULT_ALLOCATION_CATEGORIES,
   DEFAULT_BUSINESS_INCOME_CATEGORIES, DEFAULT_COS_CATEGORIES, DEFAULT_OPPS_CATEGORIES,
-  CATEGORY_SUBS, ALL_LEDGERS_ID, ALL_LEDGERS_TEMPLATE
+  CATEGORY_SUBS, ALL_LEDGERS_ID, ALL_LEDGERS_TEMPLATE, DEFAULT_TAB
 } from '../constants.js'
+
+// Personal ledgers with Flow Pipeline on land on Flow (not Transactions) —
+// Flow is the report/spend surface for that mode, and Transactions is a
+// Settings-only utility screen for it. Every other ledger/mode keeps the
+// user's own defaultAppTab (or the app-wide DEFAULT_TAB) unchanged.
+export function resolveDefaultTab(vaultData) {
+  const settings = vaultData?.settings || {}
+  const ledgers = (vaultData?.ledgers || []).filter(Boolean)
+  const activeLedger = ledgers.find(l => l.id === vaultData?.activeLedgerId) || ledgers[0]
+  if (activeLedger?.type === 'personal' && settings.moneyPipelineEnabled) return 'flow'
+  return settings.defaultAppTab || DEFAULT_TAB
+}
 
 // Accounts may belong to more than one ledger (e.g. a Cash account spent from
 // both a Personal and a Family ledger while sharing one real-world balance).

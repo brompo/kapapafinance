@@ -38,7 +38,10 @@ export function CategoryDetail({
   const [prevValue, setPrevValue] = useState('')
   const [operator, setOperator] = useState('')
   const [note, setNote] = useState('')
-  const [date, setDate] = useState(todayISO())
+  // Flow (viewing a past period) can hand in an initialDate to pre-date a
+  // transaction opened from one of its rows; every other entry point (the
+  // Transactions category grid) leaves it unset and gets today, as before.
+  const [date, setDate] = useState(category.initialDate || todayISO())
   const [accountId, setAccountId] = useState(meta?.defaultAccountId || '')
   const [toAccountId, setToAccountId] = useState(meta?.defaultToAccountId || '')
   const [accountError, setAccountError] = useState(false)

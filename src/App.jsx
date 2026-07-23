@@ -14,7 +14,7 @@ import { LandingStage, PinStage, UnlockStage } from './stages/AuthStages'
 
 function VaultApp() {
   const { 
-    stage, tab, setTab, selectedCategory, showAddForm,
+    stage, tab, setTab, selectedCategory, setSelectedCategory, showAddForm,
     activeLedger, accounts, allAccounts, allAccountTxns, txns, clients,
     ledgers, focusAccountId, settings, setFocusAccountId,
     show, upsertAccount, deleteAccount, mergeAccounts, addAccountTxn, issueLoan,
@@ -28,6 +28,16 @@ function VaultApp() {
   // Flow tab is only visible for personal ledgers with the setting on — if the
   // user switches ledgers (or the setting) while on it, fall back to Transactions
   // rather than leaving the tab bar pointed at a screen that's no longer rendered.
+  // A category detail can stay open (with the nav visible) after saving a
+  // transaction, and — now that an open category keeps HomeScreen mounted
+  // regardless of `tab` (so Flow-triggered spends land back on Flow) — a bare
+  // setTab from the nav bar would get stuck on it. Close it first so every
+  // nav tap actually navigates.
+  const navigateTab = (next) => {
+    setSelectedCategory(null)
+    setTab(next)
+  }
+
   useEffect(() => {
     if (tab === 'flow' && !(activeLedger.type === 'personal' && settings.moneyPipelineEnabled)) {
       setTab('tx')
@@ -43,8 +53,8 @@ function VaultApp() {
   return (
     <div className="appContainer">
       <main className="mainContent">
-        {tab === 'tx' && <HomeScreen />}
-        {tab === 'flow' && activeLedger.type === 'personal' && settings.moneyPipelineEnabled && <FlowScreen />}
+        {(tab === 'tx' || selectedCategory) && <HomeScreen />}
+        {tab === 'flow' && !selectedCategory && activeLedger.type === 'personal' && settings.moneyPipelineEnabled && <FlowScreen />}
         {tab === 'insights' && <FinanceInsightsScreen />}
         {tab === 'accounts' && (
           <AccountsScreen
@@ -115,7 +125,7 @@ function VaultApp() {
       )}
 
       {!(selectedCategory && showAddForm) && (
-        <BottomNav tab={tab} setTab={setTab} variant="light" />
+        <BottomNav tab={tab} setTab={navigateTab} variant="light" />
       )}
       <GlobalToast />
     </div>

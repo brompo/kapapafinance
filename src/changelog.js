@@ -1,5 +1,14 @@
 export const CHANGELOG = [
     {
+        version: "3.1.0",
+        date: "2026-07-23",
+        changes: [
+            'Flow is now a spend/income entry point, not just a report: tap Upkeep to pick which Expense category the spend is for, tap a Lifestyle or Growth row to log against it directly, or tap the new "+ Add Income" button under the pie to log a Collection — each lands on the same entry screen Transactions uses, then returns you to Flow. The ✎ icon on Lifestyle/Growth rows still opens the target/%/opening-balance editor, now separate from the row tap.',
+            'For personal ledgers with Flow Pipeline on, Transactions no longer takes a bottom-nav slot — Flow is the default tab instead. Transactions still exists exactly as before (category grid, +Add, history, reimbursements) and is one tap away via a new "Transactions" row in Settings; from there the bottom nav stays live so you can jump straight to any other tab.',
+            'A transaction started from Flow now dates itself to whatever period Flow is viewing (this month by default, or the browsed-to month/year) instead of always defaulting to today.',
+        ]
+    },
+    {
         version: "3.0.0",
         date: "2026-07-19",
         changes: [

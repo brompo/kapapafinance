@@ -1,9 +1,32 @@
 import React, { useMemo, useState } from 'react'
 import { useAppContext } from '../context/AppContext'
-import { fmtTZS } from '../money'
+import { fmtTZS, todayISO } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth } from '../utils/ledger'
+
+// Theme bases mirror the category-card colors HomeScreen assigns per section
+// (Transactions tab), so a category opened from Flow gets the same header
+// color as it would opening the same category from Transactions.
+const THEME_BASE = { expense: 1, allocation: 2, collection: 4, growth: 4 }
+
+// A new transaction started from a Flow row defaults to the period Flow is
+// viewing, not necessarily today — browsing March's report and tapping
+// "spend" should log into March. Year view has no month to anchor to, so it
+// only carries the current-year/today link; a past year falls back to
+// December of that year, same clamped-day rule as month view.
+function defaultTxnDateForPeriod(viewGranularity, statPeriod) {
+  const today = new Date()
+  const clampedDay = (year, month) => Math.min(today.getDate(), new Date(year, month, 0).getDate())
+  if (viewGranularity === 'year') {
+    if (String(statPeriod) === String(today.getFullYear())) return todayISO()
+    const day = clampedDay(Number(statPeriod), 12)
+    return `${statPeriod}-12-${String(day).padStart(2, '0')}`
+  }
+  const [y, m] = statPeriod.split('-').map(Number)
+  const day = clampedDay(y, m)
+  return `${statPeriod}-${String(day).padStart(2, '0')}`
+}
 
 const UPKEEP_COLOR = '#fb923c'
 const LIFESTYLE_PALETTE = ['#a87dfb', '#38bdf8', '#f472b6', '#fbbf24', '#818cf8', '#fb7185']
@@ -83,13 +106,18 @@ function RingLegendItem({ color, label, percent }) {
   )
 }
 
-function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onClick }) {
+// onSpend (tap the row) opens transaction entry for this category; onEdit
+// (the separate ✎ button) opens the target/%/opening-balance modal. They're
+// deliberately different hit-targets on the same row rather than one click
+// doing both, since "log a spend" and "change my target" are different jobs
+// a person reaches for at different times.
+function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onSpend, onEdit }) {
   return (
     <div
-      onClick={onClick}
+      onClick={onSpend}
       style={{
         padding: '10px 12px', borderRadius: 16, background: `${color}0f`, border: `1px solid ${color}33`,
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, cursor: onClick ? 'pointer' : 'default'
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, cursor: onSpend ? 'pointer' : 'default'
       }}
     >
       <div style={{
@@ -108,7 +136,39 @@ function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onCli
         {note && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{note}</div>}
         {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagColor || '#94a3b8' }}>{tag}</div>}
       </div>
-      {onClick && <div style={{ fontSize: 13, color: '#94a3b8', marginLeft: 4, flexShrink: 0 }}>✎</div>}
+      {onEdit && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          style={{ fontSize: 13, color: '#94a3b8', marginLeft: 4, flexShrink: 0, background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}
+          aria-label={`Edit ${name}`}
+        >✎</button>
+      )}
+      {onSpend && !onEdit && <div style={{ fontSize: 15, color: '#94a3b8', marginLeft: 4, flexShrink: 0 }}>›</div>}
+    </div>
+  )
+}
+
+function CategoryPickList({ names, onPick }) {
+  if (names.length === 0) {
+    return <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet — add one from Transactions first.</div>
+  }
+  return (
+    <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+      {names.map(name => (
+        <button
+          key={name}
+          type="button"
+          onClick={() => onPick(name)}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left', padding: '12px 10px',
+            border: 'none', borderBottom: '1px solid #f1f5f9', background: 'none',
+            fontSize: 14, fontWeight: 600, color: '#1e293b', cursor: 'pointer'
+          }}
+        >
+          {name}
+        </button>
+      ))}
     </div>
   )
 }
@@ -124,19 +184,21 @@ function SectionDivider({ title, total, color }) {
   )
 }
 
-// Read-only budget report: for each category (Upkeep lump, Lifestyle buckets, Growth
-// pools), shows how much was Distributed this period and the running Balance
-// (Distributed minus real spend, carried over month to month). No transaction entry
-// happens here — Distribution happens in Accounts, Expenditure in Transactions.
+// Budget report + primary spend/income entry point for pipeline mode: for each
+// category (Upkeep lump, Lifestyle buckets, Growth pools) shows how much was
+// Distributed this period and the running Balance (Distributed minus real
+// spend, carried over month to month) — and tapping a row opens the same
+// transaction-entry screen Transactions uses (reached via Settings for this
+// mode), landing back here once you're done. Editing a target/%/opening
+// balance is a separate action (the ✎ button), not a transaction.
 export function FlowScreen() {
   const {
     formatMonthLabel,
-    activeLedger, setShowLedgerPicker, persistActiveLedger, show
+    activeLedger, setShowLedgerPicker, persistActiveLedger, show, setSelectedCategory
   } = useAppContext()
 
   // Budget/percent aren't transactions — they're just category settings — so
-  // editing them here (unlike adding a transaction) doesn't break Flow's
-  // read-only-report rule.
+  // editing them here doesn't go through the same flow as adding a transaction.
   const [editTarget, setEditTarget] = useState(null) // { metaType: 'allocation'|'growth', name, field: 'budget'|'percent' }
   const [editValue, setEditValue] = useState('')
   const [editOpeningBalance, setEditOpeningBalance] = useState('')
@@ -150,6 +212,29 @@ export function FlowScreen() {
   const [transferFrom, setTransferFrom] = useState('')
   const [transferTo, setTransferTo] = useState('')
   const [transferAmount, setTransferAmount] = useState('')
+
+  // Upkeep has no single category to spend against (it's every Expense
+  // category lumped together), and Collections has no rows on this screen at
+  // all — both need a quick "which category?" picker before landing on the
+  // real transaction-entry screen. Lifestyle/Growth rows skip this since they
+  // already map 1:1 to a category.
+  const [showUpkeepPicker, setShowUpkeepPicker] = useState(false)
+  const [showIncomePicker, setShowIncomePicker] = useState(false)
+
+  // Opens the same transaction-entry screen Transactions uses, pre-dated to
+  // whatever period Flow is currently viewing (see defaultTxnDateForPeriod)
+  // rather than always defaulting to today.
+  const openCategorySpend = (type, name) => {
+    const listKey = type === 'collection' ? 'income' : type
+    const list = activeLedger.categories?.[listKey] || []
+    const i = Math.max(0, list.indexOf(name))
+    setSelectedCategory({
+      type,
+      name,
+      theme: `theme-${(i % 6) + THEME_BASE[type]}`,
+      initialDate: defaultTxnDateForPeriod(viewGranularity, statPeriod)
+    })
+  }
 
   const openEdit = (metaType, name, field, currentValue) => {
     setEditTarget({ metaType, name, field })
@@ -354,6 +439,10 @@ export function FlowScreen() {
         <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 10px' }}>
+        <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>
+      </div>
+
       {incomeInfo.isLegacyFallback && (
         <div style={{ padding: '4px 16px 0', fontSize: 11, color: '#8b90b2' }}>
           No Collections recorded yet this {viewGranularity} — Income includes legacy entries shown as already-clean.
@@ -372,6 +461,7 @@ export function FlowScreen() {
           amount={envelopeSummary.upkeep.distributedThisPeriod}
           tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
           color={UPKEEP_COLOR}
+          onSpend={() => setShowUpkeepPicker(true)}
         />
 
         <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} />
@@ -384,7 +474,8 @@ export function FlowScreen() {
             amount={b.distributedThisPeriod}
             tag={`Balance: ${fmtTZS(b.balance)}`}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
-            onClick={() => openEdit('allocation', b.name, 'budget', b.budget)}
+            onSpend={() => openCategorySpend('allocation', b.name)}
+            onEdit={() => openEdit('allocation', b.name, 'budget', b.budget)}
           />
         ))}
         {envelopeSummary.lifestyle.length === 0 && (
@@ -401,7 +492,8 @@ export function FlowScreen() {
             amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
             tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
             color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
-            onClick={() => openEdit('growth', p.name, 'percent', p.percent)}
+            onSpend={() => openCategorySpend('growth', p.name)}
+            onEdit={() => openEdit('growth', p.name, 'percent', p.percent)}
           />
         ))}
         {envelopeSummary.growth.length === 0 && (
@@ -498,6 +590,42 @@ export function FlowScreen() {
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowTransferModal(false)}>Cancel</button>
               <button className="btn primary" type="button" onClick={saveTransfer}>Move</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpkeepPicker && (
+        <div className="modalBackdrop" onClick={() => setShowUpkeepPicker(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Spend from Upkeep</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>
+              Upkeep covers every Expense category — pick which one this spend is for.
+            </div>
+            <CategoryPickList
+              names={activeLedger.categories?.expense || []}
+              onPick={name => { setShowUpkeepPicker(false); openCategorySpend('expense', name) }}
+            />
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowUpkeepPicker(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showIncomePicker && (
+        <div className="modalBackdrop" onClick={() => setShowIncomePicker(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Add Income</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>
+              Pick which Collection this income belongs to.
+            </div>
+            <CategoryPickList
+              names={activeLedger.categories?.income || []}
+              onPick={name => { setShowIncomePicker(false); openCategorySpend('collection', name) }}
+            />
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowIncomePicker(false)}>Cancel</button>
             </div>
           </div>
         </div>

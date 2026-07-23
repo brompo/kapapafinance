@@ -8,9 +8,10 @@ import ChangelogScreen from './ChangelogScreen'
 import pkg from '../../package.json'
 
 export function SettingsScreen() {
-  const { settings, updateSettings, show } = useAppContext()
+  const { settings, updateSettings, show, activeLedger, setTab } = useAppContext()
   const version = pkg.version
-  
+  const pipelineMode = activeLedger?.type === 'personal' && !!settings.moneyPipelineEnabled
+
   const [activeSub, setActiveSub] = useState(null)
 
   return (
@@ -42,6 +43,16 @@ export function SettingsScreen() {
             </div>
             <div className="stgChevron">›</div>
           </button>
+          {pipelineMode && (
+            <button className="stgRow" onClick={() => setTab('tx')}>
+              <div className="stgRowIcon">🧾</div>
+              <div className="stgRowBody">
+                <div className="stgRowText">Transactions</div>
+                <div className="stgRowSub">Category grid, history, reimbursements</div>
+              </div>
+              <div className="stgChevron">›</div>
+            </button>
+          )}
         </div>
       </div>
 

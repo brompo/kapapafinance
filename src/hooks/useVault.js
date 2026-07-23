@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { loadVault, loadVaultPlain, saveVault, saveVaultPlain, hasPin, setNewPin } from '../cryptoVault.js';
-import { PIN_FLOW_KEY, SEED_KEY, DEFAULT_TAB } from '../constants.js';
-import { getAccountLedgerIds } from '../utils/ledger.js';
+import { PIN_FLOW_KEY, SEED_KEY } from '../constants.js';
+import { getAccountLedgerIds, resolveDefaultTab } from '../utils/ledger.js';
 
 // We need to pass createLedger and normalizeVault because they are defined in App.jsx currently
 // Typically these would be extracted into utils/ledger.js as well.
@@ -62,7 +62,7 @@ export function useVault({
       setVaultState(nextVault)
       localStorage.setItem(PIN_FLOW_KEY, 'false')
       setStage('app')
-      setTab(nextVault.settings?.defaultAppTab || DEFAULT_TAB)
+      setTab(resolveDefaultTab(nextVault))
       show('PIN lock disabled.')
     } catch (e) {
       show('Could not disable PIN lock.')
@@ -85,7 +85,7 @@ export function useVault({
       setVaultState(data)
 
       setStage('app')
-      setTab(data.settings?.defaultAppTab || DEFAULT_TAB)
+      setTab(resolveDefaultTab(data))
       show('PIN set. Vault created.')
     } catch (e) {
       show(e.message || 'Failed to set PIN.')
@@ -104,7 +104,7 @@ export function useVault({
       setVaultState(data)
 
       setStage('app')
-      setTab(data.settings?.defaultAppTab || DEFAULT_TAB)
+      setTab(resolveDefaultTab(data))
       show('Unlocked.')
     } catch (e) {
       show('Wrong PIN or vault corrupted.')

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react'
 import {
   uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
-  normalizeAccountsWithGroups, getAccountLedgerIds, accountVisibleInLedger
+  normalizeAccountsWithGroups, getAccountLedgerIds, accountVisibleInLedger, resolveDefaultTab
 } from '../utils/ledger.js'
 import { collectionStatus } from '../utils/pipeline.js'
 import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, fmtTZS } from '../money.js'
@@ -71,7 +71,7 @@ export function AppProvider({ children }) {
           const v = normalizeVault(plain)
           setVaultState(v)
           setStage('app')
-          setTab(v.settings?.defaultAppTab || DEFAULT_TAB)
+          setTab(resolveDefaultTab(v))
           return
         }
 

@@ -170,9 +170,8 @@ export function CategoryDetail({
   const groupedTxns = useMemo(() => {
     const map = new Map()
     for (const t of recentTxns) {
-      const m = t.date.slice(0, 7)
-      if (!map.has(m)) map.set(m, [])
-      map.get(m).push(t)
+      if (!map.has(t.date)) map.set(t.date, [])
+      map.get(t.date).push(t)
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [recentTxns])
@@ -614,7 +613,7 @@ export function CategoryDetail({
               This pool funds Upkeep — add transactions there instead.
             </div>
           ) : (
-            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.type === 'income' ? 'Income' : category.type === 'collection' ? 'Collection' : category.type === 'allocation' ? 'Lifestyle' : category.type === 'growth' ? 'Growth' : 'Expense'}</button>
+            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.name}</button>
           )}
 
           <div className="modeSegmented" style={{
@@ -649,17 +648,22 @@ export function CategoryDetail({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-            {groupedTxns.map(([m, items]) => {
-              const monthName = new Date(m + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })
+            {groupedTxns.map(([d, items]) => {
+              const dayDate = new Date(d)
               const totalOut = items.reduce((s, t) => s + (!(t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
               const totalIn = items.reduce((s, t) => s + ((t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
               return (
-                <div key={m} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div key={d} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '8px 4px', borderBottom: '1px solid #f8fafc'
                   }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#4b5563' }}>{monthName}</div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{dayDate.getFullYear()}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#4b5563' }}>
+                        {dayDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </div>
+                    </div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: totalOut > 0 ? '#ef4444' : '#10b981' }}>
                       {totalOut > 0 ? `OUT ${fmtCompact(totalOut)}` : `IN ${fmtCompact(totalIn)}`}
                     </div>
@@ -687,8 +691,7 @@ export function CategoryDetail({
                       <div className="catHistoryInfo">
                         <div className="catHistoryTitleRow" style={{ fontSize: 13, fontWeight: 700 }}>{t.note || category.name}</div>
                         <div className="catHistoryMeta" style={{ fontSize: 11 }}>
-                          {new Date(t.date).getDate()} {new Date(t.date).toLocaleString('default', { month: 'short' })}
-                          {t.accountId && ` • ${accounts.find(a => a.id === t.accountId)?.name}`}
+                          {t.accountId ? accounts.find(a => a.id === t.accountId)?.name : 'Unallocated'}
                         </div>
                         {t.reimbursedBy && t.reimbursedBy.length > 0 && (
                           <div className="reimbursedBadge" style={{ fontSize: 9, marginTop: 4 }}>

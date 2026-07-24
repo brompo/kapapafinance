@@ -112,7 +112,7 @@ function RingLegendItem({ color, label, percent }) {
 // deliberately different hit-targets on the same row rather than one click
 // doing both, since "log a spend" and "change my target" are different jobs
 // a person reaches for at different times.
-function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onSpend, onEdit }) {
+function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, color, onSpend, onEdit }) {
   return (
     <div
       onClick={onSpend}
@@ -135,6 +135,7 @@ function FlowRow({ name, sub, expense, note, amount, tag, tagColor, color, onSpe
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
         {note && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{note}</div>}
+        {preTag && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{preTag}</div>}
         {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagColor || '#94a3b8' }}>{tag}</div>}
       </div>
       {onEdit && (
@@ -381,6 +382,9 @@ export function FlowScreen() {
     + envelopeSummary.growthUnallocated.broughtForward
   const balanceExpense = envelopeSummary.lifestyle.reduce((s, b) => s + b.spentThisPeriod, 0)
     + nonUpkeepGrowth.reduce((s, p) => s + p.spentThisPeriod, 0)
+  // What was left over carrying in, net of this period's spend, before this
+  // period's Distribution is added on top to arrive at the new Balance.
+  const balanceBeforeDistribution = balanceBF - balanceExpense
   // lifestyleDistributed/growthDistributed already exclude the fundsUpkeep
   // pool's share (its cascade share is redirected to Upkeep, never counted as
   // its own Distribution — see cascadeForMonth in envelopes.js), so this is
@@ -535,6 +539,7 @@ export function FlowScreen() {
           sub={`B/F: ${fmtTZS(balanceBF)}`}
           expense={balanceExpense}
           amount={balanceDistribution}
+          preTag={`Before Distribution: ${fmtTZS(balanceBeforeDistribution)}`}
           tag={`Balance: ${fmtTZS(balanceTotal)}`}
           color={BALANCE_COLOR}
         />

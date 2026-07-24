@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "3.1.3",
+        date: "2026-07-24",
+        changes: [
+            'Flow\'s Balance summary now shows a "Before Distribution" line (B/F minus Expense) in green, ahead of the final Balance, so it\'s clear how much this period\'s Distribution actually added.',
+        ]
+    },
+    {
         version: "3.1.2",
         date: "2026-07-24",
         changes: [

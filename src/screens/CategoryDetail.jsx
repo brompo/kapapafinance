@@ -100,6 +100,33 @@ export function CategoryDetail({
   // Add-transaction keypad is forced off regardless of the showAddForm prop
   // (which AppContext's handleSelectCategory defaults to true on every tap).
   const isSilentGrowth = category.type === 'growth' && !!meta?.fundsUpkeep
+
+  // Plans: a lightweight "how much will this cost me" checklist scoped to this
+  // category, modeled on the Accounts screen's Goals & Targets planner (name +
+  // amount, no linkage to real transactions). Pipeline-only, same gate as the
+  // rest of Flow's category-level surface.
+  const pipelineMode = activeLedger?.type === 'personal' && !!settings.moneyPipelineEnabled
+  const plans = Array.isArray(meta?.plans) ? meta.plans : []
+  const totalPlanned = plans.reduce((s, p) => s + Number(p.amount || 0), 0)
+  const [showAddPlanModal, setShowAddPlanModal] = useState(false)
+  const [newPlanName, setNewPlanName] = useState('')
+  const [newPlanAmount, setNewPlanAmount] = useState('')
+
+  const handleAddPlan = () => {
+    const amt = Number(String(newPlanAmount).replace(/,/g, '')) || 0
+    const name = newPlanName.trim()
+    if (!name || amt <= 0) return show('Enter a valid name and amount.')
+    const nextPlans = [...plans, { id: uid(), name, amount: amt }]
+    onUpdateMeta({ ...meta, plans: nextPlans })
+    setNewPlanName('')
+    setNewPlanAmount('')
+    setShowAddPlanModal(false)
+    show('Plan added.')
+  }
+
+  const handleDeletePlan = (planId) => {
+    onUpdateMeta({ ...meta, plans: plans.filter(p => p.id !== planId) })
+  }
   const effectiveShowAddForm = showAddForm && !isSilentGrowth
 
   const [showEditModal, setShowEditModal] = useState(false)
@@ -640,8 +667,59 @@ export function CategoryDetail({
                 boxShadow: txnTab === 'future' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none'
               }}
             >Future</button>
+            {pipelineMode && (
+              <button
+                onClick={() => setTxnTab('plans')}
+                style={{
+                  flex: 1, padding: '8px', borderRadius: 10,
+                  background: txnTab === 'plans' ? '#fff' : 'transparent',
+                  border: 'none', fontWeight: 700, fontSize: 12,
+                  color: txnTab === 'plans' ? '#5a5fb0' : '#64748b',
+                  boxShadow: txnTab === 'plans' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none'
+                }}
+              >Plans</button>
+            )}
           </div>
 
+          {txnTab === 'plans' ? (
+            <div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '14px 16px', borderRadius: 16, background: '#eef2ff', marginBottom: 15
+              }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: 0.3 }}>TOTAL PLANNED</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b' }}>{fmtTZS(totalPlanned)}</div>
+                </div>
+                <button className="btn primary" type="button" style={{ height: 36, fontSize: 12, padding: '0 14px' }} onClick={() => setShowAddPlanModal(true)}>+ Add Plan</button>
+              </div>
+
+              {plans.length === 0 ? (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8' }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>🎯</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#64748b' }}>No planned costs yet for {category.name}.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {plans.map(p => (
+                    <div key={p.id} style={{
+                      padding: '10px 12px', borderRadius: 16, background: '#fff', border: '0.5px solid #eef2ff',
+                      display: 'flex', alignItems: 'center', gap: 12
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 16, background: '#fff', border: '1px solid #f1f5f9',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0
+                      }}>🎯</div>
+                      <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{p.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{fmtTZS(p.amount)}</div>
+                      <button type="button" onClick={() => handleDeletePlan(p.id)} style={{ marginLeft: 4, opacity: 0.4, background: 'none', border: 'none', fontSize: 16 }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+          <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{txnTab === 'activity' ? 'Recent' : 'Upcoming'} {category.name}</span>
             <button onClick={() => setIsSelectMode(!isSelectMode)} style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>{isSelectMode ? 'Cancel' : 'Select'}</button>
@@ -713,6 +791,8 @@ export function CategoryDetail({
             <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
               No {txnTab} transactions found.
             </div>
+          )}
+          </>
           )}
         </div>
       )}
@@ -824,6 +904,39 @@ export function CategoryDetail({
                   Save Reimbursement
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddPlanModal && (
+        <div className="modalBackdrop" onClick={() => setShowAddPlanModal(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Add Plan</div>
+            <div className="field">
+              <label>Plan Name</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Toilets (Tiles and Fundi's Costs)"
+                value={newPlanName}
+                onChange={e => setNewPlanName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Estimated Cost (TZS)</label>
+              <input
+                inputMode="decimal"
+                className="input"
+                placeholder="e.g. 220000"
+                value={newPlanAmount}
+                onChange={e => setNewPlanAmount(e.target.value)}
+              />
+            </div>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowAddPlanModal(false)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={handleAddPlan}>Add to Plan</button>
             </div>
           </div>
         </div>

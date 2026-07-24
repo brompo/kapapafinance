@@ -31,6 +31,7 @@ function defaultTxnDateForPeriod(viewGranularity, statPeriod) {
 const UPKEEP_COLOR = '#fb923c'
 const LIFESTYLE_PALETTE = ['#a87dfb', '#38bdf8', '#f472b6', '#fbbf24', '#818cf8', '#fb7185']
 const GROWTH_PALETTE = ['#2bb06a', '#22c55e', '#34d399', '#10b981', '#4ade80', '#059669']
+const BALANCE_COLOR = '#0ea5e9'
 
 // Pie split into one solid wedge per segment (Upkeep / Lifestyle / Growth), sized by
 // each segment's share of this period's total Distributed amount. Each wedge carries
@@ -370,6 +371,25 @@ export function FlowScreen() {
   const upkeepDistributedTotal = envelopeSummary.upkeep.distributedThisPeriod + envelopeSummary.upkeep.fundedByGrowthThisPeriod
   const totalDistributed = upkeepDistributedTotal + lifestyleDistributed + growthDistributed
 
+  // The Balance summary rolls up every bucket except Upkeep itself. A Growth
+  // pool flagged fundsUpkeep (e.g. "Up Buffer") is excluded here too — its
+  // share never accumulates its own Balance (see envelopes.js), it's already
+  // folded into Upkeep's Balance above, so counting it here would double it.
+  const nonUpkeepGrowth = envelopeSummary.growth.filter(p => !p.fundsUpkeep)
+  const balanceBF = envelopeSummary.lifestyle.reduce((s, b) => s + b.broughtForward, 0)
+    + nonUpkeepGrowth.reduce((s, p) => s + p.broughtForward, 0)
+    + envelopeSummary.growthUnallocated.broughtForward
+  const balanceExpense = envelopeSummary.lifestyle.reduce((s, b) => s + b.spentThisPeriod, 0)
+    + nonUpkeepGrowth.reduce((s, p) => s + p.spentThisPeriod, 0)
+  // lifestyleDistributed/growthDistributed already exclude the fundsUpkeep
+  // pool's share (its cascade share is redirected to Upkeep, never counted as
+  // its own Distribution — see cascadeForMonth in envelopes.js), so this is
+  // already "Distribution from Lifestyle and Growth except what's going to Upkeep."
+  const balanceDistribution = lifestyleDistributed + growthDistributed
+  const balanceTotal = envelopeSummary.lifestyle.reduce((s, b) => s + b.balance, 0)
+    + nonUpkeepGrowth.reduce((s, p) => s + p.balance, 0)
+    + envelopeSummary.growthUnallocated.balance
+
   const ringSegments = [
     { name: 'Upkeep', value: upkeepDistributedTotal, color: UPKEEP_COLOR },
     { name: 'Lifestyle', value: lifestyleDistributed, color: LIFESTYLE_PALETTE[0] },
@@ -491,7 +511,7 @@ export function FlowScreen() {
             expense={p.spentThisPeriod}
             amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
             tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
-            color={GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
+            color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
             onSpend={() => openCategorySpend('growth', p.name)}
             onEdit={() => openEdit('growth', p.name, 'percent', p.percent)}
           />
@@ -508,6 +528,16 @@ export function FlowScreen() {
             color="#94a3b8"
           />
         )}
+
+        <SectionDivider title="BALANCE" total={balanceDistribution} color={BALANCE_COLOR} />
+        <FlowRow
+          name="Lifestyle + Growth"
+          sub={`B/F: ${fmtTZS(balanceBF)}`}
+          expense={balanceExpense}
+          amount={balanceDistribution}
+          tag={`Balance: ${fmtTZS(balanceTotal)}`}
+          color={BALANCE_COLOR}
+        />
 
         <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
           <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>

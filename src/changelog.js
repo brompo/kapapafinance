@@ -1,5 +1,21 @@
 export const CHANGELOG = [
     {
+        version: "3.1.2",
+        date: "2026-07-24",
+        changes: [
+            'Added a "Balance" summary to the bottom of Flow — rolls up B/F, Expense, Distribution, and Balance across every Lifestyle bucket and Growth pool (excluding Upkeep, and excluding a "Funds Upkeep" pool since its share already lives in Upkeep\'s own Balance).',
+            'The Growth pool flagged "Funds Upkeep" (e.g. "Up Buffer") now renders grayed out in Flow, since it\'s a silent pass-through into Upkeep rather than its own spendable bucket.',
+        ]
+    },
+    {
+        version: "3.1.1",
+        date: "2026-07-23",
+        changes: [
+            'The "+ Add" button on a category screen now names the actual category ("+ Add Emergency Fund", "+ Add Food") instead of its generic type ("+ Add Lifestyle", "+ Add Expense").',
+            'A category\'s transaction history now groups by day (e.g. "Tue 21 Jul") with a per-day OUT/IN total, matching the Accounts screen\'s history layout, instead of one lump group per month.',
+        ]
+    },
+    {
         version: "3.1.0",
         date: "2026-07-23",
         changes: [

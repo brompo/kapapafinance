@@ -539,8 +539,8 @@ export function FlowScreen() {
           sub={`B/F: ${fmtTZS(balanceBF)}`}
           expense={balanceExpense}
           amount={balanceDistribution}
-          preTag={`Before Distribution: ${fmtTZS(balanceBeforeDistribution)}`}
-          tag={`Balance: ${fmtTZS(balanceTotal)}`}
+          preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
+          tag={`After Dist: ${fmtTZS(balanceTotal)}`}
           color={BALANCE_COLOR}
         />
 

@@ -3522,15 +3522,14 @@ label {
 .ledgerCheckboxList {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 6px;
   width: 100%;
 }
 
 .ledgerCheckboxRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px 1fr;
   align-items: center;
-  justify-content: flex-start;
   gap: 8px;
   font-size: 0.85rem;
   width: 100%;
@@ -3538,8 +3537,10 @@ label {
 }
 
 .ledgerCheckboxRow input[type="checkbox"] {
-  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
   margin: 0;
+  justify-self: start;
 }
 
 .sharedLedgerBadge {

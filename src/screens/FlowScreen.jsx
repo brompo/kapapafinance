@@ -483,9 +483,23 @@ export function FlowScreen() {
             ? `${fundsUpkeepPoolName || 'Growth'}: ${fmtTZS(envelopeSummary.upkeep.fundedByGrowthThisPeriod)}`
             : null}
           amount={envelopeSummary.upkeep.distributedThisPeriod}
+          preTag={envelopeSummary.upkeep.spentThisPeriod > 0
+            ? `Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`
+            : null}
           tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
           color={UPKEEP_COLOR}
           onSpend={() => setShowUpkeepPicker(true)}
+        />
+
+        <SectionDivider title="BALANCE" total={balanceDistribution} color={BALANCE_COLOR} />
+        <FlowRow
+          name="Lifestyle + Growth"
+          sub={`B/F: ${fmtTZS(balanceBF)}`}
+          expense={balanceExpense}
+          amount={balanceDistribution}
+          preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
+          tag={`After Dist: ${fmtTZS(balanceTotal)}`}
+          color={BALANCE_COLOR}
         />
 
         <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} />
@@ -496,6 +510,7 @@ export function FlowScreen() {
             sub={`B/F: ${fmtTZS(b.broughtForward)}`}
             expense={b.spentThisPeriod}
             amount={b.distributedThisPeriod}
+            preTag={b.spentThisPeriod > 0 ? `Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}` : null}
             tag={`Balance: ${fmtTZS(b.balance)}`}
             color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
             onSpend={() => openCategorySpend('allocation', b.name)}
@@ -514,6 +529,7 @@ export function FlowScreen() {
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
             expense={p.spentThisPeriod}
             amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
+            preTag={(!p.fundsUpkeep && p.spentThisPeriod > 0) ? `Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}` : null}
             tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
             color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
             onSpend={() => openCategorySpend('growth', p.name)}
@@ -532,17 +548,6 @@ export function FlowScreen() {
             color="#94a3b8"
           />
         )}
-
-        <SectionDivider title="BALANCE" total={balanceDistribution} color={BALANCE_COLOR} />
-        <FlowRow
-          name="Lifestyle + Growth"
-          sub={`B/F: ${fmtTZS(balanceBF)}`}
-          expense={balanceExpense}
-          amount={balanceDistribution}
-          preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
-          tag={`After Dist: ${fmtTZS(balanceTotal)}`}
-          color={BALANCE_COLOR}
-        />
 
         <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
           <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>

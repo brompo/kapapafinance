@@ -151,26 +151,39 @@ function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, colo
   )
 }
 
-function CategoryPickList({ names, onPick, onAddNew }) {
+// `info(name)` is optional — when given, each row shows spent-vs-budget under
+// the category name (used for Upkeep, where that's the number that matters
+// before you tap in; Income/Collections have no budget concept, so they skip it).
+function CategoryPickList({ names, onPick, onAddNew, info }) {
   return (
     <div style={{ maxHeight: 280, overflowY: 'auto' }}>
       {names.length === 0 && (
         <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet.</div>
       )}
-      {names.map(name => (
-        <button
-          key={name}
-          type="button"
-          onClick={() => onPick(name)}
-          style={{
-            display: 'block', width: '100%', textAlign: 'left', padding: '12px 10px',
-            border: 'none', borderBottom: '1px solid #f1f5f9', background: 'none',
-            fontSize: 14, fontWeight: 600, color: '#1e293b', cursor: 'pointer'
-          }}
-        >
-          {name}
-        </button>
-      ))}
+      {names.map(name => {
+        const i = info?.(name)
+        return (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onPick(name)}
+            style={{
+              display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between',
+              textAlign: 'left', padding: '10px 10px',
+              border: 'none', borderBottom: '1px solid #f1f5f9', background: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>{name}</span>
+            {i && (
+              <span style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: i.spent > i.budget ? '#ef4444' : '#1e293b' }}>{fmtTZS(i.spent)}</div>
+                <div style={{ fontSize: 10, color: '#94a3b8' }}>of {fmtTZS(i.budget)}</div>
+              </span>
+            )}
+          </button>
+        )
+      })}
       {onAddNew && (
         <button
           type="button"
@@ -357,6 +370,24 @@ export function FlowScreen() {
     () => computeEnvelopeSummary({ txns, categories, categoryMeta }, statPeriod),
     [txns, categories, categoryMeta, statPeriod]
   )
+
+  // Per-category spend this period, for the "Spend from Upkeep" picker — Upkeep
+  // itself is a lump sum of every Expense category, so seeing each one's own
+  // spend-vs-budget here is what tells you which is actually eating the total.
+  const expenseSpentTotals = useMemo(() => {
+    const map = new Map()
+    for (const t of periodTxns) {
+      if (t.type !== 'expense') continue
+      const key = t.category || 'Other'
+      const reimbursed = (t.reimbursedBy || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+      map.set(key, (map.get(key) || 0) + Number(t.amount || 0) - reimbursed)
+    }
+    return map
+  }, [periodTxns])
+  const expenseCategoryInfo = (name) => ({
+    spent: expenseSpentTotals.get(name) || 0,
+    budget: Number(categoryMeta.expense?.[name]?.budget || 0)
+  })
 
   const transferBuckets = useMemo(() => [
     ...envelopeSummary.lifestyle.map(b => ({ type: 'allocation', name: b.name, balance: b.balance })),
@@ -688,6 +719,7 @@ export function FlowScreen() {
               names={categories?.expense || []}
               onPick={name => { setShowUpkeepPicker(false); openCategorySpend('expense', name) }}
               onAddNew={() => addCategory('expense')}
+              info={expenseCategoryInfo}
             />
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowUpkeepPicker(false)}>Cancel</button>

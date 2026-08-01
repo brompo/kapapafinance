@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.0.3",
+        date: "2026-08-01",
+        changes: [
+            'The "Spend from Upkeep" picker now shows each Expense category\'s spend against its Monthly Target right on the row (red if over), instead of just a bare name list.',
+            'Tightened the spacing between "+ Add Income" and the Upkeep section in Flow/Kapapa.',
+        ]
+    },
+    {
         version: "4.0.2",
         date: "2026-08-01",
         changes: [

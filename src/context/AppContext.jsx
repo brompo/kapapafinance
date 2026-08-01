@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react'
 import {
-  uid, createLedger, normalizeLedger, normalizeVault, isVaultEmpty,
-  normalizeAccountsWithGroups, getAccountLedgerIds, accountVisibleInLedger, resolveDefaultTab
+  uid, normalizeVault, isVaultEmpty, BOOK_IDS, resolveDefaultTab
 } from '../utils/ledger.js'
 import { collectionStatus } from '../utils/pipeline.js'
 import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, fmtTZS } from '../money.js'
@@ -45,15 +44,11 @@ export function AppProvider({ children }) {
     setTab,
     show,
     setSelectedCategory: handleSelectCategory,
-    setFocusAccountId,
     isVaultEmpty,
     normalizeVault,
-    createLedger,
     vault,
     setVaultState
   })
-
-
 
   // Initialization
   useEffect(() => {
@@ -90,22 +85,12 @@ export function AppProvider({ children }) {
     handleUnlock,
     handlePinToggle,
     persist,
-    persistActiveLedger,
-    persistLedgerAndAccounts,
+    persistBook: persistBookRaw,
+    persistBookAndAccounts: persistBookAndAccountsRaw,
     updateSettings,
-    handleAddPersonalLedger,
-    handleAddBusinessLedger,
-    handleSaveNewLedger,
-    handleDeleteLedger,
-    handleSelectLedger,
-    handleSwitchLedgerToAccounts,
-    activeLedger,
     allAccounts,
     allAccountTxns,
-    pin, setPin, pin2, setPin2,
-    showLedgerPicker, setShowLedgerPicker,
-    showAddLedgerModal, setShowAddLedgerModal,
-    addLedgerName, setAddLedgerName
+    pin, setPin, pin2, setPin2
   } = vaultControls
 
   const cloudGoogleControls = useGoogleDrive({
@@ -158,43 +143,51 @@ export function AppProvider({ children }) {
     }
   }
 
-  // Derived data
-  const accounts = useMemo(() => {
-    if (!activeLedger?.id) return []
-    return allAccounts.filter(a => {
-      // Show if account belongs to this ledger OR has a sub-account in this ledger
-      const isMain = accountVisibleInLedger(a, activeLedger.id)
-      const hasSub = a.subAccounts?.some(s => s.ledgerId === activeLedger.id)
-      return isMain || hasSub
-    })
-  }, [allAccounts, activeLedger?.id])
+  // Which book (transaction / flow / kapapa) the current tab operates on.
+  // Transaction is the default/fallback for every tab that isn't Flow or
+  // Kapapa themselves (Accounts, Insights, Settings, etc. all read/write
+  // Transaction's data when they touch categories/txns at all).
+  const currentBookId = tab === 'flow' ? 'flow' : tab === 'kapapa' ? 'kapapa' : 'transaction'
+  const book = vault[currentBookId] || vault.transaction
 
-  const accountTxns = useMemo(() => {
-    if (!activeLedger?.id) return []
-    return allAccountTxns.filter(t => {
-      const acct = allAccounts.find(a => a.id === t.accountId)
-      if (!acct) return false
-      const isMain = accountVisibleInLedger(acct, activeLedger.id)
-      const hasSub = acct.subAccounts?.some(s => s.ledgerId === activeLedger.id)
-      return isMain || hasSub
+  // Convenience wrappers so screens can persist "the book I'm looking at"
+  // without needing to know its id — mirrors the old persistActiveLedger API.
+  // Callers may pass either a full book object or just the fields they're
+  // changing; either way it's merged onto the current book, so a partial
+  // update (e.g. just `categories`) never accidentally drops `txns`.
+  function persistBook(bookUpdate, nextClients) {
+    return persistBookRaw(currentBookId, { ...book, ...bookUpdate }, nextClients)
+  }
+  function persistBookAndAccounts({ nextBook, nextAccounts, nextAccountTxns, nextClients }) {
+    return persistBookAndAccountsRaw({
+      bookId: currentBookId,
+      nextBook: nextBook ? { ...book, ...nextBook } : undefined,
+      nextAccounts,
+      nextAccountTxns,
+      nextClients
     })
-  }, [allAccountTxns, allAccounts, activeLedger?.id])
+  }
 
-  const txns = activeLedger?.txns || []
+  // Derived data — accounts are unscoped now (visible/spendable from every book).
+  const accounts = allAccounts
+  const accountTxns = allAccountTxns
+
+  const txns = book?.txns || []
   const filteredTxns = useMemo(() =>
     txns.filter(t => t.date && t.date.startsWith(month)),
     [txns, month]
   )
 
-  const categories = activeLedger?.categories || {}
-  const categoryMeta = activeLedger?.categoryMeta || {}
+  const categories = book?.categories || {}
+  const categoryMeta = book?.categoryMeta || {}
   const expenseCats = categories.expense || []
   const incomeCats = categories.income || []
+  const groups = vault.groups || []
 
   // KPIs
   const kpis = useMemo(() => {
     let inc = 0, exp = 0
-    if (!activeLedger) return { inc: 0, exp: 0, balance: 0 }
+    if (!book) return { inc: 0, exp: 0, balance: 0 }
 
     for (const t of filteredTxns) {
       if (t.type === 'income' && !t.reimbursementOf) inc += Number(t.amount || 0)
@@ -204,9 +197,9 @@ export function AppProvider({ children }) {
         exp += Number(t.amount || 0) - reimbursed
       }
     }
-    // Add realized gains to income KPI (use accountTxns scoped to this ledger, gains only)
+    // Add realized gains to income KPI (use accountTxns, gains only)
     const assets = accounts.filter(a => {
-      const g = activeLedger.groups?.find(g => g.id === a.groupId);
+      const g = groups.find(g => g.id === a.groupId);
       return g && g.type === 'asset';
     });
     for (const acc of assets) {
@@ -237,7 +230,7 @@ export function AppProvider({ children }) {
     }, 0)
 
     return { inc, exp, balance: bal, monthlyBalance, monthlyAlloc }
-  }, [filteredTxns, accounts, allAccountTxns, activeLedger, month])
+  }, [filteredTxns, accounts, allAccountTxns, book, groups, month])
 
   function shiftMonth(delta) {
     const d = new Date(month + '-01')
@@ -407,7 +400,7 @@ export function AppProvider({ children }) {
 
     const nextClients = pendingClient ? [...(vault.clients || []), pendingClient] : undefined;
 
-    let nextMetaData = activeLedger.categoryMeta || {};
+    let nextMetaData = book.categoryMeta || {};
     if (updateDefaultAccount && (accountId || toAccountId)) {
       nextMetaData = {
         ...nextMetaData,
@@ -422,8 +415,9 @@ export function AppProvider({ children }) {
       };
     }
 
-    persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: [...newTxns.reverse(), ...txns], categoryMeta: nextMetaData },
+    persistBookAndAccounts({
+      bookId: currentBookId,
+      nextBook: { ...book, txns: [...newTxns.reverse(), ...txns], categoryMeta: nextMetaData },
       nextAccounts,
       nextAccountTxns,
       nextClients
@@ -518,8 +512,9 @@ export function AppProvider({ children }) {
       }
     })
 
-    persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: nextTxns },
+    persistBookAndAccounts({
+      bookId: currentBookId,
+      nextBook: { ...book, txns: nextTxns },
       nextAccounts,
       nextAccountTxns: [...txnEntries, ...otherTxnEntries, ...nonTxnEntries]
     })
@@ -567,8 +562,9 @@ export function AppProvider({ children }) {
 
     const nextTxns = txns.filter(x => x.id !== id)
 
-    persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: nextTxns },
+    persistBookAndAccounts({
+      bookId: currentBookId,
+      nextBook: { ...book, txns: nextTxns },
       nextAccounts,
       nextAccountTxns
     })
@@ -622,8 +618,9 @@ export function AppProvider({ children }) {
     }
     const nextAccountTxns = [entry, ...allAccountTxns]
 
-    persistLedgerAndAccounts({
-      nextLedger: { ...activeLedger, txns: nextTxns },
+    persistBookAndAccounts({
+      bookId: currentBookId,
+      nextBook: { ...book, txns: nextTxns },
       nextAccounts,
       nextAccountTxns
     })
@@ -636,7 +633,7 @@ export function AppProvider({ children }) {
       ? allAccounts.map(a => a.id === acc.id ? acc : a)
       : [...allAccounts, acc]
 
-    persistLedgerAndAccounts({ nextAccounts })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts })
     show(exists ? 'Account updated.' : 'Account created.')
   }
 
@@ -644,15 +641,14 @@ export function AppProvider({ children }) {
     if (!window.confirm('Are you sure? All transactions for this account will be removed.')) return
     const nextAccounts = allAccounts.filter(a => a.id !== accountId)
     const nextAccountTxns = allAccountTxns.filter(t => t.accountId !== accountId && t.relatedAccountId !== accountId)
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns })
     show('Account deleted.')
   }
 
-  // Folds a duplicate account (e.g. "Cash" that used to live in a second ledger)
-  // into another one: their balances combine onto `intoAccountId`, the ledgers
-  // that could see either one can now see the survivor, and `fromAccountId` is
-  // archived (not deleted) rather than merging its transaction history, so both
-  // accounts keep their own full audit trail while the money itself is unified.
+  // Folds a duplicate account into another one: their balances combine onto
+  // `intoAccountId`, and `fromAccountId` is archived (not deleted) rather than
+  // merging its transaction history, so both accounts keep their own full
+  // audit trail while the money itself is unified.
   async function mergeAccounts(intoAccountId, fromAccountId) {
     const intoAcc = allAccounts.find(a => a.id === intoAccountId)
     const fromAcc = allAccounts.find(a => a.id === fromAccountId)
@@ -673,25 +669,20 @@ export function AppProvider({ children }) {
       }
     ] : []
 
-    const mergedLedgerIds = Array.from(new Set([
-      ...getAccountLedgerIds(intoAcc),
-      ...getAccountLedgerIds(fromAcc)
-    ]))
-
     const nextAccounts = allAccounts.map(a => {
-      if (a.id === intoAcc.id) {
-        const { ledgerId, ...rest } = a
-        return { ...rest, balance: Number(a.balance || 0) + amt, ledgerIds: mergedLedgerIds }
-      }
+      if (a.id === intoAcc.id) return { ...a, balance: Number(a.balance || 0) + amt }
       if (a.id === fromAcc.id) return { ...a, balance: 0, archived: true }
       return a
     })
 
     // Re-point any category default-account settings that pointed at the
-    // absorbed account, in every ledger, so future quick-adds default to the
-    // surviving shared account instead of the now-archived one.
-    const nextLedgers = (vault.ledgers || []).map(l => {
-      const meta = l.categoryMeta || {}
+    // absorbed account, in every book, so future quick-adds default to the
+    // surviving account instead of the now-archived one.
+    const nextVaultBooks = {}
+    for (const bookId of BOOK_IDS) {
+      const b = vault[bookId]
+      if (!b) continue
+      const meta = b.categoryMeta || {}
       let changed = false
       const nextMeta = Object.fromEntries(Object.entries(meta).map(([type, byName]) => {
         if (!byName || typeof byName !== 'object') return [type, byName]
@@ -708,25 +699,21 @@ export function AppProvider({ children }) {
         }))
         return [type, nextByName]
       }))
-      return changed ? { ...l, categoryMeta: nextMeta } : l
-    })
+      if (changed) nextVaultBooks[bookId] = { ...b, categoryMeta: nextMeta }
+    }
 
     await persist({
       ...vault,
-      ledgers: nextLedgers,
+      ...nextVaultBooks,
       accounts: nextAccounts,
       accountTxns: [...newEntries, ...allAccountTxns]
     })
     show(`Merged ${fromAcc.name} into ${intoAcc.name}.`)
   }
-  async function updateAccounts(nextLedgerAccounts) {
-    if (!Array.isArray(nextLedgerAccounts)) return
 
-    // Merge Strategy: keep accounts not visible in this ledger untouched, replace the rest
-    const otherLedgerAccounts = allAccounts.filter(a => !accountVisibleInLedger(a, activeLedger.id))
-    const nextAccounts = [...otherLedgerAccounts, ...nextLedgerAccounts]
-
-    persistLedgerAndAccounts({ nextAccounts })
+  async function updateAccounts(nextAccounts) {
+    if (!Array.isArray(nextAccounts)) return
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts })
     show('Accounts reordered.')
   }
 
@@ -758,7 +745,7 @@ export function AppProvider({ children }) {
           nextAccounts = applyAccountDelta(nextAccounts, accountId, subAccountId, direction === 'in' ? amt : -amt)
         }
       }
-      persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [...entries, ...allAccountTxns] })
+      persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [...entries, ...allAccountTxns] })
       show('Transaction added.')
       return
     }
@@ -823,7 +810,7 @@ export function AppProvider({ children }) {
       newTxns = [entry, inEntry, ...allAccountTxns]
     }
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: newTxns })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: newTxns })
     show('Transaction added.')
   }
 
@@ -861,7 +848,7 @@ export function AppProvider({ children }) {
     }
     let nextAccounts = applyAccountDelta(allAccounts, loanAccountId, null, amt)
     nextAccounts = applyAccountDelta(nextAccounts, fromAccountId, fromSubAccountId, -amt)
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [loanEntry, outEntry, ...allAccountTxns] })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [loanEntry, outEntry, ...allAccountTxns] })
     show('Loan issued.')
   }
 
@@ -901,7 +888,7 @@ export function AppProvider({ children }) {
       ? allAccountTxns.map(t => t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t)
       : allAccountTxns
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [outEntry, inEntry, ...baseTxns] })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [outEntry, inEntry, ...baseTxns] })
     show('Transfer completed.')
   }
 
@@ -940,7 +927,7 @@ export function AppProvider({ children }) {
       ? allAccountTxns.map(t => t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t)
       : allAccountTxns
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: [creditOutEntry, walletOutEntry, ...baseTxns] })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [creditOutEntry, walletOutEntry, ...baseTxns] })
     show('Payback saved.')
   }
 
@@ -958,23 +945,23 @@ export function AppProvider({ children }) {
 
     const nextAccountTxns = allAccountTxns.map(t => t.id === id ? next : t)
 
-    // If this entry is linked to a ledger transaction, sync date/amount/note there too
-    let nextLedger
+    // If this entry is linked to a book transaction, sync date/amount/note there too
+    let nextBook
     if (original.kind === 'txn') {
       const catId = id.replace(/^txn-/, '').replace(/-to$/, '')
-      const ledgerTxn = txns.find(t => t.id === catId)
-      if (ledgerTxn) {
-        const updatedLedgerTxn = {
-          ...ledgerTxn,
+      const bookTxn = txns.find(t => t.id === catId)
+      if (bookTxn) {
+        const updatedBookTxn = {
+          ...bookTxn,
           ...(fields.date !== undefined && { date: fields.date }),
           ...(fields.amount !== undefined && { amount: fields.amount }),
           ...(fields.note !== undefined && { note: fields.note }),
         }
-        nextLedger = { ...activeLedger, txns: txns.map(t => t.id === catId ? updatedLedgerTxn : t) }
+        nextBook = { ...book, txns: txns.map(t => t.id === catId ? updatedBookTxn : t) }
       }
     }
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns, nextLedger })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
     show('Updated.')
   }
 
@@ -1006,17 +993,16 @@ export function AppProvider({ children }) {
         .filter(x => x?.kind === 'txn')
         .map(x => x.id.replace(/^txn-/, '').replace(/-to$/, ''))
     )
-    const nextLedger = catIdsToDelete.size > 0
-      ? { ...activeLedger, txns: txns.filter(t => !catIdsToDelete.has(t.id)) }
+    const nextBook = catIdsToDelete.size > 0
+      ? { ...book, txns: txns.filter(t => !catIdsToDelete.has(t.id)) }
       : undefined
 
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns, nextLedger })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
     show('Deleted.')
   }
 
   async function updateAccountGroups(nextGroups) {
-    const nextLedgers = (vault.ledgers || []).map(l => ({ ...l, groups: nextGroups }))
-    await persist({ ...vault, ledgers: nextLedgers })
+    await persist({ ...vault, groups: nextGroups })
   }
 
   async function reallocateBuckets({ accountId, fromSubId, toSubId, amount }) {
@@ -1024,7 +1010,7 @@ export function AppProvider({ children }) {
     if (!amt || amt <= 0) return show('Enter a valid amount.')
     let nextAccounts = applyAccountDelta(allAccounts, accountId, fromSubId, -amt)
     nextAccounts = applyAccountDelta(nextAccounts, accountId, toSubId, amt)
-    persistLedgerAndAccounts({ nextAccounts, nextAccountTxns: allAccountTxns })
+    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: allAccountTxns })
     show('Reallocated.')
   }
 
@@ -1037,7 +1023,7 @@ export function AppProvider({ children }) {
     tab, setTab,
     month, setMonth,
     vault, setVaultState,
-    activeLedger,
+    currentBookId, book, groups,
     accounts, allAccounts,
     accountTxns, allAccountTxns,
     txns, filteredTxns,
@@ -1082,21 +1068,13 @@ export function AppProvider({ children }) {
 
     // Persistence
     persist,
-    persistActiveLedger,
-    persistLedgerAndAccounts,
+    persistBook,
+    persistBookAndAccounts,
 
     // Auth & Security
     pin, setPin, pin2, setPin2,
     handleSetPin, handleUnlock, handleReset,
     handlePinToggle,
-
-    // Ledger Management
-    showLedgerPicker, setShowLedgerPicker,
-    showAddLedgerModal, setShowAddLedgerModal,
-    addLedgerName, setAddLedgerName,
-    handleAddPersonalLedger, handleAddBusinessLedger,
-    handleSaveNewLedger, handleDeleteLedger,
-    handleSelectLedger, handleSwitchLedgerToAccounts,
 
     // DSE Market Data
     dse,

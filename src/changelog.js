@@ -1,5 +1,16 @@
 export const CHANGELOG = [
     {
+        version: "4.0.0",
+        date: "2026-08-01",
+        changes: [
+            'Ledgers are gone. In their place: three fixed tabs — Transaction (personal expenditure, always on, unchanged), Flow (family expenditure), and Kapapa (shared/community expenditure) — each with its own independent Upkeep/Lifestyle/Growth budget cascade. Flow and Kapapa are optional, toggled on in Settings → Features (off by default); no ledger switcher, no per-ledger account sharing.',
+            'Accounts are no longer scoped to a ledger — every account is visible and spendable from all three tabs.',
+            'Existing data is preserved automatically: all transactions stay in Transaction exactly as before, and if Flow Pipeline was on, its Lifestyle/Growth budget targets/percentages carry over as Flow\'s starting config (with an empty transaction history, since Flow now tracks its own spending independently).',
+            'Insights is now optional too, toggled in Settings → Features (on by default).',
+            'Removed the unused Business ledger type and its Cost of Sales/Operating Expenses categories.',
+        ]
+    },
+    {
         version: "3.1.3",
         date: "2026-07-24",
         changes: [

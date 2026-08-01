@@ -14,17 +14,15 @@ export function CategoryDetail({
   onUpdateMeta,
   expenseCats = [],
   incomeCats = [],
-  cosCats = [],
-  oppsCats = [],
   allocationCats = [],
   growthCats = [],
   showAddForm,
   setShowAddForm
 }) {
   const {
-    accounts, txns, activeLedger, accountTxns,
+    accounts, txns, tab, groups, categories, accountTxns,
     addQuickTxn, updateTxn, delTxn, addReimbursement,
-    show, persistActiveLedger, categoryMeta, settings, clients, formatMonthLabel
+    show, persistBook, categoryMeta, settings, clients, formatMonthLabel
   } = useAppContext()
 
   const [amount, setAmount] = useState('')
@@ -105,7 +103,7 @@ export function CategoryDetail({
   // category, modeled on the Accounts screen's Goals & Targets planner (name +
   // amount, no linkage to real transactions). Pipeline-only, same gate as the
   // rest of Flow's category-level surface.
-  const pipelineMode = activeLedger?.type === 'personal' && !!settings.moneyPipelineEnabled
+  const pipelineMode = tab !== 'tx'
   const plans = Array.isArray(meta?.plans) ? meta.plans : []
   const totalPlanned = plans.reduce((s, p) => s + Number(p.amount || 0), 0)
   const [showAddPlanModal, setShowAddPlanModal] = useState(false)
@@ -173,7 +171,7 @@ export function CategoryDetail({
     let gains = []
     if (category.type === 'income' && txnTab === 'activity') {
       const assets = accounts.filter(a => {
-        const g = activeLedger.groups.find(g => g.id === a.groupId);
+        const g = groups.find(g => g.id === a.groupId);
         return g && g.type === 'asset';
       });
       for (const acc of assets) {
@@ -192,7 +190,7 @@ export function CategoryDetail({
       }
     }
     return [...regular, ...gains].sort((a, b) => b._sortDate.localeCompare(a._sortDate)).slice(0, 50)
-  }, [txns, category.name, accounts, activeLedger.groups, accountTxns, txnTab])
+  }, [txns, category.name, accounts, groups, accountTxns, txnTab])
 
   const groupedTxns = useMemo(() => {
     const map = new Map()
@@ -250,8 +248,6 @@ export function CategoryDetail({
         accounts={accounts}
         expenseCats={expenseCats}
         incomeCats={incomeCats}
-        cosCats={cosCats}
-        oppsCats={oppsCats}
         allocationCats={allocationCats}
         growthCats={growthCats}
         settings={settings}
@@ -374,7 +370,7 @@ export function CategoryDetail({
               <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                 <button className="btn" style={{ flex: 1 }} onClick={() => setShowEditModal(false)}>Cancel</button>
                 <button className="btn primary" style={{ flex: 1 }} disabled={growthOverBy > 0} onClick={() => {
-                  const existingMeta = activeLedger.categoryMeta[metaType]?.[category.name]
+                  const existingMeta = categoryMeta[metaType]?.[category.name]
                   const growthUpdate = category.type === 'growth'
                     ? withGrowthPercentForMonth(existingMeta, editMonthKey, Number(String(editPercent).replace(/,/g, '')) || 0)
                     : null
@@ -382,7 +378,7 @@ export function CategoryDetail({
                     ? withBudgetForMonth(existingMeta, editMonthKey, Number(String(editBudget).replace(/,/g, '')) || 0)
                     : null
                   const nameChanged = editName !== category.name
-                  const nextMetaForType = { ...(activeLedger.categoryMeta[metaType] || {}) }
+                  const nextMetaForType = { ...(categoryMeta[metaType] || {}) }
                   if (nameChanged) delete nextMetaForType[category.name]
                   // Only one Growth pool may fund Upkeep at a time — clear the flag on
                   // every other pool in the same save so it stays exclusive.
@@ -393,18 +389,17 @@ export function CategoryDetail({
                       }
                     }
                   }
-                  const updatedLedger = {
-                    ...activeLedger,
+                  const bookUpdate = {
                     categories: {
-                      ...activeLedger.categories,
-                      [metaType]: activeLedger.categories[metaType].map(n => n === category.name ? editName : n)
+                      ...categories,
+                      [metaType]: categories[metaType].map(n => n === category.name ? editName : n)
                     },
                     categoryMeta: {
-                      ...activeLedger.categoryMeta,
+                      ...categoryMeta,
                       [metaType]: {
                         ...nextMetaForType,
                         [editName]: {
-                          ...(activeLedger.categoryMeta[metaType]?.[category.name] || {}),
+                          ...(categoryMeta[metaType]?.[category.name] || {}),
                           color: editColor,
                           ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
                           ...(category.type === 'expense' && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 }),
@@ -418,12 +413,12 @@ export function CategoryDetail({
                     // category string and silently dropped out of every Balance/Spent total),
                     // making it look like the transactions had vanished. Re-point them here.
                     ...(nameChanged && {
-                      txns: (activeLedger.txns || []).map(t =>
+                      txns: (txns || []).map(t =>
                         t.category === category.name && t.type === category.type ? { ...t, category: editName } : t
                       )
                     })
                   }
-                  persistActiveLedger(updatedLedger)
+                  persistBook(bookUpdate)
                   setShowEditModal(false)
                   show('Card updated.')
                 }}>Save Changes</button>
@@ -436,17 +431,16 @@ export function CategoryDetail({
                     ? `Delete "${category.name}"? It has ${fmtTZS(total)} recorded — existing transactions are kept but will no longer show this card.`
                     : `Delete "${category.name}"? This can't be undone.`
                   if (!window.confirm(warn)) return
-                  const nextMetaForType = { ...(activeLedger.categoryMeta[metaType] || {}) }
+                  const nextMetaForType = { ...(categoryMeta[metaType] || {}) }
                   delete nextMetaForType[category.name]
-                  const updatedLedger = {
-                    ...activeLedger,
+                  const bookUpdate = {
                     categories: {
-                      ...activeLedger.categories,
-                      [metaType]: activeLedger.categories[metaType].filter(n => n !== category.name)
+                      ...categories,
+                      [metaType]: categories[metaType].filter(n => n !== category.name)
                     },
-                    categoryMeta: { ...activeLedger.categoryMeta, [metaType]: nextMetaForType }
+                    categoryMeta: { ...categoryMeta, [metaType]: nextMetaForType }
                   }
-                  persistActiveLedger(updatedLedger)
+                  persistBook(bookUpdate)
                   setShowEditModal(false)
                   show('Card deleted.')
                   onClose()

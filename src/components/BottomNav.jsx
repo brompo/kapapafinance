@@ -2,7 +2,7 @@ import React from 'react'
 import { useAppContext } from '../context/AppContext'
 
 export default function BottomNav({ tab, setTab, variant }) {
-  const { settings, activeLedger } = useAppContext()
+  const { settings } = useAppContext()
   const isLight = variant === 'light'
   const activeColor = '#5a5fb0'
   const inactiveColor = '#9aa0bf'
@@ -21,7 +21,7 @@ export default function BottomNav({ tab, setTab, variant }) {
     },
     {
       id: 'tx',
-      label: 'Transactions',
+      label: 'Transaction',
       content: (active) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 3h9l3 3v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinejoin="round"/>
@@ -36,6 +36,18 @@ export default function BottomNav({ tab, setTab, variant }) {
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M2 9c1.4 0 1.4-3 2.8-3s1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           <path d="M2 15c1.4 0 1.4-3 2.8-3s1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
+    },
+    {
+      id: 'kapapa',
+      label: 'Kapapa',
+      content: (active) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="9" cy="9" r="3.2" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
+          <circle cx="16" cy="11" r="2.6" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
+          <path d="M3.5 19c.6-2.8 2.7-4.5 5.5-4.5s4.9 1.7 5.5 4.5" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
+          <path d="M14.8 15.2c2.1.2 3.6 1.6 4.1 3.8" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
         </svg>
       )
     },
@@ -72,14 +84,11 @@ export default function BottomNav({ tab, setTab, variant }) {
     }
   ]
 
-  const pipelineMode = activeLedger.type === 'personal' && settings.moneyPipelineEnabled
   const visibleIcons = icons.filter(i => {
     if (i.id === 'dse') return settings.dseEnabled
-    if (i.id === 'flow') return pipelineMode
-    // Flow takes over Transactions' job as the primary tab for pipeline mode —
-    // Transactions is still fully there, just reached via Settings instead of
-    // taking a bottom-nav slot (see SettingsScreen's Transactions row).
-    if (i.id === 'tx') return !pipelineMode
+    if (i.id === 'flow') return settings.flowEnabled
+    if (i.id === 'kapapa') return settings.kapapaEnabled
+    if (i.id === 'insights') return settings.insightsEnabled
     return true
   })
 

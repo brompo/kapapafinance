@@ -153,7 +153,7 @@ function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, colo
 
 function CategoryPickList({ names, onPick }) {
   if (names.length === 0) {
-    return <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet — add one from Transactions first.</div>
+    return <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet.</div>
   }
   return (
     <div style={{ maxHeight: 280, overflowY: 'auto' }}>
@@ -186,18 +186,20 @@ function SectionDivider({ title, total, color }) {
   )
 }
 
-// Budget report + primary spend/income entry point for pipeline mode: for each
-// category (Upkeep lump, Lifestyle buckets, Growth pools) shows how much was
-// Distributed this period and the running Balance (Distributed minus real
-// spend, carried over month to month) — and tapping a row opens the same
-// transaction-entry screen Transactions uses (reached via Settings for this
-// mode), landing back here once you're done. Editing a target/%/opening
-// balance is a separate action (the ✎ button), not a transaction.
+// Budget report + primary spend/income entry point for the Flow/Kapapa books:
+// for each category (Upkeep lump, Lifestyle buckets, Growth pools) shows how
+// much was Distributed this period and the running Balance (Distributed minus
+// real spend, carried over month to month) — and tapping a row opens the
+// transaction-entry screen (shared with Transactions, see HomeScreen), landing
+// back here once you're done. Editing a target/%/opening balance is a separate
+// action (the ✎ button), not a transaction.
 export function FlowScreen() {
   const {
-    formatMonthLabel,
-    activeLedger, setShowLedgerPicker, persistActiveLedger, show, setSelectedCategory
+    formatMonthLabel, tab,
+    txns, categories, categoryMeta, persistBook, show, setSelectedCategory
   } = useAppContext()
+
+  const bookLabel = tab === 'kapapa' ? 'Kapapa' : 'Flow'
 
   // Budget/percent aren't transactions — they're just category settings — so
   // editing them here doesn't go through the same flow as adding a transaction.
@@ -228,7 +230,7 @@ export function FlowScreen() {
   // rather than always defaulting to today.
   const openCategorySpend = (type, name) => {
     const listKey = type === 'collection' ? 'income' : type
-    const list = activeLedger.categories?.[listKey] || []
+    const list = categories?.[listKey] || []
     const i = Math.max(0, list.indexOf(name))
     setSelectedCategory({
       type,
@@ -241,7 +243,7 @@ export function FlowScreen() {
   const openEdit = (metaType, name, field, currentValue) => {
     setEditTarget({ metaType, name, field })
     setEditValue(String(currentValue || 0))
-    setEditOpeningBalance(String(activeLedger.categoryMeta[metaType]?.[name]?.openingBalance || 0))
+    setEditOpeningBalance(String(categoryMeta[metaType]?.[name]?.openingBalance || 0))
   }
 
   const saveEdit = () => {
@@ -251,7 +253,7 @@ export function FlowScreen() {
       show(`Growth pools would total ${projectedGrowthTotal}% — reduce this or another pool below 100% first.`)
       return
     }
-    const existingMeta = activeLedger.categoryMeta[metaType]?.[name]
+    const existingMeta = categoryMeta[metaType]?.[name]
     // Growth percent and Lifestyle budget are both month-scoped: an edit takes
     // effect from the viewed period forward without rewriting earlier months.
     const nextMeta = {
@@ -262,12 +264,11 @@ export function FlowScreen() {
           : { ...existingMeta, [field]: nextValue }),
       openingBalance: Number(String(editOpeningBalance).replace(/,/g, '')) || 0
     }
-    persistActiveLedger({
-      ...activeLedger,
+    persistBook({
       categoryMeta: {
-        ...activeLedger.categoryMeta,
+        ...categoryMeta,
         [metaType]: {
-          ...activeLedger.categoryMeta[metaType],
+          ...categoryMeta[metaType],
           [name]: nextMeta
         }
       }
@@ -301,20 +302,23 @@ export function FlowScreen() {
   const editMonthKey = viewGranularity === 'year' ? `${statPeriod}-01` : statPeriod
   const isEditingGrowthPercent = editTarget?.metaType === 'growth' && editTarget?.field === 'percent'
   const otherGrowthPercentTotal = isEditingGrowthPercent
-    ? (activeLedger.categories.growth || [])
+    ? (categories.growth || [])
       .filter(n => n !== editTarget.name)
-      .reduce((s, n) => s + getGrowthPercentForMonth(activeLedger.categoryMeta.growth?.[n], editMonthKey), 0)
+      .reduce((s, n) => s + getGrowthPercentForMonth(categoryMeta.growth?.[n], editMonthKey), 0)
     : 0
   const enteredGrowthPercent = Number(String(editValue).replace(/,/g, '')) || 0
   const projectedGrowthTotal = otherGrowthPercentTotal + enteredGrowthPercent
   const growthOverBy = isEditingGrowthPercent ? projectedGrowthTotal - 100 : 0
 
   const periodTxns = useMemo(
-    () => (activeLedger?.txns || []).filter(t => t.date && t.date.slice(0, statPeriod.length) === statPeriod),
-    [activeLedger, statPeriod]
+    () => (txns || []).filter(t => t.date && t.date.slice(0, statPeriod.length) === statPeriod),
+    [txns, statPeriod]
   )
   const incomeInfo = useMemo(() => computeIncome(periodTxns), [periodTxns])
-  const envelopeSummary = useMemo(() => computeEnvelopeSummary(activeLedger, statPeriod), [activeLedger, statPeriod])
+  const envelopeSummary = useMemo(
+    () => computeEnvelopeSummary({ txns, categories, categoryMeta }, statPeriod),
+    [txns, categories, categoryMeta, statPeriod]
+  )
 
   const transferBuckets = useMemo(() => [
     ...envelopeSummary.lifestyle.map(b => ({ type: 'allocation', name: b.name, balance: b.balance })),
@@ -339,9 +343,9 @@ export function FlowScreen() {
     if (!transferFrom || !transferTo || transferFrom === transferTo) return show('Choose two different buckets.')
     const [fromType, fromName] = transferFrom.split('::')
     const [toType, toName] = transferTo.split('::')
-    const fromMeta = activeLedger.categoryMeta[fromType]?.[fromName] || {}
-    const toMeta = activeLedger.categoryMeta[toType]?.[toName] || {}
-    const nextCategoryMeta = { ...activeLedger.categoryMeta }
+    const fromMeta = categoryMeta[fromType]?.[fromName] || {}
+    const toMeta = categoryMeta[toType]?.[toName] || {}
+    const nextCategoryMeta = { ...categoryMeta }
     nextCategoryMeta[fromType] = {
       ...nextCategoryMeta[fromType],
       [fromName]: { ...fromMeta, openingBalance: Number(fromMeta.openingBalance || 0) - amt }
@@ -350,7 +354,7 @@ export function FlowScreen() {
       ...nextCategoryMeta[toType],
       [toName]: { ...(nextCategoryMeta[toType]?.[toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) + amt }
     }
-    persistActiveLedger({ ...activeLedger, categoryMeta: nextCategoryMeta })
+    persistBook({ categoryMeta: nextCategoryMeta })
     show(`Moved ${fmtTZS(amt)}.`)
     setShowTransferModal(false)
     setTransferAmount('')
@@ -405,7 +409,7 @@ export function FlowScreen() {
   return (
     <div className="ledgerScreen">
       <div className="ledgerHeader">
-        <button className="ledgerGhost" onClick={() => setShowLedgerPicker(true)}>{activeLedger.name || 'Personal'} ▾</button>
+        <div className="ledgerGhost" style={{ cursor: 'default' }}>{bookLabel}</div>
         <div className="ledgerPeriod" style={{ position: 'relative' }}>
           <button className="ledgerNavBtn" onClick={() => shiftPeriod(-1)}>‹</button>
           <div className="ledgerPeriodLabel" style={{ cursor: 'pointer' }} onClick={() => setShowGranularityMenu(v => !v)}>{periodLabel}</div>
@@ -643,7 +647,7 @@ export function FlowScreen() {
               Upkeep covers every Expense category — pick which one this spend is for.
             </div>
             <CategoryPickList
-              names={activeLedger.categories?.expense || []}
+              names={categories?.expense || []}
               onPick={name => { setShowUpkeepPicker(false); openCategorySpend('expense', name) }}
             />
             <div className="modalActions">
@@ -661,7 +665,7 @@ export function FlowScreen() {
               Pick which Collection this income belongs to.
             </div>
             <CategoryPickList
-              names={activeLedger.categories?.income || []}
+              names={categories?.income || []}
               onPick={name => { setShowIncomePicker(false); openCategorySpend('collection', name) }}
             />
             <div className="modalActions">

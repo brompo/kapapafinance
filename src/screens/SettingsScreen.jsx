@@ -8,9 +8,8 @@ import ChangelogScreen from './ChangelogScreen'
 import pkg from '../../package.json'
 
 export function SettingsScreen() {
-  const { settings, updateSettings, show, activeLedger, setTab } = useAppContext()
+  const { settings, updateSettings, show } = useAppContext()
   const version = pkg.version
-  const pipelineMode = activeLedger?.type === 'personal' && !!settings.moneyPipelineEnabled
 
   const [activeSub, setActiveSub] = useState(null)
 
@@ -43,22 +42,33 @@ export function SettingsScreen() {
             </div>
             <div className="stgChevron">›</div>
           </button>
-          {pipelineMode && (
-            <button className="stgRow" onClick={() => setTab('tx')}>
-              <div className="stgRowIcon">🧾</div>
-              <div className="stgRowBody">
-                <div className="stgRowText">Transactions</div>
-                <div className="stgRowSub">Category grid, history, reimbursements</div>
-              </div>
-              <div className="stgChevron">›</div>
-            </button>
-          )}
         </div>
       </div>
 
       <div className="stgSection">
         <div className="stgSectionTitle">FEATURES</div>
         <div className="stgGroup">
+          <div className="stgRow" style={{ cursor: 'default' }}>
+            <div className="stgRowIcon">📊</div>
+            <div className="stgRowBody" style={{ flex: 1 }}>
+              <div className="stgRowText">Insights</div>
+              <div className="stgRowSub">Show the Insights tab</div>
+            </div>
+            <label className="toggle" style={{ marginLeft: 'auto' }}>
+              <input
+                type="checkbox"
+                checked={settings.insightsEnabled !== false}
+                onChange={e => {
+                  updateSettings({ ...settings, insightsEnabled: e.target.checked })
+                  show(e.target.checked ? 'Insights enabled.' : 'Insights hidden.')
+                }}
+              />
+              <span className="toggleTrack" />
+            </label>
+          </div>
+
+          <div className="hr" />
+
           <div className="stgRow" style={{ cursor: 'default' }}>
             <div className="stgRowIcon">📈</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
@@ -83,16 +93,37 @@ export function SettingsScreen() {
           <div className="stgRow" style={{ cursor: 'default' }}>
             <div className="stgRowIcon">🌊</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
-              <div className="stgRowText">Flow Pipeline</div>
-              <div className="stgRowSub">Adds a Flow tab (budget plan: Budget vs Allocated) and Collections/Growth sections to Transactions (personal ledgers only)</div>
+              <div className="stgRowText">Flow</div>
+              <div className="stgRowSub">Adds a Flow tab for family expenditure, with its own budget cascade (Upkeep/Lifestyle/Growth)</div>
             </div>
             <label className="toggle" style={{ marginLeft: 'auto' }}>
               <input
                 type="checkbox"
-                checked={!!settings.moneyPipelineEnabled}
+                checked={!!settings.flowEnabled}
                 onChange={e => {
-                  updateSettings({ ...settings, moneyPipelineEnabled: e.target.checked })
-                  show(e.target.checked ? 'Flow Pipeline enabled.' : 'Flow Pipeline disabled.')
+                  updateSettings({ ...settings, flowEnabled: e.target.checked })
+                  show(e.target.checked ? 'Flow enabled.' : 'Flow disabled.')
+                }}
+              />
+              <span className="toggleTrack" />
+            </label>
+          </div>
+
+          <div className="hr" />
+
+          <div className="stgRow" style={{ cursor: 'default' }}>
+            <div className="stgRowIcon">🤝</div>
+            <div className="stgRowBody" style={{ flex: 1 }}>
+              <div className="stgRowText">Kapapa</div>
+              <div className="stgRowSub">Adds a Kapapa tab for shared/community expenditure, with its own budget cascade</div>
+            </div>
+            <label className="toggle" style={{ marginLeft: 'auto' }}>
+              <input
+                type="checkbox"
+                checked={!!settings.kapapaEnabled}
+                onChange={e => {
+                  updateSettings({ ...settings, kapapaEnabled: e.target.checked })
+                  show(e.target.checked ? 'Kapapa enabled.' : 'Kapapa disabled.')
                 }}
               />
               <span className="toggleTrack" />

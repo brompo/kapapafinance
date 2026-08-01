@@ -78,8 +78,8 @@ export async function setNewPin(pin){
     iterations
   })
 
-  // initialize empty vault object
-  await saveVault(pin, { ledgers: [], activeLedgerId: '', settings: { pinLockEnabled: false } })
+  // initialize empty vault object — normalizeVault() fills in the real shape on next load
+  await saveVault(pin, { settings: { pinLockEnabled: false } })
 }
 
 export async function loadVault(pin){

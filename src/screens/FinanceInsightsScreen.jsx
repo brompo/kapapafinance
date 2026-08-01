@@ -7,7 +7,6 @@ import { useAppContext } from '../context/AppContext'
 import { fmtTZS, fmtCompact, todayISO, calculateAssetMetrics, monthsBetween, daysBetween } from '../money'
 import { TransactionDetail } from '../components/TransactionDetail'
 import { collectionStatus } from '../utils/pipeline'
-import { accountVisibleInLedger } from '../utils/ledger'
 
 // Categorical palette for allocation-category segments — green/red are reserved
 // for the breakeven status (bar/line color) and never reused as a category hue.
@@ -20,9 +19,9 @@ const ALLOC_OTHER_KEY = '__other__'
 
 export function FinanceInsightsScreen() {
   const {
-    activeLedger, accounts, accountTxns, txns, clients,
+    groups, accounts, accountTxns, txns, clients,
     expenseCats, incomeCats, categories, categoryMeta, settings, show, updateTxn, delTxn,
-    activeLedgerId, ALL_LEDGERS_ID, setShowLedgerPicker, addReimbursement
+    addReimbursement
   } = useAppContext()
 
   const cosCats = useMemo(() => new Set(categories?.cos || []), [categories])
@@ -65,7 +64,7 @@ export function FinanceInsightsScreen() {
   }
 
   const statYear = Number(statPeriod.slice(0, 4))
-  const groupById = useMemo(() => new Map((activeLedger.groups || []).map(g => [g.id, g])), [activeLedger.groups])
+  const groupById = useMemo(() => new Map((groups || []).map(g => [g.id, g])), [groups])
   const visibleAccounts = useMemo(() => accounts.filter(a => !a.archived), [accounts])
 
   function shiftPeriod(delta) {
@@ -121,7 +120,7 @@ export function FinanceInsightsScreen() {
       return b;
     };
     const base = subs.length > 0
-      ? subs.reduce((s, sub) => (activeLedgerId === "all" || sub.ledgerId === activeLedgerId ? s + getBaseBalance(sub) : s), 0)
+      ? subs.reduce((s, sub) => s + getBaseBalance(sub), 0)
       : getBaseBalance(account);
 
     const groupType = account.accountType || groupById.get(account.groupId)?.type;
@@ -143,8 +142,6 @@ export function FinanceInsightsScreen() {
         return (info.value || 0) + uninvestedCash;
       }
     }
-    if (subs.length > 0) return base;
-    if (!accountVisibleInLedger(account, activeLedgerId)) return 0;
     return base;
   }
 
@@ -179,7 +176,7 @@ export function FinanceInsightsScreen() {
     const costOfCapital = liabilities > 0 ? (totalWeightedRate / liabilities) : 0;
     const coverage = costOfCapital > 0 ? (monthlyReturn / costOfCapital) : (liabilities > 0 ? 0 : 999);
     return { assets, liabilities, netWorth: assets - liabilities, capitalDeployed, invested, monthlyReturn, coverage, loanBook, liquidCash, landCapital, sharesCapital };
-  }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
+  }, [visibleAccounts, groupById, accountTxns, txns]);
 
   const combinedTxns = useMemo(() => {
     const baseTxns = txns.map(t => {
@@ -617,17 +614,8 @@ export function FinanceInsightsScreen() {
   return (
     <div className="txScreen" style={{ background: '#f8fafc', minHeight: '100vh' }}>
       <div style={{ padding: '20px 15px', display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
-          {/* Left: Ledger Picker */}
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <button
-              className="ledgerGhost"
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowLedgerPicker(true); }}
-              style={{ padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: 4, opacity: 0.9 }}
-            >
-              {activeLedger?.name || 'Personal'} <span style={{ fontSize: '0.8em' }}>▾</span>
-            </button>
-          </div>
+          {/* Left: spacer to balance the layout (no ledger picker anymore) */}
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }} />
 
           {/* Center: Period Navigator */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, position: 'relative' }}>

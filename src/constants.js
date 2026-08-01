@@ -24,17 +24,6 @@ export const DEFAULT_ALLOCATION_CATEGORIES = [
   'Buffer',
   'Debt Paydown'
 ]
-export const DEFAULT_BUSINESS_INCOME_CATEGORIES = [
-  'Sales',
-  'Services',
-  'Investments',
-  'Other Income'
-]
-export const DEFAULT_COS_CATEGORIES = [
-  'Direct Labor',
-  'Transport & Accommodation',
-  'Administration'
-]
 export const INSIGHT_TAB_LABELS = {
   transactions: 'Records',
   summary: 'Summary',
@@ -45,23 +34,14 @@ export const INSIGHT_TAB_LABELS = {
 
 export const APP_TAB_LABELS = {
   insights: 'Insights',
-  tx: 'Transactions',
+  tx: 'Transaction',
+  flow: 'Flow',
+  kapapa: 'Kapapa',
   accounts: 'Accounts',
   dse: 'DSE',
   settings: 'Settings'
 };
 
-export const DEFAULT_OPPS_CATEGORIES = [
-  'Rent',
-  'Utilities',
-  'Payroll',
-  'Marketing',
-  'Software',
-  'Office Supplies',
-  'Financing',
-  'Taxes & Licenses',
-  'Misc'
-]
 export const CATEGORY_SUBS = {
   Transportation: [
     'Public Trans',
@@ -112,32 +92,3 @@ export const META_CATEGORIES = {
 }
 export const DEFAULT_TAB = 'tx' // insights | accounts | tx | settings
 
-export const ALL_LEDGERS_ID = 'all'
-
-export const ALL_LEDGERS_TEMPLATE = {
-  id: ALL_LEDGERS_ID,
-  name: 'All Ledgers',
-  type: 'personal',
-  groups: [
-    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.OBLIGATIONS, collapsed: false },
-    { id: GROUP_IDS.investment, name: 'Investments', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
-    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
-    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
-  ],
-  categories: {
-    expense: [...DEFAULT_EXPENSE_CATEGORIES],
-    income: [...DEFAULT_INCOME_CATEGORIES],
-    cos: [...DEFAULT_COS_CATEGORIES],
-    opps: [...DEFAULT_OPPS_CATEGORIES],
-    allocation: [...DEFAULT_ALLOCATION_CATEGORIES],
-  },
-  categoryMeta: {
-    expense: {},
-    income: {},
-    cos: {},
-    opps: {},
-    allocation: {}
-  },
-  txns: []
-}

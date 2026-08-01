@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext'
 import { fmtTZS } from '../money'
 
 function BudgetSettings({ onClose }) {
-  const { categoryMeta, expenseCats, activeLedger, persistActiveLedger, show } = useAppContext()
+  const { categoryMeta, expenseCats, persistBook, show } = useAppContext()
   const [draftBudgets, setDraftBudgets] = useState(() => {
     const map = {}
     expenseCats.forEach(c => {
@@ -23,7 +23,7 @@ function BudgetSettings({ onClose }) {
       const current = categoryMeta.expense?.[c] || { budget: 0, subs: [] }
       nextMeta.expense[c] = { ...current, budget: Number(draftBudgets[c] || 0) }
     })
-    persistActiveLedger({ ...activeLedger, categoryMeta: nextMeta })
+    persistBook({ categoryMeta: nextMeta })
     onClose()
     show('Budgets saved.')
   }
@@ -58,7 +58,7 @@ function BudgetSettings({ onClose }) {
 }
 
 function ClientsManager({ onClose }) {
-  const { clients, persist, vault, activeLedger, allAccountTxns, rawAccounts, show } = useAppContext()
+  const { clients, persist, vault, allAccountTxns, rawAccounts, show } = useAppContext()
   
   function handleRename(client) {
     const newName = prompt('New client name?', client.name)

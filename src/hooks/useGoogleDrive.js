@@ -30,7 +30,7 @@ function randomString(len = 64) {
 
 function isVaultEmpty(v) {
   if (!v) return true
-  if (v.ledgers && v.ledgers.length > 0) return false
+  if (['transaction', 'flow', 'kapapa'].some(id => v[id]?.txns?.length > 0)) return false
   if (v.accounts && v.accounts.length > 0) return false
   return true
 }

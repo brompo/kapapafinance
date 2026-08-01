@@ -1,32 +1,22 @@
 import { useState } from 'react';
 import { loadVault, loadVaultPlain, saveVault, saveVaultPlain, hasPin, setNewPin } from '../cryptoVault.js';
 import { PIN_FLOW_KEY, SEED_KEY } from '../constants.js';
-import { getAccountLedgerIds, resolveDefaultTab } from '../utils/ledger.js';
+import { resolveDefaultTab, BOOK_IDS } from '../utils/ledger.js';
 
-// We need to pass createLedger and normalizeVault because they are defined in App.jsx currently
-// Typically these would be extracted into utils/ledger.js as well.
-export function useVault({ 
-  setStage, 
-  setTab, 
-  show, 
-  setSelectedCategory, 
-  setFocusAccountId,
+export function useVault({
+  setStage,
+  setTab,
+  show,
+  setSelectedCategory,
   isVaultEmpty,
   normalizeVault,
-  createLedger,
   vault,
   setVaultState
 }) {
   const [pin, setPin] = useState('');
   const [pin2, setPin2] = useState('');
-  const [showLedgerPicker, setShowLedgerPicker] = useState(false);
-  const [showAddLedgerModal, setShowAddLedgerModal] = useState(null);
-  const [addLedgerName, setAddLedgerName] = useState('');
 
   const settings = vault.settings || { pinLockEnabled: false };
-  const ledgers = vault.ledgers || [];
-  const activeLedgerId = vault.activeLedgerId;
-  const activeLedger = ledgers.filter(Boolean).find(l => l.id === activeLedgerId) || ledgers[0] || createLedger();
   const allAccounts = vault.accounts || [];
   const allAccountTxns = vault.accountTxns || [];
 
@@ -115,9 +105,10 @@ export function useVault({
     if (!nextVault) return
 
     // Safety Lock: Prevent overwriting a populated vault with an empty one
-    const currentHasData = (vault?.accounts?.length > 0 || vault?.ledgers?.some(l => l?.txns?.length > 0))
-    const nextIsEmpty = (!nextVault?.accounts?.length && !nextVault?.ledgers?.some(l => l?.txns?.length > 0))
-    
+    const hasTxns = (v) => BOOK_IDS.some(id => v?.[id]?.txns?.length > 0)
+    const currentHasData = (vault?.accounts?.length > 0 || hasTxns(vault))
+    const nextIsEmpty = (!nextVault?.accounts?.length && !hasTxns(nextVault))
+
     if (currentHasData && nextIsEmpty) {
       console.error('CRITICAL: Attempted to save an empty vault over an existing one. BLOCKED.', { current: vault, next: nextVault })
       show('Data Safety: Save Blocked (Empty state detected)')
@@ -138,151 +129,35 @@ export function useVault({
     persist({ ...vault, settings: next })
   }
 
-  function persistActiveLedger(nextLedger, nextClients) {
-    const hasActive = ledgers.some(l => l.id === activeLedger.id)
-    const nextLedgers = hasActive
-      ? ledgers.map(l => (l.id === activeLedger.id ? nextLedger : l))
-      : [...ledgers, nextLedger]
-    const nextActiveId = hasActive ? activeLedger.id : nextLedger.id
-    const vaultUpdate = { ...vault, ledgers: nextLedgers, activeLedgerId: nextActiveId }
+  function persistBook(bookId, nextBook, nextClients) {
+    const vaultUpdate = { ...vault, [bookId]: nextBook }
     if (nextClients) vaultUpdate.clients = nextClients
     return persist(vaultUpdate)
   }
 
-  function persistLedgerAndAccounts({ nextLedger, nextAccounts, nextAccountTxns, nextClients }) {
-    const targetLedger = nextLedger || activeLedger
-    const hasActive = ledgers.some(l => l && l.id === activeLedger.id)
-    const nextLedgers = hasActive
-      ? ledgers.map(l => (l && l.id === activeLedger.id ? targetLedger : l))
-      : [...ledgers, targetLedger]
-    
-    // Ensure we don't accidentally insert undefined into ledgers
-    const cleanLedgers = nextLedgers.filter(l => !!l)
-    
-    const nextActiveId = hasActive ? activeLedger.id : (targetLedger?.id || activeLedger.id)
+  function persistBookAndAccounts({ bookId, nextBook, nextAccounts, nextAccountTxns, nextClients }) {
     const vaultUpdate = {
       ...vault,
-      ledgers: cleanLedgers,
-      activeLedgerId: nextActiveId,
       accounts: nextAccounts ?? allAccounts,
       accountTxns: nextAccountTxns ?? allAccountTxns
     }
+    if (nextBook) vaultUpdate[bookId] = nextBook
     if (nextClients) vaultUpdate.clients = nextClients
     return persist(vaultUpdate)
-  }
-
-  function handleAddPersonalLedger() {
-    setAddLedgerName('')
-    setShowAddLedgerModal('personal')
-    setShowLedgerPicker(false)
-  }
-
-  function handleAddBusinessLedger() {
-    setAddLedgerName('')
-    setShowAddLedgerModal('business')
-    setShowLedgerPicker(false)
-  }
-
-  function handleSaveNewLedger() {
-    const trimmed = addLedgerName.trim()
-    if (!trimmed) {
-      show('Please enter a ledger name.')
-      return
-    }
-    const type = showAddLedgerModal
-    const nextLedger = createLedger({ name: trimmed, type })
-    persist({
-      ...vault,
-      ledgers: [...ledgers, nextLedger],
-      activeLedgerId: nextLedger.id
-    })
-    setShowAddLedgerModal(null)
-    setAddLedgerName('')
-  }
-
-  function handleDeleteLedger(ledgerId) {
-    if (ledgers.length <= 1) {
-      show('Cannot delete the only ledger.')
-      return
-    }
-    const ledger = ledgers.find(l => l.id === ledgerId)
-    if (!ledger) return
-    if (!window.confirm(`Are you sure you want to delete the ledger "${ledger.name}"? This will delete all transactions and accounts within it.`)) return
-
-    const nextLedgers = ledgers.filter(l => l.id !== ledgerId)
-    const nextActiveLedgerId = activeLedgerId === ledgerId ? nextLedgers[0].id : activeLedgerId
-
-    // Accounts shared with other ledgers just lose this ledger's tag; accounts
-    // that only belonged to this ledger are removed along with their transactions.
-    const accountsToRemove = new Set(
-      allAccounts.filter(a => {
-        const ids = getAccountLedgerIds(a)
-        return ids.length ? (ids.includes(ledgerId) && ids.length === 1) : false
-      }).map(a => a.id)
-    )
-    const nextAccounts = allAccounts
-      .filter(a => !accountsToRemove.has(a.id))
-      .map(a => {
-        const ids = getAccountLedgerIds(a)
-        if (ids.length > 1 && ids.includes(ledgerId)) {
-          const { ledgerId: _legacy, ...rest } = a
-          return { ...rest, ledgerIds: ids.filter(id => id !== ledgerId) }
-        }
-        return a
-      })
-    const nextAccountTxns = allAccountTxns.filter(t => !accountsToRemove.has(t.accountId) && !accountsToRemove.has(t.relatedAccountId))
-
-    persist({
-      ...vault,
-      ledgers: nextLedgers,
-      activeLedgerId: nextActiveLedgerId,
-      accounts: nextAccounts,
-      accountTxns: nextAccountTxns
-    })
-    if (activeLedgerId === ledgerId) setShowLedgerPicker(false)
-  }
-
-  function handleSelectLedger(id) {
-    if (!id || id === activeLedgerId) {
-      setShowLedgerPicker(false)
-      return
-    }
-    persist({ ...vault, activeLedgerId: id })
-    setSelectedCategory(null)
-    setShowLedgerPicker(false)
-  }
-
-  async function handleSwitchLedgerToAccounts(id, accountId) {
-    if (!id || id === activeLedger.id) return
-    await persist({ ...vault, activeLedgerId: id })
-    setTab('accounts')
-    setFocusAccountId(accountId || null)
   }
 
   return {
     pin, setPin,
     pin2, setPin2,
-    showLedgerPicker, setShowLedgerPicker,
-    showAddLedgerModal, setShowAddLedgerModal,
-    addLedgerName, setAddLedgerName,
-    
+
     handlePinToggle,
     handleSetPin,
     handleUnlock,
     persist,
     updateSettings,
-    persistActiveLedger,
-    persistLedgerAndAccounts,
-    
-    handleAddPersonalLedger,
-    handleAddBusinessLedger,
-    handleSaveNewLedger,
-    handleDeleteLedger,
-    handleSelectLedger,
-    handleSwitchLedgerToAccounts,
-    
-    activeLedger,
-    ledgers,
+    persistBook,
+    persistBookAndAccounts,
+
     allAccounts,
     allAccountTxns
   }

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fmtTZS, fmtCompact, calculateAssetMetrics, calculateSavingsMetrics } from "../money.js";
-import { getAccountLedgerIds, accountVisibleInLedger } from "../utils/ledger.js";
 
 function calculateBucketSpentYTD(subId, accountTxns) {
   const year = String(new Date().getFullYear())
@@ -32,11 +31,8 @@ export default function Accounts({
   allAccounts = [],
   accountTxns = [],
   groups = [],
-  activeLedgerId = "",
-  ledgers = [],
   focusAccountId,
   onFocusAccountUsed,
-  onSwitchLedger,
   onDetailOpen,
   onDetailClose,
   onToast,
@@ -58,8 +54,6 @@ export default function Accounts({
   categories = {}, // { income: [], expense: [] }
   txns = [], // Ledger transactions for return calc
   clients = [], // Global list of clients
-  activeLedgerName = "",
-  onOpenLedgerPicker
 }) {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [editTargetValue, setEditTargetValue] = useState("");
@@ -182,9 +176,7 @@ export default function Accounts({
                   getAccountBalance={getAccountBalance}
                   expandedAccounts={expandedAccounts}
                   onToggleAccountExpand={toggleAccountExpand}
-                  activeLedgerId={activeLedgerId}
                   categories={categories}
-                  ledgers={ledgers}
                 />
               )
             })}
@@ -193,10 +185,6 @@ export default function Accounts({
       </div>
     );
   }
-
-  useEffect(() => {
-    setSelectedId(null);
-  }, [activeLedgerId]);
 
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   const visibleAccounts = useMemo(
@@ -258,14 +246,8 @@ export default function Accounts({
       return b;
     };
 
-    // Show only the total of sub-accounts associated with the active ledger
     const base = subs.length > 0
-      ? subs.reduce((s, sub) => {
-        if (ignoreLedgerFilter || activeLedgerId === "all" || sub.ledgerId === activeLedgerId) {
-          return s + getBaseBalance(sub);
-        }
-        return s;
-      }, 0)
+      ? subs.reduce((s, sub) => s + getBaseBalance(sub), 0)
       : getBaseBalance(account);
 
     const group = groupById.get(account.groupId);
@@ -309,12 +291,6 @@ export default function Accounts({
       }
     }
 
-    // Default fallback (cash balance)
-    // If we have sub-accounts, we trust the base sum (which filters subs by ledger)
-    if (subs.length > 0) return base;
-
-    // Otherwise, check if the parent account belongs to the active ledger
-    if (!accountVisibleInLedger(account, activeLedgerId)) return 0;
     return base;
   }
 
@@ -530,7 +506,7 @@ export default function Accounts({
       }, 0),
       savingsBal: visibleAccounts.filter(a => (groupById.get(a.groupId)?.metaCategory === 'savings')).reduce((s, a) => s + getAccountBalance(a), 0),
     };
-  }, [visibleAccounts, groupById, activeLedgerId, accountTxns, txns]);
+  }, [visibleAccounts, groupById, accountTxns, txns]);
 
 
   const metaGroups = useMemo(() => {
@@ -583,7 +559,6 @@ export default function Accounts({
       balance,
       groupId: addingToGroup.id,
       groupType: addingToGroup.type,
-      ledgerIds: activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : [],
     });
     setAddingToGroup(null);
   }
@@ -759,10 +734,7 @@ export default function Accounts({
         allAccounts={allAccounts}
         groups={groups}
         accountTxns={accountTxns}
-        activeLedgerId={activeLedgerId}
-        ledgers={ledgers}
         categories={categories}
-        onSwitchLedger={onSwitchLedger}
         onClose={() => setSelectedId(null)}
         getAccountBalance={getAccountBalance}
         onAddAccountTxn={onAddAccountTxn}
@@ -851,9 +823,6 @@ export default function Accounts({
                   <option value="savings">SAVINGS (Purpose)</option>
                 </select>
               </div>
-              <div style={{ fontSize: 11, color: '#6366f1', marginBottom: 12, padding: '8px 10px', background: '#f5f3ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
-                💡 <b>Global Sync:</b> Renaming or moving this group will update it across all your ledgers.
-              </div>
               <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
                 <button
                   className="btn danger"
@@ -886,17 +855,8 @@ export default function Accounts({
       <div className="overviewTitle"
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
 
-        {/* Left: Ledger Picker */}
-        <div style={{ justifyContent: 'flex-start' }}>
-          <button
-            className="ledgerGhost"
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenLedgerPicker?.(); }}
-            style={{ padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: 4, opacity: 0.9 }}
-          >
-            {activeLedgerName || 'Personal'} <span style={{ fontSize: '0.8em' }}>▾</span>
-          </button>
-        </div>
+        {/* Left: spacer to balance the layout (no ledger picker anymore) */}
+        <div style={{ justifyContent: 'flex-start', width: 60 }} />
 
         {/* Center: Financial Overview */}
         <div
@@ -1024,9 +984,6 @@ export default function Accounts({
                       <option value="savings">SAVINGS (Purpose)</option>
                     </select>
                   </div>
-                  <div style={{ fontSize: 11, color: '#6366f1', marginBottom: 16, padding: '8px 10px', background: '#f5f3ff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
-                    💡 <b>Global Sync:</b> This group will be available across all your ledgers (Personal, Business, etc).
-                  </div>
                   <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                     <button className="btn" type="button" onClick={() => setShowAddGroupModal(false)}>Cancel</button>
                     <button className="btn primary" type="button" onClick={handleAddGroup}>Add</button>
@@ -1069,16 +1026,9 @@ function Section({
   getAccountBalance,
   expandedAccounts,
   onToggleAccountExpand,
-  activeLedgerId,
   metaCategory,
   accounts,
-  ledgers,
 }) {
-  function sharedLedgerLabel(a) {
-    const ids = getAccountLedgerIds(a)
-    if (ids.length < 2) return null
-    return ids.map(id => ledgers?.find(l => l.id === id)?.name || '?').join(' + ')
-  }
   return (
     <div
       className={`sectionCard ${isDragging ? "dragging" : ""} ${dragOver ? "dragOver" : ""}`}
@@ -1162,9 +1112,6 @@ function Section({
                         </div>
                         <div className="assetInfo">
                           <h4>{a.name}</h4>
-                          {sharedLedgerLabel(a) && (
-                            <div className="sharedLedgerBadge">{sharedLedgerLabel(a)}</div>
-                          )}
                           <div style={{ fontSize: '0.75rem', color: '#666' }}>
                             {(() => {
                               const info = calculateAssetMetrics(a, accountTxns, group.type)
@@ -1190,9 +1137,6 @@ function Section({
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                           <div className={`stdName ${(a.accountType || group.type) === 'loan' && bal > 0 ? 'loan' : ''}`}>{a.name}</div>
-                          {sharedLedgerLabel(a) && (
-                            <div className="sharedLedgerBadge">{sharedLedgerLabel(a)}</div>
-                          )}
                           {metaCategory === 'savings' && (
                             <div className="metricStack purple" style={{ alignItems: 'flex-start', marginTop: 2 }}>
                               <div className="metricLabel">PLANNED:</div>
@@ -1229,12 +1173,9 @@ function Section({
 
               const subs = Array.isArray(a.subAccounts) ? a.subAccounts : [];
               const isDebitAccount = (a.accountType || group.type) === 'debit';
-              const allLedgerSubs = activeLedgerId === "all"
-                ? subs
-                : subs.filter(s => s.ledgerId === activeLedgerId);
               const visibleSubs = isDebitAccount
-                ? allLedgerSubs.filter(s => Number(s.balance || 0) !== 0)
-                : allLedgerSubs;
+                ? subs.filter(s => Number(s.balance || 0) !== 0)
+                : subs;
 
               if (visibleSubs.length && (expandedAccounts?.[a.id] || isDebitAccount)) {
                 visibleSubs.forEach((s) => {
@@ -1300,11 +1241,8 @@ function AccountDetail({
   groups,
   categories,
   accountTxns,
-  activeLedgerId,
-  ledgers,
   focusAccountId,
   onFocusAccountUsed,
-  onSwitchLedger,
   onDetailOpen,
   onDetailClose,
   onToast,
@@ -1400,16 +1338,11 @@ function AccountDetail({
   const [editInterestStartDate, setEditInterestStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState(account.name || "");
-  const [editLedgerIds, setEditLedgerIds] = useState(() => {
-    const ids = getAccountLedgerIds(account);
-    return ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []);
-  });
   const [editBalance, setEditBalance] = useState("");
   const [editGroupId, setEditGroupId] = useState("");
   const [editError, setEditError] = useState("");
   const [editingSubAccountId, setEditingSubAccountId] = useState(null)
   const [subEditName, setSubEditName] = useState("")
-  const [subEditLedgerId, setSubEditLedgerId] = useState("")
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [mergeFromId, setMergeFromId] = useState("")
   const [showAddBucketModal, setShowAddBucketModal] = useState(false)
@@ -1476,9 +1409,7 @@ function AccountDetail({
 
   useEffect(() => {
     setEditName(account.name || "");
-    const ids = getAccountLedgerIds(account);
-    setEditLedgerIds(ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []));
-  }, [account.id, account.name, account.ledgerId, account.ledgerIds, activeLedgerId]);
+  }, [account.id, account.name]);
 
   useEffect(() => {
     if (!showCreditModal) return;
@@ -1962,17 +1893,11 @@ function AccountDetail({
 
   function handleEdit() {
     setEditName(account.name);
-    const ids = getAccountLedgerIds(account);
-    setEditLedgerIds(ids.length ? ids : (activeLedgerId && activeLedgerId !== 'all' ? [activeLedgerId] : []));
     setEditBalance(account.balance || 0);
     setEditGroupId(account.groupId);
     setEditAccountType(account.accountType || '');
     setEditError("");
     setShowEditModal(true);
-  }
-
-  function toggleEditLedgerId(id) {
-    setEditLedgerIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
   async function handleSaveEdit() {
@@ -1981,21 +1906,12 @@ function AccountDetail({
       setEditError("Enter a name.");
       return;
     }
-    if (!editLedgerIds.length) {
-      setEditError("Select at least one ledger.");
-      return;
-    }
     const newGroup = editGroupId ? groups.find(g => g.id === editGroupId) : null;
     const type = editAccountType || newGroup?.type || currentGroup?.type || account.groupType || "debit";
-    const prevLedgerIds = getAccountLedgerIds(account);
 
-    // Groups are shared across all ledgers already, so there's no per-ledger
-    // group to remap here — just keep the account's chosen group as-is.
-    const { ledgerId, ...accountRest } = account;
     await onUpsertAccount?.({
-      ...accountRest,
+      ...account,
       name,
-      ledgerIds: editLedgerIds,
       groupId: editGroupId || account.groupId,
       groupType: type,
       accountType: editAccountType || undefined,
@@ -2020,14 +1936,7 @@ function AccountDetail({
     }
 
     setShowEditModal(false);
-    const ledgersChanged = prevLedgerIds.length !== editLedgerIds.length || editLedgerIds.some(id => !prevLedgerIds.includes(id));
-    if (ledgersChanged) {
-      const label = editLedgerIds.map((id) => ledgers.find((l) => l.id === id)?.name).filter(Boolean).join(' + ') || 'selected ledger';
-      onToast?.(editLedgerIds.length > 1 ? `Account shared with ${label}.` : `Account moved to ${label}.`);
-    } else {
-      onToast?.("Account updated.");
-    }
-    // Do not switch active ledger when editing; only update the account's ledger assignment.
+    onToast?.("Account updated.");
   }
 
   function daysBetween(a, b) {
@@ -2190,11 +2099,10 @@ function AccountDetail({
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-    const targetLedgerId = activeLedgerId === "all" ? getAccountLedgerIds(account)[0] : activeLedgerId;
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
     const nextSubs = [
       ...subs,
-      { id: crypto.randomUUID(), name: trimmed, balance: 0, ledgerId: targetLedgerId },
+      { id: crypto.randomUUID(), name: trimmed, balance: 0 },
     ];
     onUpsertAccount({ ...account, subAccounts: nextSubs });
     if (!subAccountId) setSubAccountId(nextSubs[0].id);
@@ -2204,7 +2112,6 @@ function AccountDetail({
     const name = newBucketName.trim()
     if (!name) return
     const amt = Number(newBucketAmount || 0)
-    const targetLedgerId = activeLedgerId === "all" ? getAccountLedgerIds(account)[0] : activeLedgerId
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
     const currentBalance = getAccountBalance(account, 'current', true)
 
@@ -2212,8 +2119,8 @@ function AccountDetail({
       const unallocId = crypto.randomUUID()
       const newBucketId = crypto.randomUUID()
       const nextSubs = [
-        { id: unallocId, name: 'Unallocated', balance: currentBalance - amt, ledgerId: targetLedgerId, isUnallocated: true },
-        { id: newBucketId, name, balance: amt, ledgerId: targetLedgerId },
+        { id: unallocId, name: 'Unallocated', balance: currentBalance - amt, isUnallocated: true },
+        { id: newBucketId, name, balance: amt },
       ]
       onUpsertAccount({ ...account, balance: 0, subAccounts: nextSubs })
     } else {
@@ -2221,7 +2128,7 @@ function AccountDetail({
       const nextSubs = subs.map(s =>
         s.isUnallocated ? { ...s, balance: Number(s.balance || 0) - amt } : s
       )
-      nextSubs.push({ id: newBucketId, name, balance: amt, ledgerId: targetLedgerId })
+      nextSubs.push({ id: newBucketId, name, balance: amt })
       onUpsertAccount({ ...account, subAccounts: nextSubs })
     }
 
@@ -2235,7 +2142,7 @@ function AccountDetail({
     const subs = Array.isArray(account.subAccounts) ? account.subAccounts : []
     const nextSubs = subs.map(s => {
       if (s.id !== editingSubAccountId) return s
-      return { ...s, name: subEditName.trim(), ledgerId: subEditLedgerId }
+      return { ...s, name: subEditName.trim() }
     })
     onUpsertAccount({ ...account, subAccounts: nextSubs })
     setEditingSubAccountId(null)
@@ -2419,9 +2326,6 @@ function AccountDetail({
                               <div className="avatar subAvatar">{(s.isUnallocated ? 'U' : s.name.slice(0, 1)).toUpperCase()}</div>
                               <div>
                                 <div className="rowName">{s.isUnallocated ? 'Unallocated' : s.name}</div>
-                                {effectiveType !== 'debit' && (
-                                  <div className="rowMeta">{ledgers.find(l => l.id === s.ledgerId)?.name}</div>
-                                )}
                               </div>
                             </div>
                             <div className="rowRight" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2436,7 +2340,6 @@ function AccountDetail({
                                   e.stopPropagation()
                                   setEditingSubAccountId(s.id)
                                   setSubEditName(s.name)
-                                  setSubEditLedgerId(s.ledgerId || getAccountLedgerIds(account)[0] || activeLedgerId)
                                 }}>Edit</button>
                               )}
                             </div>
@@ -3291,9 +3194,7 @@ function AccountDetail({
                       setPaybackError(false);
                       const acct = accounts.find(a => a.id === e.target.value)
                       const subs = acct && Array.isArray(acct.subAccounts) ? acct.subAccounts : []
-                      const ledger = activeLedgerId === 'all' ? getAccountLedgerIds(account)[0] : activeLedgerId
-                      const match = subs.find(s => s.ledgerId === ledger)
-                      setPaybackSubAccountId(match ? match.id : (subs[0]?.id || ''))
+                      setPaybackSubAccountId(subs[0]?.id || '')
                     }}
                     style={paybackError ? { borderColor: '#e24b4b', background: 'rgba(226,75,75,0.05)' } : undefined}
                   >
@@ -3401,26 +3302,6 @@ function AccountDetail({
                   />
                 </div>
                 <div className="field">
-                  <label>Ledgers</label>
-                  <div className="ledgerCheckboxList">
-                    {ledgers.map((l) => (
-                      <label key={l.id} className="ledgerCheckboxRow">
-                        <input
-                          type="checkbox"
-                          checked={editLedgerIds.includes(l.id)}
-                          onChange={() => toggleEditLedgerId(l.id)}
-                        />
-                        {l.name}
-                      </label>
-                    ))}
-                  </div>
-                  {editLedgerIds.length > 1 && (
-                    <div className="small" style={{ marginTop: 4, color: '#8b90b2' }}>
-                      Shared: one balance, visible in all selected ledgers.
-                    </div>
-                  )}
-                </div>
-                <div className="field">
                   <label>Group</label>
                   <select
                     value={editGroupId}
@@ -3474,9 +3355,8 @@ function AccountDetail({
               <div className="modalCard" onClick={(e) => e.stopPropagation()}>
                 <div className="modalTitle">Merge Into "{account.name}"</div>
                 <div className="small" style={{ color: '#8b90b2', marginBottom: 12 }}>
-                  Pick the duplicate account to fold in. Its balance moves onto "{account.name}", the ledgers
-                  either one was visible in will both be able to see the result, and the duplicate is archived
-                  (kept for history, not deleted).
+                  Pick the duplicate account to fold in. Its balance moves onto "{account.name}",
+                  and the duplicate is archived (kept for history, not deleted).
                 </div>
                 <div className="field">
                   <label>Merge this account in</label>
@@ -3513,17 +3393,6 @@ function AccountDetail({
                     onChange={(e) => setSubEditName(e.target.value)}
                     autoFocus
                   />
-                </div>
-                <div className="field">
-                  <label>Ledger</label>
-                  <select
-                    value={subEditLedgerId}
-                    onChange={(e) => setSubEditLedgerId(e.target.value)}
-                  >
-                    {ledgers.map(l => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", gap: 8, marginTop: 24 }}>
                   {(() => {

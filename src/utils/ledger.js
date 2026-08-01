@@ -1,39 +1,16 @@
-import { todayISO, uid } from '../money.js'
+import { uid } from '../money.js'
 export { uid }
 import {
   GROUP_IDS, META_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES, DEFAULT_ALLOCATION_CATEGORIES,
-  DEFAULT_BUSINESS_INCOME_CATEGORIES, DEFAULT_COS_CATEGORIES, DEFAULT_OPPS_CATEGORIES,
-  CATEGORY_SUBS, ALL_LEDGERS_ID, ALL_LEDGERS_TEMPLATE, DEFAULT_TAB
+  CATEGORY_SUBS, DEFAULT_TAB
 } from '../constants.js'
 
-// Personal ledgers with Flow Pipeline on land on Flow (not Transactions) —
-// Flow is the report/spend surface for that mode, and Transactions is a
-// Settings-only utility screen for it. Every other ledger/mode keeps the
-// user's own defaultAppTab (or the app-wide DEFAULT_TAB) unchanged.
+export const BOOK_IDS = ['transaction', 'flow', 'kapapa']
+
 export function resolveDefaultTab(vaultData) {
   const settings = vaultData?.settings || {}
-  const ledgers = (vaultData?.ledgers || []).filter(Boolean)
-  const activeLedger = ledgers.find(l => l.id === vaultData?.activeLedgerId) || ledgers[0]
-  if (activeLedger?.type === 'personal' && settings.moneyPipelineEnabled) return 'flow'
   return settings.defaultAppTab || DEFAULT_TAB
-}
-
-// Accounts may belong to more than one ledger (e.g. a Cash account spent from
-// both a Personal and a Family ledger while sharing one real-world balance).
-// `ledgerIds` is the canonical field; `ledgerId` (single string) is kept only
-// as a read-compat shim for data saved before this feature existed.
-export function getAccountLedgerIds(account) {
-  if (Array.isArray(account?.ledgerIds) && account.ledgerIds.length) return account.ledgerIds
-  if (account?.ledgerId) return [account.ledgerId]
-  return []
-}
-
-export function accountVisibleInLedger(account, ledgerId) {
-  if (!ledgerId || ledgerId === 'all') return true
-  const ids = getAccountLedgerIds(account)
-  if (!ids.length) return true
-  return ids.includes(ledgerId)
 }
 
 export function normalizeAccountsWithGroups(inputAccounts, groups) {
@@ -52,6 +29,45 @@ export function normalizeAccountsWithGroups(inputAccounts, groups) {
   })
 }
 
+export function getDefaultGroups() {
+  return [
+    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
+    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.OBLIGATIONS, collapsed: false },
+    { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: META_CATEGORIES.SAVINGS, collapsed: false },
+    { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
+    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
+  ]
+}
+
+function normalizeGroups(groups) {
+  const fallbackGroups = getDefaultGroups()
+  return Array.isArray(groups) && groups.length
+    ? groups.map(g => {
+      const name = g.name || 'Group'
+      const normalizedName = name.toLowerCase()
+      let id = g.id || uid()
+      if (normalizedName === 'debit') id = GROUP_IDS.debit
+      else if (normalizedName === 'credit') id = GROUP_IDS.credit
+      else if (normalizedName === 'investment' || normalizedName === 'invest') id = GROUP_IDS.investment
+      else if (normalizedName === 'shares') id = GROUP_IDS.shares
+      else if (normalizedName === 'real estate') id = GROUP_IDS.realEstate
+
+      const type = g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit'))
+      let metaCategory = g.metaCategory
+      if (metaCategory === 'debt') metaCategory = META_CATEGORIES.OBLIGATIONS // Migration
+
+      if (!metaCategory) {
+        if (type === 'credit' || type === 'loan') metaCategory = META_CATEGORIES.OBLIGATIONS
+        else if (type === 'asset') metaCategory = META_CATEGORIES.ASSET
+        else metaCategory = META_CATEGORIES.WALLET
+      }
+
+      return { id, name, type, metaCategory, collapsed: !!g.collapsed }
+    })
+    : fallbackGroups
+}
+
 export const GROWTH_POOL_DEFS = [
   { name: 'Upkeep Buffer', priority: 1 },
   { name: 'Family Projects', priority: 2 },
@@ -62,7 +78,7 @@ export const GROWTH_POOL_DEFS = [
 // appends a `{ month, percent }` entry rather than overwriting a flat value, and
 // resolving a given month walks the (ascending) list for the last entry that
 // started on or before it. Months before the earliest entry fall back to the
-// legacy flat `percent`, so ledgers saved before this feature existed need no
+// legacy flat `percent`, so books saved before this feature existed need no
 // migration.
 export function getGrowthPercentForMonth(meta, monthKey) {
   const history = Array.isArray(meta?.percentHistory) ? meta.percentHistory : []
@@ -112,11 +128,10 @@ export function withBudgetForMonth(meta, monthKey, budget) {
   return { ...existing, budgetHistory: history }
 }
 
-// Growth pools are now first-class categories (like Lifestyle/allocation buckets)
-// so real transactions can be logged against them via CategoryDetail. Migrates the
-// old standalone pipeline.growthPools array on first load, then never touches it again.
-function resolveGrowthCategories(growthCategories, growthMeta, legacyPipeline) {
-  if (Array.isArray(growthCategories) && growthCategories.length > 0) {
+// Growth pools are first-class categories (like Lifestyle/allocation buckets)
+// so real transactions can be logged against them via CategoryDetail.
+function resolveGrowthCategories(growthCategories, growthMeta) {
+  if (Array.isArray(growthCategories)) {
     const meta = growthMeta && typeof growthMeta === 'object' ? { ...growthMeta } : {}
     growthCategories.forEach((name, i) => {
       const existing = meta[name] && typeof meta[name] === 'object' ? meta[name] : {}
@@ -127,15 +142,7 @@ function resolveGrowthCategories(growthCategories, growthMeta, legacyPipeline) {
     return { categories: growthCategories, meta }
   }
 
-  const legacyPools = Array.isArray(legacyPipeline?.growthPools) ? legacyPipeline.growthPools : []
-  const source = legacyPools.length > 0
-    ? legacyPools.map((p, i) => ({
-      name: p?.name || `Pool ${i + 1}`,
-      priority: Number.isFinite(Number(p?.priority)) ? Number(p.priority) : i + 1,
-      percent: Number.isFinite(Number(p?.percent)) ? Number(p.percent) : 0
-    }))
-    : GROWTH_POOL_DEFS.map(def => ({ ...def, percent: 0 }))
-
+  const source = GROWTH_POOL_DEFS.map(def => ({ ...def, percent: 0 }))
   const categories = []
   const meta = {}
   source.forEach(p => {
@@ -150,10 +157,6 @@ function resolveGrowthCategories(growthCategories, growthMeta, legacyPipeline) {
 
 function resolveAllocationMeta(allocationCategories, allocationMeta) {
   const meta = allocationMeta && typeof allocationMeta === 'object' ? { ...allocationMeta } : {}
-  let nextPriority = allocationCategories.reduce((max, name) => {
-    const p = Number(meta[name]?.priority)
-    return Number.isFinite(p) && p > max ? p : max
-  }, 0) + 1
   allocationCategories.forEach((name, i) => {
     const existing = meta[name] && typeof meta[name] === 'object' ? meta[name] : {}
     if (!Number.isFinite(Number(existing.priority))) {
@@ -165,348 +168,214 @@ function resolveAllocationMeta(allocationCategories, allocationMeta) {
   return meta
 }
 
-export function createLedger({
-  id = uid(),
-  name = 'Personal',
-  type = 'personal', // 'personal' | 'business'
-  txns = [],
-  categories,
-  categoryMeta,
-  groups,
-  pipeline
-} = {}) {
-  const fallbackGroups = [
-    { id: GROUP_IDS.debit, name: 'Debit', type: 'debit', metaCategory: META_CATEGORIES.WALLET, collapsed: false },
-    { id: GROUP_IDS.credit, name: 'Credit', type: 'credit', metaCategory: META_CATEGORIES.OBLIGATIONS, collapsed: false },
-    { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: META_CATEGORIES.SAVINGS, collapsed: false },
-    { id: GROUP_IDS.investment, name: 'Invest', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
-    { id: GROUP_IDS.shares, name: 'Shares', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false },
-    { id: GROUP_IDS.realEstate, name: 'Real Estate', type: 'asset', metaCategory: META_CATEGORIES.ASSET, collapsed: false }
-  ]
-
-  const normalizedGroups = Array.isArray(groups) && groups.length
-    ? groups.map(g => {
-      const name = g.name || 'Group'
-      const normalizedName = name.toLowerCase()
-      let id = g.id || uid()
-      if (normalizedName === 'debit') id = GROUP_IDS.debit
-      else if (normalizedName === 'credit') id = GROUP_IDS.credit
-      else if (normalizedName === 'investment' || normalizedName === 'invest') id = GROUP_IDS.investment
-      else if (normalizedName === 'shares') id = GROUP_IDS.shares
-      else if (normalizedName === 'real estate') id = GROUP_IDS.realEstate
-
-      const type = g.type === 'credit' ? 'credit' : (g.type === 'asset' ? 'asset' : (g.type === 'loan' ? 'loan' : 'debit'))
-      let metaCategory = g.metaCategory
-      if (metaCategory === 'debt') metaCategory = META_CATEGORIES.OBLIGATIONS // Migration
-      
-      if (!metaCategory) {
-        if (type === 'credit' || type === 'loan') metaCategory = META_CATEGORIES.OBLIGATIONS
-        else if (type === 'asset') metaCategory = META_CATEGORIES.ASSET
-        else metaCategory = META_CATEGORIES.WALLET
-      }
-
-      return {
-        id,
-        name,
-        type,
-        metaCategory,
-        collapsed: !!g.collapsed
-      }
-    })
-    : fallbackGroups
-
-  const expenseDefaults = type === 'business' ? [] : [...DEFAULT_EXPENSE_CATEGORIES]
-  const incomeDefaults = type === 'business' ? [...DEFAULT_BUSINESS_INCOME_CATEGORIES] : [...DEFAULT_INCOME_CATEGORIES]
-  const allocationDefaults = [...DEFAULT_ALLOCATION_CATEGORIES]
-
-  const resolvedGrowth = resolveGrowthCategories(categories?.growth, categoryMeta?.growth, pipeline)
+// A "book" is one of the app's three fixed transaction ledgers — transaction,
+// flow, kapapa — sharing one vault. Its identity is its key in the vault
+// object, not an id/name/type field like the old multi-ledger model had.
+export function createBook({ txns = [], categories, categoryMeta } = {}) {
+  const resolvedGrowth = resolveGrowthCategories(categories?.growth, categoryMeta?.growth)
 
   const resolvedCategories = {
-    expense: Array.isArray(categories?.expense) ? categories.expense : expenseDefaults,
-    income: Array.isArray(categories?.income) ? categories.income : incomeDefaults,
-    cos: Array.isArray(categories?.cos) ? categories.cos : (type === 'business' ? [...DEFAULT_COS_CATEGORIES] : []),
-    opps: Array.isArray(categories?.opps) ? categories.opps : (type === 'business' ? [...DEFAULT_OPPS_CATEGORIES] : []),
-    allocation: Array.isArray(categories?.allocation) ? categories.allocation : allocationDefaults,
+    expense: Array.isArray(categories?.expense) ? categories.expense : [...DEFAULT_EXPENSE_CATEGORIES],
+    income: Array.isArray(categories?.income) ? categories.income : [...DEFAULT_INCOME_CATEGORIES],
+    allocation: Array.isArray(categories?.allocation) ? categories.allocation : [...DEFAULT_ALLOCATION_CATEGORIES],
     growth: resolvedGrowth.categories
   }
 
   const resolvedMeta = {
-    expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object' ? categoryMeta.expense : (type === 'business' ? {} : Object.fromEntries(Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }]))),
+    expense: categoryMeta?.expense && typeof categoryMeta.expense === 'object' ? categoryMeta.expense : Object.fromEntries(Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }])),
     income: categoryMeta?.income && typeof categoryMeta.income === 'object' ? categoryMeta.income : {},
-    cos: categoryMeta?.cos && typeof categoryMeta.cos === 'object' ? categoryMeta.cos : {},
-    opps: categoryMeta?.opps && typeof categoryMeta.opps === 'object' ? categoryMeta.opps : {},
     allocation: resolveAllocationMeta(resolvedCategories.allocation, categoryMeta?.allocation),
     growth: resolvedGrowth.meta
   }
 
   return {
-    id,
-    name,
-    type,
     txns: Array.isArray(txns) ? txns : [],
     categories: resolvedCategories,
-    categoryMeta: resolvedMeta,
-    groups: normalizedGroups
+    categoryMeta: resolvedMeta
   }
 }
 
-export function normalizeLedger(data) {
-  if (!data || typeof data !== 'object') return createLedger()
-  return createLedger({
-    id: data.id || uid(),
-    name: data.name || 'Personal',
-    type: data.type || 'personal',
+// Fully empty starting point — used for the Kapapa book, which (unlike Flow)
+// has no legacy config to inherit.
+export function createBlankBook() {
+  return {
+    txns: [],
+    categories: { expense: [], income: [], allocation: [], growth: [] },
+    categoryMeta: { expense: {}, income: {}, allocation: {}, growth: {} }
+  }
+}
+
+export function normalizeBook(data) {
+  if (!data || typeof data !== 'object') return createBook()
+  return createBook({
     txns: data.txns,
     categories: data.categories,
-    categoryMeta: data.categoryMeta,
-    groups: data.groups,
-    pipeline: data.pipeline
+    categoryMeta: data.categoryMeta
   })
 }
 
 export function isVaultEmpty(v) {
-  if (Array.isArray(v?.ledgers) && v.ledgers.length > 0) {
-    return v.ledgers.every(l =>
-      (!l.txns || l.txns.length === 0) &&
-      true
-    )
-  }
-  return (
-    (!v.txns || v.txns.length === 0) &&
-    (!v.accounts || v.accounts.length === 0) &&
-    (!v.accountTxns || v.accountTxns.length === 0)
-  )
+  const books = [v?.transaction, v?.flow, v?.kapapa]
+  const noTxns = books.every(b => !b?.txns || b.txns.length === 0)
+  return noTxns && (!v?.accounts || v.accounts.length === 0) && (!v?.accountTxns || v.accountTxns.length === 0)
 }
 
-export function getSeedVault() {
-  const selcomId = uid()
-  const absaId = uid()
-  const crdbId = uid()
-  const airtelId = uid()
-  const cashId = uid()
-  const realEstateId = uid()
-  const stockId = uid()
-  const ruthId = uid()
-  const lottusId = uid()
-
-  const ledger = createLedger({
-    name: 'Personal',
-    txns: [],
-    categories: {
-      expense: [...DEFAULT_EXPENSE_CATEGORIES],
-      income: [...DEFAULT_INCOME_CATEGORIES]
-    },
-    categoryMeta: {
-      expense: Object.fromEntries(
-        Object.entries(CATEGORY_SUBS).map(([k, v]) => [k, { budget: 0, subs: v }])
-      ),
-      income: {}
-    }
-  })
-
+function defaultSettings(overrides) {
   return {
-    ledgers: [ledger],
-    activeLedgerId: ledger.id,
-    accounts: [
-      { id: selcomId, name: 'Selcom Bank', type: 'debit', balance: 150000 },
-      { id: absaId, name: 'Absa Account', type: 'debit', balance: 0 },
-      { id: crdbId, name: 'CRDB Bank', type: 'debit', balance: 1000000 },
-      { id: airtelId, name: 'Airtel Money', type: 'debit', balance: 0 },
-      { id: cashId, name: 'Cash', type: 'debit', balance: 0 },
-      { id: realEstateId, name: 'Real Estate', type: 'asset', balance: 0 },
-      { id: stockId, name: 'CRDB Stock', type: 'asset', balance: 0 },
-      { id: ruthId, name: 'Ruth Mnyampi', type: 'credit', balance: 1000000 },
-      { id: lottusId, name: 'Lottus', type: 'credit', balance: 100000 },
-    ].map(a => {
-      let groupId = GROUP_IDS.debit
-      if (a.type === 'credit') groupId = GROUP_IDS.credit
-      else if (a.type === 'asset') groupId = a.id === realEstateId ? GROUP_IDS.realEstate : GROUP_IDS.shares
-      return { ...a, groupType: a.type, groupId, ledgerIds: [ledger.id] }
-    }),
-    accountTxns: [
-      {
-        id: uid(),
-        accountId: selcomId,
-        amount: 50000,
-        direction: 'in',
-        kind: 'adjust',
-        note: 'Balance update',
-        date: todayISO()
-      },
-      {
-        id: uid(),
-        accountId: selcomId,
-        amount: 100000,
-        direction: 'in',
-        kind: 'transfer',
-        relatedAccountId: lottusId,
-        note: 'Transfer from Lottus',
-        date: todayISO()
-      },
-      {
-        id: uid(),
-        accountId: crdbId,
-        amount: 1000000,
-        direction: 'in',
-        kind: 'transfer',
-        relatedAccountId: ruthId,
-        note: 'Transfer from Ruth Mnyampi',
-        date: todayISO()
-      },
-    ],
-    settings: { pinLockEnabled: false }
+    pinLockEnabled: false,
+    requireAccountForTxns: false,
+    defaultAppTab: 'tx',
+    defaultInsightTab: 'cashflow',
+    insightTabOrder: ['transactions', 'summary', 'cashflow'],
+    appTabOrder: ['insights', 'tx', 'accounts', 'settings'],
+    flowEnabled: false,
+    kapapaEnabled: false,
+    insightsEnabled: true,
+    ...overrides
   }
+}
+
+function stripLedgerScoping(accounts) {
+  return (Array.isArray(accounts) ? accounts : []).map(a => {
+    const { ledgerId, ledgerIds, subAccounts, ...rest } = a
+    const nextSubAccounts = Array.isArray(subAccounts)
+      ? subAccounts.map(s => {
+        const { ledgerId: _subLedgerId, ...subRest } = s
+        return subRest
+      })
+      : subAccounts
+    return nextSubAccounts !== undefined ? { ...rest, subAccounts: nextSubAccounts } : rest
+  })
 }
 
 export function normalizeVault(data) {
   if (!data) {
-    const ledger = createLedger()
     return {
-      ledgers: [ledger],
-      activeLedgerId: ledger.id,
-      settings: {
-        pinLockEnabled: false,
-        requireAccountForTxns: false,
-        defaultAppTab: 'tx',
-        defaultInsightTab: 'cashflow',
-        insightTabOrder: ['transactions', 'summary', 'cashflow']
-      },
+      transaction: createBook(),
+      flow: createBlankBook(),
+      kapapa: createBlankBook(),
+      groups: getDefaultGroups(),
+      accounts: [],
+      accountTxns: [],
+      settings: defaultSettings(),
       clients: []
     }
   }
 
+  // Legacy: bare array of transactions, no other structure at all.
   if (Array.isArray(data)) {
-    const ledger = createLedger({ txns: data })
     return {
-      ledgers: [ledger],
-      activeLedgerId: ledger.id,
-      settings: {
-        pinLockEnabled: false,
-        requireAccountForTxns: false,
-        defaultAppTab: 'tx',
-        defaultInsightTab: 'cashflow',
-        insightTabOrder: ['transactions', 'summary', 'cashflow']
-      },
+      transaction: createBook({ txns: data }),
+      flow: createBlankBook(),
+      kapapa: createBlankBook(),
+      groups: getDefaultGroups(),
+      accounts: [],
+      accountTxns: [],
+      settings: defaultSettings(),
       clients: []
     }
   }
 
-  if (Array.isArray(data.ledgers)) {
-    const ledgers = data.ledgers.length ? data.ledgers.map(l => normalizeLedger(l)) : [createLedger()]
-    const activeLedgerId = ledgers.find(l => l.id === data.activeLedgerId)?.id || ledgers[0]?.id || ''
-    
-    // Safety: ensure all accounts have valid ledgerIds and a groupId
-    const activeLedger = ledgers.find(l => l.id === activeLedgerId) || ledgers[0]
-
-    // NEW: Synchronize groups across ALL ledgers
-    const canonicalGroups = activeLedger.groups || []
-    ledgers.forEach(l => {
-      l.groups = [...canonicalGroups]
-    })
-
-    const groupIds = new Set(canonicalGroups.map(g => g.id))
-    const validLedgerIds = new Set(ledgers.map(l => l.id))
-
-    const rawAccounts = (Array.isArray(data.accounts) ? data.accounts : [])
-
-    // Recovery Phase 1: Re-link accounts to known ledgers, dropping any ghost
-    // ledger ids (deleted ledgers). An account can legitimately belong to
-    // several ledgers at once (see getAccountLedgerIds); one that's left with
-    // none (new account, or all its ledgers were deleted) falls back to active.
-    const migratedAccounts = rawAccounts.map(a => {
-      const survivingIds = getAccountLedgerIds(a).filter(id => validLedgerIds.has(id))
-      const { ledgerId, ...rest } = a
-      return {
-        ...rest,
-        ledgerIds: survivingIds.length ? survivingIds : [activeLedgerId]
-      }
-    })
-    
-    // Recovery Phase 2: Detect orphaned groups and re-create them or merge into existing Savings
-    let savingsGroup = canonicalGroups.find(g => g.metaCategory === 'savings' || g.name === 'Savings')
-    
-    if (!savingsGroup) {
-      savingsGroup = { id: 'group-savings', name: 'Savings', type: 'debit', metaCategory: 'savings', collapsed: false }
-      // Update canonical and all ledgers
-      canonicalGroups.push(savingsGroup)
-      ledgers.forEach(l => {
-        if (!l.groups.find(g => g.id === savingsGroup.id)) {
-          l.groups.push(savingsGroup)
-        }
-      })
-    }
-    
-    const finalMigratedAccounts = migratedAccounts.map(a => {
-      const isFund = a.name.toLowerCase().includes('fund')
-      // Expanded detection: If it's a known savings account name or contains 'fund', 
-      // AND it's currently orphaned (groupId not in current groups), move it to Savings.
-      const isKnownSavings = ['exploration', 'family care', 'children fund', 'emergency fund', 'upkeep fund'].includes(a.name.toLowerCase())
-      
-      if ((isFund || isKnownSavings) && (!a.groupId || !groupIds.has(a.groupId))) {
-        return { ...a, groupId: savingsGroup.id, groupType: savingsGroup.type }
-      }
-      return a
-    })
-    
-    // Recovery Phase 3: Cleanup duplicate Loans (if they have 0 balance and same name)
-    const seenNames = new Set()
-    const uniqueAccounts = finalMigratedAccounts.filter(a => {
-      if (a.name === 'Loans' && a.balance === 0) {
-        if (seenNames.has('Loans')) return false
-        seenNames.add('Loans')
-        return true
-      }
-      return true
-    })
-    
-    // Final Normalization
-    const finalAccounts = normalizeAccountsWithGroups(uniqueAccounts, canonicalGroups)
-    
+  // Already-migrated shape.
+  if (data.transaction || data.flow || data.kapapa) {
+    const groups = normalizeGroups(data.groups)
     return {
-      ledgers,
-      activeLedgerId,
-      accounts: finalAccounts,
+      transaction: normalizeBook(data.transaction),
+      flow: normalizeBook(data.flow),
+      kapapa: normalizeBook(data.kapapa),
+      groups,
+      accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: {
+      settings: defaultSettings({
         ...(data.settings || {}),
         pinLockEnabled: !!data.settings?.pinLockEnabled,
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
-        defaultAppTab: data.settings?.defaultAppTab || 'tx',
-        defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
-        insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'cashflow'],
-        appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
-      },
+        flowEnabled: !!data.settings?.flowEnabled,
+        kapapaEnabled: !!data.settings?.kapapaEnabled,
+        insightsEnabled: data.settings?.insightsEnabled !== false
+      }),
       clients: Array.isArray(data.clients) ? data.clients : []
     }
   }
 
-  const legacyLedger = createLedger({
+  // Legacy multi-ledger shape (vault.ledgers[] + activeLedgerId). Migrate the
+  // active ledger into `transaction` verbatim (minus the unused cos/opps
+  // business fields), seed `flow` from its Lifestyle/Growth budget config
+  // (copied, not moved — the active ledger's own transactions all stay put
+  // in `transaction`), and leave `kapapa` blank.
+  if (Array.isArray(data.ledgers)) {
+    const ledgers = data.ledgers.filter(Boolean)
+    const activeLedger = ledgers.find(l => l.id === data.activeLedgerId) || ledgers[0] || {}
+
+    const transactionBook = createBook({
+      txns: activeLedger.txns,
+      categories: {
+        expense: activeLedger.categories?.expense,
+        income: activeLedger.categories?.income,
+        allocation: activeLedger.categories?.allocation,
+        growth: activeLedger.categories?.growth
+      },
+      categoryMeta: {
+        expense: activeLedger.categoryMeta?.expense,
+        income: activeLedger.categoryMeta?.income,
+        allocation: activeLedger.categoryMeta?.allocation,
+        growth: activeLedger.categoryMeta?.growth
+      }
+    })
+
+    const flowBook = createBook({
+      txns: [],
+      categories: {
+        allocation: activeLedger.categories?.allocation,
+        growth: activeLedger.categories?.growth
+      },
+      categoryMeta: {
+        allocation: activeLedger.categoryMeta?.allocation,
+        growth: activeLedger.categoryMeta?.growth
+      }
+    })
+
+    const groups = normalizeGroups(activeLedger.groups)
+
+    return {
+      transaction: transactionBook,
+      flow: flowBook,
+      kapapa: createBlankBook(),
+      groups,
+      accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
+      accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
+      settings: defaultSettings({
+        ...(data.settings || {}),
+        pinLockEnabled: !!data.settings?.pinLockEnabled,
+        requireAccountForTxns: !!data.settings?.requireAccountForTxns,
+        flowEnabled: !!data.settings?.moneyPipelineEnabled,
+        kapapaEnabled: false,
+        insightsEnabled: true
+      }),
+      clients: Array.isArray(data.clients) ? data.clients : []
+    }
+  }
+
+  // Legacy flat pre-multi-ledger shape (fields directly on the vault object).
+  const transactionBook = createBook({
     txns: data.txns,
     categories: data.categories,
-    categoryMeta: data.categoryMeta,
-    groups: data.groups
+    categoryMeta: data.categoryMeta
   })
-
-  // Migration: assign all accounts to the new legacyLedger.id
-  const migratedAccounts = (Array.isArray(data.accounts) ? data.accounts : []).map(a => {
-    const { ledgerId, ...rest } = a
-    return { ...rest, ledgerIds: [legacyLedger.id] }
-  })
+  const groups = normalizeGroups(data.groups)
 
   return {
-    ledgers: [legacyLedger],
-    activeLedgerId: legacyLedger.id,
-    accounts: migratedAccounts,
+    transaction: transactionBook,
+    flow: createBlankBook(),
+    kapapa: createBlankBook(),
+    groups,
+    accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-    settings: {
+    settings: defaultSettings({
       ...(data.settings || {}),
       pinLockEnabled: !!data.settings?.pinLockEnabled,
-      requireAccountForTxns: !!data.settings?.requireAccountForTxns,
-      defaultAppTab: data.settings?.defaultAppTab || 'tx',
-      defaultInsightTab: data.settings?.defaultInsightTab || 'summary',
-      insightTabOrder: data.settings?.insightTabOrder || ['transactions', 'summary', 'cashflow'],
-      appTabOrder: data.settings?.appTabOrder || ['insights', 'tx', 'accounts', 'settings']
-    },
+      requireAccountForTxns: !!data.settings?.requireAccountForTxns
+    }),
     clients: Array.isArray(data.clients) ? data.clients : []
   }
 }

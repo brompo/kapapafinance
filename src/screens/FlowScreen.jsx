@@ -188,9 +188,9 @@ function CategoryPickList({ names, onPick, onAddNew }) {
   )
 }
 
-function SectionDivider({ title, total, color, onAdd }) {
+function SectionDivider({ title, total, color, onAdd, style }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 4px 10px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 4px 10px', ...style }}>
       <div style={{ width: 8, height: 8, borderRadius: 4, background: color }} />
       <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', letterSpacing: 0.3 }}>{title}</div>
       <div style={{ flex: 1, height: 1, background: `${color}33` }} />
@@ -505,7 +505,7 @@ export function FlowScreen() {
         <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
         <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>
       </div>
 
@@ -515,8 +515,8 @@ export function FlowScreen() {
         </div>
       )}
 
-      <div style={{ padding: '10px 16px 40px' }}>
-        <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} />
+      <div style={{ padding: '0px 16px 40px' }}>
+        <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} style={{ marginTop: 6 }} />
         <FlowRow
           name="Upkeep"
           sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}

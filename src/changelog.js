@@ -1,6 +1,6 @@
 export const CHANGELOG = [
     {
-        version: "4.1.0",
+        version: "4.0.2",
         date: "2026-08-01",
         changes: [
             'Flow and Kapapa can now add their own Upkeep, Income, Lifestyle, and Growth categories directly — a "+ Add category" option on the Upkeep/Income pickers, and a "+ Add" button on the Lifestyle/Growth section headers.',

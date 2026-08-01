@@ -151,12 +151,12 @@ function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, colo
   )
 }
 
-function CategoryPickList({ names, onPick }) {
-  if (names.length === 0) {
-    return <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet.</div>
-  }
+function CategoryPickList({ names, onPick, onAddNew }) {
   return (
     <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+      {names.length === 0 && (
+        <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No categories yet.</div>
+      )}
       {names.map(name => (
         <button
           key={name}
@@ -171,16 +171,38 @@ function CategoryPickList({ names, onPick }) {
           {name}
         </button>
       ))}
+      {onAddNew && (
+        <button
+          type="button"
+          onClick={onAddNew}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left', padding: '12px 10px',
+            border: 'none', background: 'none',
+            fontSize: 14, fontWeight: 700, color: '#6366f1', cursor: 'pointer'
+          }}
+        >
+          + Add category
+        </button>
+      )}
     </div>
   )
 }
 
-function SectionDivider({ title, total, color }) {
+function SectionDivider({ title, total, color, onAdd }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 4px 10px' }}>
       <div style={{ width: 8, height: 8, borderRadius: 4, background: color }} />
       <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', letterSpacing: 0.3 }}>{title}</div>
       <div style={{ flex: 1, height: 1, background: `${color}33` }} />
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          style={{ fontSize: 11, fontWeight: 700, color, background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer' }}
+        >
+          + Add
+        </button>
+      )}
       <div style={{ fontSize: 12, fontWeight: 700, color }}>{fmtTZS(total)}</div>
     </div>
   )
@@ -224,6 +246,22 @@ export function FlowScreen() {
   // already map 1:1 to a category.
   const [showUpkeepPicker, setShowUpkeepPicker] = useState(false)
   const [showIncomePicker, setShowIncomePicker] = useState(false)
+
+  // Same "+ Add" pattern as Transactions' category grid — Flow/Kapapa have
+  // their own independent category lists now, so each needs its own way to
+  // add one, not just Transactions'.
+  const addCategory = (type) => {
+    const listKey = type === 'collection' ? 'income' : type
+    const label = type === 'collection' ? 'income' : type
+    const name = prompt(`New ${label} category name?`)
+    if (!name?.trim()) return
+    const trimmed = name.trim()
+    const next = [...(categories?.[listKey] || []), trimmed]
+    persistBook({
+      categories: { ...categories, [listKey]: next },
+      categoryMeta: { ...categoryMeta, [listKey]: { ...categoryMeta?.[listKey], [trimmed]: { budget: 0, subs: [] } } }
+    })
+  }
 
   // Opens the same transaction-entry screen Transactions uses, pre-dated to
   // whatever period Flow is currently viewing (see defaultTxnDateForPeriod)
@@ -506,7 +544,7 @@ export function FlowScreen() {
           color={BALANCE_COLOR}
         />
 
-        <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} />
+        <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} onAdd={() => addCategory('allocation')} />
         {envelopeSummary.lifestyle.map((b, i) => (
           <FlowRow
             key={b.name}
@@ -525,7 +563,7 @@ export function FlowScreen() {
           <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Lifestyle buckets yet.</div>
         )}
 
-        <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} />
+        <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} onAdd={() => addCategory('growth')} />
         {growthSorted.map((p, i) => (
           <FlowRow
             key={p.name}
@@ -649,6 +687,7 @@ export function FlowScreen() {
             <CategoryPickList
               names={categories?.expense || []}
               onPick={name => { setShowUpkeepPicker(false); openCategorySpend('expense', name) }}
+              onAddNew={() => addCategory('expense')}
             />
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowUpkeepPicker(false)}>Cancel</button>
@@ -667,6 +706,7 @@ export function FlowScreen() {
             <CategoryPickList
               names={categories?.income || []}
               onPick={name => { setShowIncomePicker(false); openCategorySpend('collection', name) }}
+              onAddNew={() => addCategory('collection')}
             />
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowIncomePicker(false)}>Cancel</button>

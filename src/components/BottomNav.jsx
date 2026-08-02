@@ -31,7 +31,7 @@ export default function BottomNav({ tab, setTab, variant }) {
     },
     {
       id: 'flow',
-      label: 'Flow',
+      label: 'Family',
       content: (active) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M2 9c1.4 0 1.4-3 2.8-3s1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3 1.4 3 2.8 3 1.4-3 2.8-3" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

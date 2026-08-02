@@ -116,10 +116,10 @@ export function SettingsScreen() {
           <div className="hr" />
 
           <div className="stgRow" style={{ cursor: 'default' }}>
-            <div className="stgRowIcon">🌊</div>
+            <div className="stgRowIcon">👨‍👩‍👧‍👦</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
-              <div className="stgRowText">Flow</div>
-              <div className="stgRowSub">Adds a Flow tab for family expenditure, with its own budget cascade (Upkeep/Lifestyle/Growth)</div>
+              <div className="stgRowText">Family</div>
+              <div className="stgRowSub">Adds a Family tab for family expenditure, with its own budget cascade (Upkeep/Lifestyle/Growth)</div>
             </div>
             <label className="toggle" style={{ marginLeft: 'auto' }}>
               <input
@@ -127,7 +127,7 @@ export function SettingsScreen() {
                 checked={!!settings.flowEnabled}
                 onChange={e => {
                   updateSettings({ ...settings, flowEnabled: e.target.checked })
-                  show(e.target.checked ? 'Flow enabled.' : 'Flow disabled.')
+                  show(e.target.checked ? 'Family enabled.' : 'Family disabled.')
                 }}
               />
               <span className="toggleTrack" />

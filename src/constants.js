@@ -35,7 +35,7 @@ export const INSIGHT_TAB_LABELS = {
 export const APP_TAB_LABELS = {
   insights: 'Insights',
   tx: 'Transaction',
-  flow: 'Flow',
+  flow: 'Family',
   kapapa: 'Kapapa',
   accounts: 'Accounts',
   dse: 'DSE',

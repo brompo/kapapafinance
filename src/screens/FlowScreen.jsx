@@ -235,7 +235,7 @@ export function FlowScreen() {
     txns, categories, categoryMeta, persistBook, show, setSelectedCategory
   } = useAppContext()
 
-  const bookLabel = tab === 'kapapa' ? 'Kapapa' : 'Flow'
+  const bookLabel = tab === 'kapapa' ? 'Kapapa' : 'Family'
   const isKapapa = tab === 'kapapa'
 
   // DSE Watch lives inside the Kapapa tab as a second view rather than its

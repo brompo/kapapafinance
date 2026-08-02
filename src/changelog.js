@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.0.7",
+        date: "2026-08-02",
+        changes: [
+            'Added a "Force Update" row at the bottom of Settings → About — clears the cached app and reloads the latest version if the background auto-updater hasn\'t caught up yet. Doesn\'t touch your data.',
+        ]
+    },
+    {
         version: "4.0.6",
         date: "2026-08-02",
         changes: [

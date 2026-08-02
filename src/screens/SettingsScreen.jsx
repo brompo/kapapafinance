@@ -12,6 +12,31 @@ export function SettingsScreen() {
   const version = pkg.version
 
   const [activeSub, setActiveSub] = useState(null)
+  const [forcingUpdate, setForcingUpdate] = useState(false)
+
+  // Nuclear-option updater for when the background auto-updater (main.jsx)
+  // hasn't kicked in yet — unregisters the service worker and clears the
+  // Cache Storage it populated, then reloads with a cache-busting query
+  // param so even a misconfigured host's HTTP cache can't serve stale HTML.
+  // Only touches Cache Storage/SW, never localStorage/IndexedDB, so vault
+  // data is untouched.
+  const forceUpdate = async () => {
+    if (forcingUpdate) return
+    setForcingUpdate(true)
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(reg => reg.unregister()))
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+    } catch (err) {
+      console.error('Force update failed', err)
+    }
+    window.location.href = `${window.location.pathname}?_fu=${Date.now()}`
+  }
 
   return (
     <div className="settingsScreen">
@@ -154,6 +179,17 @@ export function SettingsScreen() {
             <div className="stgRowBody">
               <div className="stgRowText">What's New</div>
               <div className="stgRowSub">Version {version}</div>
+            </div>
+            <div className="stgChevron">›</div>
+          </button>
+
+          <div className="hr" />
+
+          <button className="stgRow" onClick={forceUpdate} disabled={forcingUpdate}>
+            <div className="stgRowIcon">🔄</div>
+            <div className="stgRowBody">
+              <div className="stgRowText">{forcingUpdate ? 'Updating…' : 'Force Update'}</div>
+              <div className="stgRowSub">Clear the cached app and reload the latest version. Your data isn't affected.</div>
             </div>
             <div className="stgChevron">›</div>
           </button>

@@ -4144,6 +4144,11 @@ label {
   background: #f3f4f6;
 }
 
+.stgRow:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .stgRow+.stgRow {
   border-top: 1px solid var(--border);
 }

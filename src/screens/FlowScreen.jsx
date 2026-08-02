@@ -581,7 +581,7 @@ export function FlowScreen() {
           )}
 
           <div style={{ padding: '0px 16px 40px' }}>
-            <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} style={{ marginTop: 6 }} />
+            <SectionDivider title="UPKEEP" total={upkeepDistributedTotal} color={UPKEEP_COLOR} style={{ marginTop: 6 }} />
             <FlowRow
               name="Upkeep"
               sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}

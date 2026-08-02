@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.0.6",
+        date: "2026-08-02",
+        changes: [
+            'The UPKEEP section header in Flow/Kapapa now includes what a fundsUpkeep Growth pool (e.g. "Up Buffer") redirected in, not just the monthly distribution — so Upkeep + Balance now totals Income for the period.',
+        ]
+    },
+    {
         version: "4.0.5",
         date: "2026-08-02",
         changes: [

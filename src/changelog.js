@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.0.8",
+        date: "2026-08-02",
+        changes: [
+            'Added a Family Goal to the Family tab: a target % of income for Upkeep (defaults to 50%), shown as a progress bar at the top in place of the old Distributed total — green while under the goal, red at or over. Tap it to edit; changes apply from the viewed month onward, like Growth pool %.',
+        ]
+    },
+    {
         version: "4.0.7",
         date: "2026-08-02",
         changes: [

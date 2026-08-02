@@ -128,6 +128,31 @@ export function withBudgetForMonth(meta, monthKey, budget) {
   return { ...existing, budgetHistory: history }
 }
 
+// The Family Upkeep goal (target % of income) follows the same month-scoped
+// history approach as Growth percent above: editing it only changes the goal
+// from that month forward, so past months keep showing whatever goal was
+// actually in effect then. No goal ever set (or no history entry old enough)
+// falls back to 50%, matching the goal's own default.
+export function getUpkeepGoalPercentForMonth(goal, monthKey) {
+  const history = Array.isArray(goal?.percentHistory) ? goal.percentHistory : []
+  let effective = null
+  for (const entry of history) {
+    if (entry.month <= monthKey) effective = entry.percent
+    else break
+  }
+  if (effective === null) effective = goal?.percent
+  return Number(effective ?? 50)
+}
+
+export function withUpkeepGoalPercentForMonth(goal, monthKey, percent) {
+  const existing = goal && typeof goal === 'object' ? goal : {}
+  const history = (Array.isArray(existing.percentHistory) ? existing.percentHistory : [])
+    .filter(entry => entry.month !== monthKey)
+  history.push({ month: monthKey, percent })
+  history.sort((a, b) => a.month.localeCompare(b.month))
+  return { ...existing, percentHistory: history }
+}
+
 // Growth pools are first-class categories (like Lifestyle/allocation buckets)
 // so real transactions can be logged against them via CategoryDetail.
 function resolveGrowthCategories(growthCategories, growthMeta) {

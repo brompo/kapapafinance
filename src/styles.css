@@ -1965,6 +1965,22 @@ label {
   flex-wrap: wrap;
 }
 
+/* Family Goal progress bar (Upkeep % of income vs target) */
+.familyGoalBarBg {
+  background: #f1f5f9;
+  height: 6px;
+  border-radius: 3px;
+  margin: 10px auto 0;
+  max-width: 220px;
+  overflow: hidden;
+}
+
+.familyGoalBarFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
 .ledgerGhost {
   border: none;
   background: transparent;

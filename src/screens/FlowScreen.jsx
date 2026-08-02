@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext'
 import { fmtTZS, todayISO } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
-import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth } from '../utils/ledger'
+import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
 import DSEWatchScreen from './DSEWatchScreen'
 
 // Theme bases mirror the category-card colors HomeScreen assigns per section
@@ -231,7 +231,7 @@ function SectionDivider({ title, total, color, onAdd, style }) {
 // action (the ✎ button), not a transaction.
 export function FlowScreen() {
   const {
-    formatMonthLabel, tab, settings,
+    formatMonthLabel, tab, settings, updateSettings,
     txns, categories, categoryMeta, persistBook, show, setSelectedCategory
   } = useAppContext()
 
@@ -252,6 +252,12 @@ export function FlowScreen() {
   const [editTarget, setEditTarget] = useState(null) // { metaType: 'allocation'|'growth', name, field: 'budget'|'percent' }
   const [editValue, setEditValue] = useState('')
   const [editOpeningBalance, setEditOpeningBalance] = useState('')
+
+  // The Family Goal (Upkeep as a % of income) is a Family-tab-only concept
+  // stored flat on settings, not per-category — its own small modal rather
+  // than reusing editTarget above, since it has no bucket/openingBalance.
+  const [showGoalEdit, setShowGoalEdit] = useState(false)
+  const [editGoalValue, setEditGoalValue] = useState('')
 
   // Transfer moves Balance between Lifestyle buckets and Growth pools by shifting
   // their openingBalance — the only term in each one's balance formula that isn't
@@ -486,6 +492,29 @@ export function FlowScreen() {
   const ringTotal = ringSegments.reduce((s, seg) => s + Math.max(0, seg.value), 0)
   const percentOf = (v) => ringTotal > 0 ? (Math.max(0, v) / ringTotal) * 100 : 0
 
+  // Family Goal: Upkeep's Distribution (not raw spend) as a share of this
+  // period's income, checked against a month-scoped target — see
+  // getUpkeepGoalPercentForMonth in ledger.js for why it's resolved per month
+  // rather than a single flat setting.
+  const upkeepGoalPercent = getUpkeepGoalPercentForMonth(settings.familyUpkeepGoal, editMonthKey)
+  const upkeepActualPercent = incomeInfo.income > 0 ? (upkeepDistributedTotal / incomeInfo.income) * 100 : 0
+  const upkeepGoalOver = upkeepActualPercent >= upkeepGoalPercent
+
+  const openGoalEdit = () => {
+    setEditGoalValue(String(upkeepGoalPercent))
+    setShowGoalEdit(true)
+  }
+
+  const saveGoalEdit = () => {
+    const nextValue = Number(String(editGoalValue).replace(/,/g, '')) || 0
+    updateSettings({
+      ...settings,
+      familyUpkeepGoal: withUpkeepGoalPercentForMonth(settings.familyUpkeepGoal, editMonthKey, nextValue)
+    })
+    show('Updated.')
+    setShowGoalEdit(false)
+  }
+
   return (
     <div className="ledgerScreen">
       <div className="ledgerHeader">
@@ -555,9 +584,27 @@ export function FlowScreen() {
       {showDSE ? <DSEWatchScreen /> : (
         <>
           <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
-            <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(totalDistributed)}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>Distributed this {viewGranularity}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
+            {isKapapa ? (
+              <>
+                <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(totalDistributed)}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>Distributed this {viewGranularity}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
+              </>
+            ) : (
+              <div onClick={openGoalEdit} style={{ cursor: 'pointer' }} role="button" aria-label="Edit Family Goal">
+                <div style={{ fontSize: 30, fontWeight: 800, color: upkeepGoalOver ? '#ef4444' : '#111827' }}>
+                  {Math.round(upkeepActualPercent)}% <span style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>on Upkeep</span>
+                </div>
+                <div className="familyGoalBarBg">
+                  <div
+                    className="familyGoalBarFill"
+                    style={{ width: `${Math.min(upkeepActualPercent, 100)}%`, background: upkeepGoalOver ? '#ef4444' : '#16a34a' }}
+                  />
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
@@ -694,6 +741,25 @@ export function FlowScreen() {
             <div className="modalActions">
               <button className="btn" onClick={() => setEditTarget(null)}>Cancel</button>
               <button className="btn primary" onClick={saveEdit} disabled={growthOverBy > 0}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGoalEdit && (
+        <div className="modalBackdrop" onClick={() => setShowGoalEdit(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Family Goal</div>
+            <div className="field">
+              <label>Upkeep should not exceed (% of income)</label>
+              <input inputMode="decimal" value={editGoalValue} onChange={e => setEditGoalValue(e.target.value)} placeholder="e.g. 50" autoFocus />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                Applies from {periodLabel} onward — earlier months keep their existing goal.
+              </div>
+            </div>
+            <div className="modalActions">
+              <button className="btn" onClick={() => setShowGoalEdit(false)}>Cancel</button>
+              <button className="btn primary" onClick={saveGoalEdit}>Save</button>
             </div>
           </div>
         </div>

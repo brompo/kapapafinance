@@ -130,7 +130,7 @@ function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, colo
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-        {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Expense: {fmtTZS(expense)}</div>}
+        {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Exp: {fmtTZS(expense)}</div>}
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -590,9 +590,7 @@ export function FlowScreen() {
                 ? `${fundsUpkeepPoolName || 'Growth'}: ${fmtTZS(envelopeSummary.upkeep.fundedByGrowthThisPeriod)}`
                 : null}
               amount={envelopeSummary.upkeep.distributedThisPeriod}
-              preTag={envelopeSummary.upkeep.spentThisPeriod > 0
-                ? `Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`
-                : null}
+              preTag={`Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`}
               tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
               color={UPKEEP_COLOR}
               onSpend={() => setShowUpkeepPicker(true)}
@@ -617,7 +615,7 @@ export function FlowScreen() {
                 sub={`B/F: ${fmtTZS(b.broughtForward)}`}
                 expense={b.spentThisPeriod}
                 amount={b.distributedThisPeriod}
-                preTag={b.spentThisPeriod > 0 ? `Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}` : null}
+                preTag={`Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}`}
                 tag={`Balance: ${fmtTZS(b.balance)}`}
                 color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
                 onSpend={() => openCategorySpend('allocation', b.name)}
@@ -636,7 +634,7 @@ export function FlowScreen() {
                 sub={`B/F: ${fmtTZS(p.broughtForward)}`}
                 expense={p.spentThisPeriod}
                 amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
-                preTag={(!p.fundsUpkeep && p.spentThisPeriod > 0) ? `Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}` : null}
+                preTag={`Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}`}
                 tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
                 color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
                 onSpend={() => openCategorySpend('growth', p.name)}
@@ -651,6 +649,7 @@ export function FlowScreen() {
                 name={`Unallocated (${Math.round(envelopeSummary.growthUnallocated.percent)}%)`}
                 sub={`B/F: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
                 amount={envelopeSummary.growthUnallocated.distributedThisPeriod}
+                preTag={`Before Dist: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
                 tag={`Balance: ${fmtTZS(envelopeSummary.growthUnallocated.balance)}`}
                 color="#94a3b8"
               />

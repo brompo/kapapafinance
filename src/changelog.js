@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.0.5",
+        date: "2026-08-02",
+        changes: [
+            'Flow/Kapapa category rows now always show "Before Dist" (equal to B/F when there\'s no spend yet), instead of only when there\'s an expense.',
+            'Shortened "Expense:" to "Exp:" on those rows.',
+        ]
+    },
+    {
         version: "4.0.4",
         date: "2026-08-02",
         changes: [

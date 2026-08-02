@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.0.9",
+        date: "2026-08-02",
+        changes: [
+            'Flow/Kapapa category rows now show "Before Dist" and "Balance"/"After Dist" in red when negative, instead of always green/gray.',
+        ]
+    },
+    {
         version: "4.0.8",
         date: "2026-08-02",
         changes: [

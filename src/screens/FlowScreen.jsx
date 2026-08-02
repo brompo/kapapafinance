@@ -113,7 +113,7 @@ function RingLegendItem({ color, label, percent }) {
 // deliberately different hit-targets on the same row rather than one click
 // doing both, since "log a spend" and "change my target" are different jobs
 // a person reaches for at different times.
-function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, color, onSpend, onEdit }) {
+function FlowRow({ name, sub, expense, note, amount, preTag, preTagValue, tag, tagValue, tagColor, color, onSpend, onEdit }) {
   return (
     <div
       onClick={onSpend}
@@ -136,8 +136,8 @@ function FlowRow({ name, sub, expense, note, amount, preTag, tag, tagColor, colo
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
         {note && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{note}</div>}
-        {preTag && <div style={{ fontSize: 11, fontWeight: 500, color: '#16a34a' }}>{preTag}</div>}
-        {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagColor || '#94a3b8' }}>{tag}</div>}
+        {preTag && <div style={{ fontSize: 11, fontWeight: 500, color: preTagValue < 0 ? '#ef4444' : '#16a34a' }}>{preTag}</div>}
+        {tag && <div style={{ fontSize: 11, fontWeight: 700, color: tagValue < 0 ? '#ef4444' : (tagColor || '#94a3b8') }}>{tag}</div>}
       </div>
       {onEdit && (
         <button
@@ -638,7 +638,9 @@ export function FlowScreen() {
                 : null}
               amount={envelopeSummary.upkeep.distributedThisPeriod}
               preTag={`Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`}
+              preTagValue={envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod}
               tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
+              tagValue={envelopeSummary.upkeep.balance}
               color={UPKEEP_COLOR}
               onSpend={() => setShowUpkeepPicker(true)}
             />
@@ -650,7 +652,9 @@ export function FlowScreen() {
               expense={balanceExpense}
               amount={balanceDistribution}
               preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
+              preTagValue={balanceBeforeDistribution}
               tag={`After Dist: ${fmtTZS(balanceTotal)}`}
+              tagValue={balanceTotal}
               color={BALANCE_COLOR}
             />
 
@@ -663,7 +667,9 @@ export function FlowScreen() {
                 expense={b.spentThisPeriod}
                 amount={b.distributedThisPeriod}
                 preTag={`Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}`}
+                preTagValue={b.broughtForward - b.spentThisPeriod}
                 tag={`Balance: ${fmtTZS(b.balance)}`}
+                tagValue={b.balance}
                 color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
                 onSpend={() => openCategorySpend('allocation', b.name)}
                 onEdit={() => openEdit('allocation', b.name, 'budget', b.budget)}
@@ -682,7 +688,9 @@ export function FlowScreen() {
                 expense={p.spentThisPeriod}
                 amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
                 preTag={`Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}`}
+                preTagValue={p.broughtForward - p.spentThisPeriod}
                 tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
+                tagValue={p.fundsUpkeep ? undefined : p.balance}
                 color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
                 onSpend={() => openCategorySpend('growth', p.name)}
                 onEdit={() => openEdit('growth', p.name, 'percent', p.percent)}
@@ -697,7 +705,9 @@ export function FlowScreen() {
                 sub={`B/F: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
                 amount={envelopeSummary.growthUnallocated.distributedThisPeriod}
                 preTag={`Before Dist: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
+                preTagValue={envelopeSummary.growthUnallocated.broughtForward}
                 tag={`Balance: ${fmtTZS(envelopeSummary.growthUnallocated.balance)}`}
+                tagValue={envelopeSummary.growthUnallocated.balance}
                 color="#94a3b8"
               />
             )}

@@ -237,11 +237,15 @@ function ClassicHomeScreen() {
             <span className="ledgerStatLabel">Exp</span>
             <span className="ledgerStatValue kpi-expense">{fmtTZS(displayExp)}</span>
           </div>
-          <div className="ledgerSummaryDivider" />
-          <div className="ledgerSummaryStat">
-            <span className="ledgerStatLabel">Alloc</span>
-            <span className="ledgerStatValue kpi-alloc">{fmtTZS(displayAlloc)}</span>
-          </div>
+          {isEnvelopeBook && (
+            <>
+              <div className="ledgerSummaryDivider" />
+              <div className="ledgerSummaryStat">
+                <span className="ledgerStatLabel">Alloc</span>
+                <span className="ledgerStatValue kpi-alloc">{fmtTZS(displayAlloc)}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -250,8 +254,12 @@ function ClassicHomeScreen() {
           ? { title: 'Collections', type: 'collection', list: incomeCats, totals: collectionTotals, kpi: incomeCats.reduce((s, c) => s + (collectionTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4, note: incomeInfo?.isLegacyFallback ? 'No Collections recorded yet this month — totals include legacy income entries shown as already-clean.' : null }
           : { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
-        { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: lifestyleCardTotals, kpi: allocationCats.reduce((s, c) => s + (lifestyleCardTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2, secondaryTotals: isEnvelopeBook ? lifestyleBalances : null },
-        { title: 'Growth', type: 'growth', list: growthCats, totals: growthCardTotals, kpi: growthCats.reduce((s, c) => s + (growthCardTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4, secondaryTotals: isEnvelopeBook ? growthBalances : null },
+        // Lifestyle/Growth are Flow/Kapapa's budget-cascade concepts — Transaction
+        // itself stays to plain Income/Expenses only, see module comment above.
+        ...(isEnvelopeBook ? [
+          { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: lifestyleCardTotals, kpi: allocationCats.reduce((s, c) => s + (lifestyleCardTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2, secondaryTotals: lifestyleBalances },
+          { title: 'Growth', type: 'growth', list: growthCats, totals: growthCardTotals, kpi: growthCats.reduce((s, c) => s + (growthCardTotals.get(c) || 0), 0), collapse: collapseGrowth, setCollapse: setCollapseGrowth, theme: 4, secondaryTotals: growthBalances },
+        ] : []),
       ].map(sec => {
         if (sec.list.length === 0 && (sec.type === 'allocation' || sec.type === 'growth')) return null;
         return (

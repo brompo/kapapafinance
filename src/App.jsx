@@ -5,7 +5,6 @@ import { HomeScreen } from './screens/HomeScreen'
 import { FinanceInsightsScreen } from './screens/FinanceInsightsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import AccountsScreen from './screens/Accounts'
-import DSEWatchScreen from './screens/DSEWatchScreen'
 import { FlowScreen } from './screens/FlowScreen'
 import BottomNav from './components/BottomNav'
 
@@ -27,15 +26,14 @@ function VaultApp() {
     setTab(next)
   }
 
-  // Optional tabs (Flow, Kapapa, Insights, DSE) fall back to Transactions if
-  // their Settings toggle is off while they're the active tab — e.g. turning
-  // one off from Settings itself, or a stale tab from before a toggle changed.
+  // Optional tabs (Flow, Kapapa, Insights) fall back to Transactions if their
+  // Settings toggle is off while they're the active tab — e.g. turning one
+  // off from Settings itself, or a stale tab from before a toggle changed.
   useEffect(() => {
     if (tab === 'flow' && !settings.flowEnabled) setTab('tx')
     else if (tab === 'kapapa' && !settings.kapapaEnabled) setTab('tx')
     else if (tab === 'insights' && !settings.insightsEnabled) setTab('tx')
-    else if (tab === 'dse' && !settings.dseEnabled) setTab('tx')
-  }, [tab, settings.flowEnabled, settings.kapapaEnabled, settings.insightsEnabled, settings.dseEnabled, setTab])
+  }, [tab, settings.flowEnabled, settings.kapapaEnabled, settings.insightsEnabled, setTab])
 
   if (stage === 'loading') return <div className="loading">Kapapa Finance...</div>
   if (stage === 'landing') return <LandingStage />
@@ -77,7 +75,6 @@ function VaultApp() {
             onToast={show}
           />
         )}
-        {tab === 'dse' && settings.dseEnabled && <DSEWatchScreen />}
         {tab === 'settings' && <SettingsScreen />}
       </main>
 

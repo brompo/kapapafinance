@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useAppContext } from '../context/AppContext'
 
 const INSIGHT_TAB_LABELS = { transactions: 'Transactions', summary: 'Summary', cashflow: 'Cashflow' }
-const APP_TAB_LABELS = { insights: 'Insights', tx: 'Transaction', flow: 'Flow', kapapa: 'Kapapa', accounts: 'Accounts', dse: 'DSE', settings: 'Settings' }
+const APP_TAB_LABELS = { insights: 'Insights', tx: 'Transaction', flow: 'Flow', kapapa: 'Kapapa', accounts: 'Accounts', settings: 'Settings' }
 
 export default function VisibilitySettings({ onClose }) {
   const { vault, settings, updateSettings, persist, show } = useAppContext()

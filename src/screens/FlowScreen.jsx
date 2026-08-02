@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { fmtTZS, todayISO } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth } from '../utils/ledger'
+import DSEWatchScreen from './DSEWatchScreen'
 
 // Theme bases mirror the category-card colors HomeScreen assigns per section
 // (Transactions tab), so a category opened from Flow gets the same header
@@ -230,11 +231,21 @@ function SectionDivider({ title, total, color, onAdd, style }) {
 // action (the ✎ button), not a transaction.
 export function FlowScreen() {
   const {
-    formatMonthLabel, tab,
+    formatMonthLabel, tab, settings,
     txns, categories, categoryMeta, persistBook, show, setSelectedCategory
   } = useAppContext()
 
   const bookLabel = tab === 'kapapa' ? 'Kapapa' : 'Flow'
+  const isKapapa = tab === 'kapapa'
+
+  // DSE Watch lives inside the Kapapa tab as a second view rather than its
+  // own bottom-nav tab — this toggle switches between them. Falls back to
+  // 'budget' if DSE gets turned off in Settings while it's the active view.
+  const [kapapaView, setKapapaView] = useState('budget')
+  useEffect(() => {
+    if (kapapaView === 'dse' && !settings.dseEnabled) setKapapaView('budget')
+  }, [kapapaView, settings.dseEnabled])
+  const showDSE = isKapapa && kapapaView === 'dse' && settings.dseEnabled
 
   // Budget/percent aren't transactions — they're just category settings — so
   // editing them here doesn't go through the same flow as adding a transaction.
@@ -479,153 +490,178 @@ export function FlowScreen() {
     <div className="ledgerScreen">
       <div className="ledgerHeader">
         <div className="ledgerGhost" style={{ cursor: 'default' }}>{bookLabel}</div>
-        <div className="ledgerPeriod" style={{ position: 'relative' }}>
-          <button className="ledgerNavBtn" onClick={() => shiftPeriod(-1)}>‹</button>
-          <div className="ledgerPeriodLabel" style={{ cursor: 'pointer' }} onClick={() => setShowGranularityMenu(v => !v)}>{periodLabel}</div>
-          <button className="ledgerNavBtn" onClick={() => shiftPeriod(1)}>›</button>
+        {showDSE ? <div /> : (
+          <div className="ledgerPeriod" style={{ position: 'relative' }}>
+            <button className="ledgerNavBtn" onClick={() => shiftPeriod(-1)}>‹</button>
+            <div className="ledgerPeriodLabel" style={{ cursor: 'pointer' }} onClick={() => setShowGranularityMenu(v => !v)}>{periodLabel}</div>
+            <button className="ledgerNavBtn" onClick={() => shiftPeriod(1)}>›</button>
 
-          {showGranularityMenu && (
-            <>
-              <div style={{ position: 'fixed', inset: 0, zIndex: 100 }} onClick={() => setShowGranularityMenu(false)} />
-              <div style={{
-                position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)',
-                background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                padding: 8, zIndex: 101, minWidth: 120, border: '1px solid #f1f5f9'
-              }}>
-                {['Year', 'Month'].map(g => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => {
-                      const low = g.toLowerCase()
-                      setViewGranularity(low)
-                      setShowGranularityMenu(false)
-                      const now = new Date()
-                      setStatPeriod(low === 'year' ? String(now.getFullYear()) : now.toISOString().slice(0, 7))
-                    }}
-                    style={{
-                      display: 'block', width: '100%', padding: '10px 12px', border: 'none',
-                      background: viewGranularity === g.toLowerCase() ? '#eff6ff' : 'transparent',
-                      borderRadius: 8, textAlign: 'left', fontWeight: 600, fontSize: 13,
-                      color: viewGranularity === g.toLowerCase() ? '#3b82f6' : '#64748b'
-                    }}
-                  >
-                    {g}ly
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+            {showGranularityMenu && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100 }} onClick={() => setShowGranularityMenu(false)} />
+                <div style={{
+                  position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)',
+                  background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                  padding: 8, zIndex: 101, minWidth: 120, border: '1px solid #f1f5f9'
+                }}>
+                  {['Year', 'Month'].map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => {
+                        const low = g.toLowerCase()
+                        setViewGranularity(low)
+                        setShowGranularityMenu(false)
+                        const now = new Date()
+                        setStatPeriod(low === 'year' ? String(now.getFullYear()) : now.toISOString().slice(0, 7))
+                      }}
+                      style={{
+                        display: 'block', width: '100%', padding: '10px 12px', border: 'none',
+                        background: viewGranularity === g.toLowerCase() ? '#eff6ff' : 'transparent',
+                        borderRadius: 8, textAlign: 'left', fontWeight: 600, fontSize: 13,
+                        color: viewGranularity === g.toLowerCase() ? '#3b82f6' : '#64748b'
+                      }}
+                    >
+                      {g}ly
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <div style={{ width: 40 }} />
       </div>
 
-      <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
-        <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(totalDistributed)}</div>
-        <div style={{ fontSize: 12, color: '#94a3b8' }}>Distributed this {viewGranularity}</div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
-        <SegmentedPie segments={ringSegments} />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
-        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
-        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
-        <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>
-      </div>
-
-      {incomeInfo.isLegacyFallback && (
-        <div style={{ padding: '4px 16px 0', fontSize: 11, color: '#8b90b2' }}>
-          No Collections recorded yet this {viewGranularity} — Income includes legacy entries shown as already-clean.
+      {isKapapa && settings.dseEnabled && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '2px 16px 10px' }}>
+          {[{ id: 'budget', label: 'Budget' }, { id: 'dse', label: 'DSE Watch' }].map(v => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setKapapaView(v.id)}
+              style={{
+                padding: '6px 16px', fontSize: 12, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                background: kapapaView === v.id ? '#5a5fb0' : '#f1f5f9',
+                color: kapapaView === v.id ? '#fff' : '#64748b'
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       )}
 
-      <div style={{ padding: '0px 16px 40px' }}>
-        <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} style={{ marginTop: 6 }} />
-        <FlowRow
-          name="Upkeep"
-          sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}
-          expense={envelopeSummary.upkeep.spentThisPeriod}
-          note={envelopeSummary.upkeep.fundedByGrowthThisPeriod > 0
-            ? `${fundsUpkeepPoolName || 'Growth'}: ${fmtTZS(envelopeSummary.upkeep.fundedByGrowthThisPeriod)}`
-            : null}
-          amount={envelopeSummary.upkeep.distributedThisPeriod}
-          preTag={envelopeSummary.upkeep.spentThisPeriod > 0
-            ? `Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`
-            : null}
-          tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
-          color={UPKEEP_COLOR}
-          onSpend={() => setShowUpkeepPicker(true)}
-        />
+      {showDSE ? <DSEWatchScreen /> : (
+        <>
+          <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: '#111827' }}>{fmtTZS(totalDistributed)}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>Distributed this {viewGranularity}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
+          </div>
 
-        <SectionDivider title="BALANCE" total={balanceDistribution} color={BALANCE_COLOR} />
-        <FlowRow
-          name="Lifestyle + Growth"
-          sub={`B/F: ${fmtTZS(balanceBF)}`}
-          expense={balanceExpense}
-          amount={balanceDistribution}
-          preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
-          tag={`After Dist: ${fmtTZS(balanceTotal)}`}
-          color={BALANCE_COLOR}
-        />
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
+            <SegmentedPie segments={ringSegments} />
+          </div>
 
-        <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} onAdd={() => addCategory('allocation')} />
-        {envelopeSummary.lifestyle.map((b, i) => (
-          <FlowRow
-            key={b.name}
-            name={b.name}
-            sub={`B/F: ${fmtTZS(b.broughtForward)}`}
-            expense={b.spentThisPeriod}
-            amount={b.distributedThisPeriod}
-            preTag={b.spentThisPeriod > 0 ? `Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}` : null}
-            tag={`Balance: ${fmtTZS(b.balance)}`}
-            color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
-            onSpend={() => openCategorySpend('allocation', b.name)}
-            onEdit={() => openEdit('allocation', b.name, 'budget', b.budget)}
-          />
-        ))}
-        {envelopeSummary.lifestyle.length === 0 && (
-          <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Lifestyle buckets yet.</div>
-        )}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
+            <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
+            <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
+            <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
+          </div>
 
-        <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} onAdd={() => addCategory('growth')} />
-        {growthSorted.map((p, i) => (
-          <FlowRow
-            key={p.name}
-            name={`${p.name} (${p.percent}%)`}
-            sub={`B/F: ${fmtTZS(p.broughtForward)}`}
-            expense={p.spentThisPeriod}
-            amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
-            preTag={(!p.fundsUpkeep && p.spentThisPeriod > 0) ? `Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}` : null}
-            tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
-            color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
-            onSpend={() => openCategorySpend('growth', p.name)}
-            onEdit={() => openEdit('growth', p.name, 'percent', p.percent)}
-          />
-        ))}
-        {envelopeSummary.growth.length === 0 && (
-          <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Growth pools yet.</div>
-        )}
-        {Math.round(envelopeSummary.growthUnallocated.percent) > 0 && (
-          <FlowRow
-            name={`Unallocated (${Math.round(envelopeSummary.growthUnallocated.percent)}%)`}
-            sub={`B/F: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
-            amount={envelopeSummary.growthUnallocated.distributedThisPeriod}
-            tag={`Balance: ${fmtTZS(envelopeSummary.growthUnallocated.balance)}`}
-            color="#94a3b8"
-          />
-        )}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
+            <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>
+          </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
-          <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>
-        </div>
-      </div>
+          {incomeInfo.isLegacyFallback && (
+            <div style={{ padding: '4px 16px 0', fontSize: 11, color: '#8b90b2' }}>
+              No Collections recorded yet this {viewGranularity} — Income includes legacy entries shown as already-clean.
+            </div>
+          )}
+
+          <div style={{ padding: '0px 16px 40px' }}>
+            <SectionDivider title="UPKEEP" total={envelopeSummary.upkeep.distributedThisPeriod} color={UPKEEP_COLOR} style={{ marginTop: 6 }} />
+            <FlowRow
+              name="Upkeep"
+              sub={`B/F: ${fmtTZS(envelopeSummary.upkeep.broughtForward)}`}
+              expense={envelopeSummary.upkeep.spentThisPeriod}
+              note={envelopeSummary.upkeep.fundedByGrowthThisPeriod > 0
+                ? `${fundsUpkeepPoolName || 'Growth'}: ${fmtTZS(envelopeSummary.upkeep.fundedByGrowthThisPeriod)}`
+                : null}
+              amount={envelopeSummary.upkeep.distributedThisPeriod}
+              preTag={envelopeSummary.upkeep.spentThisPeriod > 0
+                ? `Before Dist: ${fmtTZS(envelopeSummary.upkeep.broughtForward - envelopeSummary.upkeep.spentThisPeriod)}`
+                : null}
+              tag={`Balance: ${fmtTZS(envelopeSummary.upkeep.balance)}`}
+              color={UPKEEP_COLOR}
+              onSpend={() => setShowUpkeepPicker(true)}
+            />
+
+            <SectionDivider title="BALANCE" total={balanceDistribution} color={BALANCE_COLOR} />
+            <FlowRow
+              name="Lifestyle + Growth"
+              sub={`B/F: ${fmtTZS(balanceBF)}`}
+              expense={balanceExpense}
+              amount={balanceDistribution}
+              preTag={`Before Dist: ${fmtTZS(balanceBeforeDistribution)}`}
+              tag={`After Dist: ${fmtTZS(balanceTotal)}`}
+              color={BALANCE_COLOR}
+            />
+
+            <SectionDivider title="LIFESTYLE" total={lifestyleDistributed} color={LIFESTYLE_PALETTE[0]} onAdd={() => addCategory('allocation')} />
+            {envelopeSummary.lifestyle.map((b, i) => (
+              <FlowRow
+                key={b.name}
+                name={b.name}
+                sub={`B/F: ${fmtTZS(b.broughtForward)}`}
+                expense={b.spentThisPeriod}
+                amount={b.distributedThisPeriod}
+                preTag={b.spentThisPeriod > 0 ? `Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}` : null}
+                tag={`Balance: ${fmtTZS(b.balance)}`}
+                color={LIFESTYLE_PALETTE[i % LIFESTYLE_PALETTE.length]}
+                onSpend={() => openCategorySpend('allocation', b.name)}
+                onEdit={() => openEdit('allocation', b.name, 'budget', b.budget)}
+              />
+            ))}
+            {envelopeSummary.lifestyle.length === 0 && (
+              <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Lifestyle buckets yet.</div>
+            )}
+
+            <SectionDivider title="GROWTH" total={growthDistributed} color={GROWTH_PALETTE[0]} onAdd={() => addCategory('growth')} />
+            {growthSorted.map((p, i) => (
+              <FlowRow
+                key={p.name}
+                name={`${p.name} (${p.percent}%)`}
+                sub={`B/F: ${fmtTZS(p.broughtForward)}`}
+                expense={p.spentThisPeriod}
+                amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
+                preTag={(!p.fundsUpkeep && p.spentThisPeriod > 0) ? `Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}` : null}
+                tag={p.fundsUpkeep ? '→ Funds Upkeep' : `Balance: ${fmtTZS(p.balance)}`}
+                color={p.fundsUpkeep ? '#94a3b8' : GROWTH_PALETTE[i % GROWTH_PALETTE.length]}
+                onSpend={() => openCategorySpend('growth', p.name)}
+                onEdit={() => openEdit('growth', p.name, 'percent', p.percent)}
+              />
+            ))}
+            {envelopeSummary.growth.length === 0 && (
+              <div style={{ padding: '4px 12px 12px', fontSize: 11, color: '#8b90b2' }}>No Growth pools yet.</div>
+            )}
+            {Math.round(envelopeSummary.growthUnallocated.percent) > 0 && (
+              <FlowRow
+                name={`Unallocated (${Math.round(envelopeSummary.growthUnallocated.percent)}%)`}
+                sub={`B/F: ${fmtTZS(envelopeSummary.growthUnallocated.broughtForward)}`}
+                amount={envelopeSummary.growthUnallocated.distributedThisPeriod}
+                tag={`Balance: ${fmtTZS(envelopeSummary.growthUnallocated.balance)}`}
+                color="#94a3b8"
+              />
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
+              <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {editTarget && (
         <div className="modalBackdrop" onClick={() => setEditTarget(null)}>

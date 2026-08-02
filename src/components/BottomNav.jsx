@@ -63,16 +63,6 @@ export default function BottomNav({ tab, setTab, variant }) {
       )
     },
     {
-      id: 'dse',
-      label: 'DSE',
-      content: (active) => (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 17L9 11L13 15L21 7" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M17 7H21V11" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      )
-    },
-    {
       id: 'settings',
       label: 'Settings',
       content: (active) => (
@@ -85,7 +75,6 @@ export default function BottomNav({ tab, setTab, variant }) {
   ]
 
   const visibleIcons = icons.filter(i => {
-    if (i.id === 'dse') return settings.dseEnabled
     if (i.id === 'flow') return settings.flowEnabled
     if (i.id === 'kapapa') return settings.kapapaEnabled
     if (i.id === 'insights') return settings.insightsEnabled

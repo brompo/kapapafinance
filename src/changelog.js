@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.0.4",
+        date: "2026-08-02",
+        changes: [
+            'DSE Watch moved inside the Kapapa tab (a "Budget"/"DSE Watch" toggle at the top) instead of its own bottom-nav tab.',
+            'Transaction is back to just Income and Expenses — Lifestyle/Growth stay exclusive to Flow and Kapapa\'s budget cascade.',
+        ]
+    },
+    {
         version: "4.0.3",
         date: "2026-08-01",
         changes: [

@@ -73,7 +73,7 @@ export function SettingsScreen() {
             <div className="stgRowIcon">📈</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
               <div className="stgRowText">DSE Watch</div>
-              <div className="stgRowSub">Show DSE stock market tab</div>
+              <div className="stgRowSub">Show DSE stock market view inside the Kapapa tab</div>
             </div>
             <label className="toggle" style={{ marginLeft: 'auto' }}>
               <input

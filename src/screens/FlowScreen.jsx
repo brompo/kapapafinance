@@ -29,6 +29,13 @@ function defaultTxnDateForPeriod(viewGranularity, statPeriod) {
   return `${statPeriod}-${String(day).padStart(2, '0')}`
 }
 
+function formatCommas(str) {
+  if (!str) return ''
+  const parts = str.toString().split('.')
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return parts.join('.')
+}
+
 const UPKEEP_COLOR = '#fb923c'
 const LIFESTYLE_PALETTE = ['#a87dfb', '#38bdf8', '#f472b6', '#fbbf24', '#818cf8', '#fb7185']
 const GROWTH_PALETTE = ['#2bb06a', '#22c55e', '#34d399', '#10b981', '#4ade80', '#059669']
@@ -801,7 +808,7 @@ export function FlowScreen() {
             </div>
             <div className="field" style={{ marginTop: 12 }}>
               <label>Amount (TZS)</label>
-              <input inputMode="decimal" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="e.g. 100000" autoFocus />
+              <input inputMode="decimal" value={formatCommas(transferAmount)} onChange={e => setTransferAmount(e.target.value.replace(/,/g, ''))} placeholder="e.g. 100,000" autoFocus />
               {transferExceedsBalance && (
                 <div style={{ fontSize: 11, marginTop: 6, fontWeight: 700, color: '#ef4444' }}>
                   {transferFromBucket.name} only has {fmtTZS(transferFromBucket.balance)} — this will push it negative.

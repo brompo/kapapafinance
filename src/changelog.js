@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.1.0",
+        date: "2026-08-03",
+        changes: [
+            'Added Projects: group planned Expenditures (name + projected cost) under a Project on any Flow/Kapapa bucket, log spend straight from an expenditure as a real tagged transaction, and see per-project progress plus a budget-fit check against the bucket\'s Balance.',
+            'Added a "Start on Projects" toggle in Edit Card — tapping that card then opens straight to its Projects tab instead of the amount-entry screen.',
+        ]
+    },
+    {
         version: "4.0.9",
         date: "2026-08-02",
         changes: [

@@ -266,7 +266,7 @@ export function AppProvider({ children }) {
     return type === 'income' || type === 'collection'
   }
 
-  async function addQuickTxn({ type, amount, category, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, needsCompliance, complianceAmount }) {
+  async function addQuickTxn({ type, amount, category, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, needsCompliance, complianceAmount, projectId, expenditureId }) {
     const amt = Number(amount || 0)
     if (!amt || amt <= 0) { show('Enter a valid amount.'); return false; }
     if (categoryMeta.requireAccountForTxns && !accountId) { show('Please select an account.'); return false; }
@@ -307,6 +307,7 @@ export function AppProvider({ children }) {
         toAccountId: toAccountId || '',
         subAccountId: subAccountId || '',
         clientId: clientId || '',
+        ...(projectId && { projectId, expenditureId }),
         ...(type === 'collection' && {
           needsCompliance: !!needsCompliance,
           complianceAmount: needsCompliance ? complianceAmount : 0

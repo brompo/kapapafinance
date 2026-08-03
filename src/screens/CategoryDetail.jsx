@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react'
 import { useAppContext } from '../context/AppContext'
 import { todayISO, fmtTZS, fmtCompact, calculateAssetMetrics, uid } from '../money'
 import { CATEGORY_SUBS } from '../constants'
@@ -99,32 +99,122 @@ export function CategoryDetail({
   // (which AppContext's handleSelectCategory defaults to true on every tap).
   const isSilentGrowth = category.type === 'growth' && !!meta?.fundsUpkeep
 
-  // Plans: a lightweight "how much will this cost me" checklist scoped to this
-  // category, modeled on the Accounts screen's Goals & Targets planner (name +
-  // amount, no linkage to real transactions). Pipeline-only, same gate as the
-  // rest of Flow's category-level surface.
+  // Projects: a lightweight budgeting checklist scoped to this category,
+  // modeled on the Accounts screen's Goals & Targets planner but one level
+  // deeper — a Project (e.g. "Home Improvement") groups several Expenditures
+  // (e.g. "Toilet Sink", "Electrical Fundi"), each with its own projected
+  // cost. Spend is logged straight from an expenditure (via the same
+  // add-transaction keypad as the rest of this screen) so it's a real,
+  // tagged transaction against this category — not a parallel ledger.
+  // Pipeline-only, same gate as the rest of Flow's category-level surface.
   const pipelineMode = tab !== 'tx'
-  const plans = Array.isArray(meta?.plans) ? meta.plans : []
-  const totalPlanned = plans.reduce((s, p) => s + Number(p.amount || 0), 0)
-  const [showAddPlanModal, setShowAddPlanModal] = useState(false)
-  const [newPlanName, setNewPlanName] = useState('')
-  const [newPlanAmount, setNewPlanAmount] = useState('')
+  const projects = Array.isArray(meta?.projects) ? meta.projects : []
+  const [expandedProjectId, setExpandedProjectId] = useState(null)
+  const [showAddProjectModal, setShowAddProjectModal] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [addExpenditureFor, setAddExpenditureFor] = useState(null) // project id
+  const [newExpenditureName, setNewExpenditureName] = useState('')
+  const [newExpenditureAmount, setNewExpenditureAmount] = useState('')
+  // Set right before opening the add-transaction keypad from an expenditure's
+  // "Log Expense" button, so the resulting transaction is tagged as it's
+  // created rather than needing a separate assignment step afterward.
+  const [logExpenseTarget, setLogExpenseTarget] = useState(null) // { projectId, expenditureId }
 
-  const handleAddPlan = () => {
-    const amt = Number(String(newPlanAmount).replace(/,/g, '')) || 0
-    const name = newPlanName.trim()
-    if (!name || amt <= 0) return show('Enter a valid name and amount.')
-    const nextPlans = [...plans, { id: uid(), name, amount: amt }]
-    onUpdateMeta({ ...meta, plans: nextPlans })
-    setNewPlanName('')
-    setNewPlanAmount('')
-    setShowAddPlanModal(false)
-    show('Plan added.')
+  const spentByExpenditureId = useMemo(() => {
+    const map = new Map()
+    for (const t of txns) {
+      if (t.category === category.name && t.type === category.type && t.expenditureId) {
+        map.set(t.expenditureId, (map.get(t.expenditureId) || 0) + Number(t.amount || 0))
+      }
+    }
+    return map
+  }, [txns, category.name, category.type])
+
+  const projectsWithTotals = useMemo(() => projects.map(p => {
+    const expenditures = (Array.isArray(p.expenditures) ? p.expenditures : []).map(e => ({
+      ...e,
+      spent: spentByExpenditureId.get(e.id) || 0
+    }))
+    const projected = expenditures.reduce((s, e) => s + Number(e.amount || 0), 0)
+    const spent = expenditures.reduce((s, e) => s + e.spent, 0)
+    return { ...p, expenditures, projected, spent }
+  }), [projects, spentByExpenditureId])
+
+  const logExpenseLabel = useMemo(() => {
+    if (!logExpenseTarget) return null
+    const project = projectsWithTotals.find(p => p.id === logExpenseTarget.projectId)
+    const expenditure = project?.expenditures.find(e => e.id === logExpenseTarget.expenditureId)
+    return project && expenditure ? `${expenditure.name} · ${project.name}` : null
+  }, [logExpenseTarget, projectsWithTotals])
+
+  const totalProjected = projectsWithTotals.reduce((s, p) => s + p.projected, 0)
+  const totalRemaining = projectsWithTotals.reduce((s, p) => s + Math.max(0, p.projected - p.spent), 0)
+  // `total` is this category's headline Balance figure whenever Projects is
+  // visible (pipelineMode) — see HomeScreen's growthDetailTotal/lifestyleDetailTotal,
+  // which pass the envelope Balance, not a plain spend sum, under that same gate.
+  const shortfall = totalRemaining - total
+
+  const persistProjects = (nextProjects) => onUpdateMeta({ ...meta, projects: nextProjects })
+
+  const handleAddProject = () => {
+    const name = newProjectName.trim()
+    if (!name) return show('Enter a project name.')
+    persistProjects([...projects, { id: uid(), name, expenditures: [] }])
+    setNewProjectName('')
+    setShowAddProjectModal(false)
+    setExpandedProjectId(null)
+    show('Project added.')
   }
 
-  const handleDeletePlan = (planId) => {
-    onUpdateMeta({ ...meta, plans: plans.filter(p => p.id !== planId) })
+  const handleAddExpenditure = () => {
+    const name = newExpenditureName.trim()
+    const amt = Number(String(newExpenditureAmount).replace(/,/g, '')) || 0
+    if (!name || amt <= 0) return show('Enter a valid name and projected cost.')
+    persistProjects(projects.map(p => p.id === addExpenditureFor
+      ? { ...p, expenditures: [...(Array.isArray(p.expenditures) ? p.expenditures : []), { id: uid(), name, amount: amt }] }
+      : p))
+    setNewExpenditureName('')
+    setNewExpenditureAmount('')
+    setAddExpenditureFor(null)
+    show('Expenditure added.')
   }
+
+  // Deleting keeps any transactions already logged against it — same
+  // precedent as deleting a category (see Delete Category below): the money
+  // was really spent, only the planning entry (and its tag) goes away. Both
+  // the meta change and the txn untagging land in one persistBook call since
+  // persistBook merges onto a book snapshot closed over at render time —
+  // two separate calls in the same handler would clobber each other.
+  const handleDeleteProject = (project) => {
+    const spent = (project.expenditures || []).reduce((s, e) => s + (spentByExpenditureId.get(e.id) || 0), 0)
+    const warn = spent > 0
+      ? `Delete "${project.name}"? It has ${fmtTZS(spent)} logged — existing transactions are kept but will no longer show under this project.`
+      : `Delete "${project.name}"? This can't be undone.`
+    if (!window.confirm(warn)) return
+    persistBook({
+      categoryMeta: { ...categoryMeta, [metaType]: { ...categoryMeta[metaType], [category.name]: { ...meta, projects: projects.filter(p => p.id !== project.id) } } },
+      txns: txns.map(t => t.projectId === project.id ? { ...t, projectId: '', expenditureId: '' } : t)
+    })
+    if (expandedProjectId === project.id) setExpandedProjectId(null)
+    show('Project deleted.')
+  }
+
+  const handleDeleteExpenditure = (project, expenditure) => {
+    const spent = spentByExpenditureId.get(expenditure.id) || 0
+    const warn = spent > 0
+      ? `Delete "${expenditure.name}"? It has ${fmtTZS(spent)} logged — existing transactions are kept but will no longer show under this project.`
+      : `Delete "${expenditure.name}"? This can't be undone.`
+    if (!window.confirm(warn)) return
+    const nextProjects = projects.map(p => p.id === project.id
+      ? { ...p, expenditures: (p.expenditures || []).filter(e => e.id !== expenditure.id) }
+      : p)
+    persistBook({
+      categoryMeta: { ...categoryMeta, [metaType]: { ...categoryMeta[metaType], [category.name]: { ...meta, projects: nextProjects } } },
+      txns: txns.map(t => t.expenditureId === expenditure.id ? { ...t, projectId: '', expenditureId: '' } : t)
+    })
+    show('Expenditure deleted.')
+  }
+
   const effectiveShowAddForm = showAddForm && !isSilentGrowth
 
   const [showEditModal, setShowEditModal] = useState(false)
@@ -132,6 +222,7 @@ export function CategoryDetail({
   const [editColor, setEditColor] = useState(meta?.color || '')
   const [editNeedsCompliance, setEditNeedsCompliance] = useState(!!meta?.needsCompliance)
   const [editFundsUpkeep, setEditFundsUpkeep] = useState(!!meta?.fundsUpkeep)
+  const [editStartOnProjects, setEditStartOnProjects] = useState(!!meta?.startOnProjects)
   const [editBudget, setEditBudget] = useState(String(
     category.type === 'allocation' ? getBudgetForMonth(meta, editMonthKey) : (meta?.budget || 0)
   ))
@@ -154,7 +245,18 @@ export function CategoryDetail({
 
   const spent = total
   const ratio = budget > 0 ? spent / budget : 0
-  const [txnTab, setTxnTab] = useState('activity')
+  // "Start on Projects": a per-category opt-in (set via Edit Card) that skips
+  // the amount-entry keypad this card would otherwise open to and lands
+  // straight on its Projects tab instead — useful for buckets you mostly
+  // visit to plan/track rather than log a quick spend against. Both reads
+  // only fire once, at mount, since CategoryDetail remounts fresh every time
+  // a category is opened (selectedCategory clears to null on close).
+  const startsOnProjects = pipelineMode && !!meta?.startOnProjects
+  const [txnTab, setTxnTab] = useState(() => startsOnProjects ? 'projects' : 'activity')
+  useLayoutEffect(() => {
+    if (startsOnProjects) setShowAddForm(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const recentTxns = useMemo(() => {
     const today = todayISO();
@@ -201,7 +303,7 @@ export function CategoryDetail({
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [recentTxns])
 
-  const onAddTxn = async (amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount) => {
+  const onAddTxn = async (amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, projectTag) => {
     return addQuickTxn({
       type: category.type,
       amount,
@@ -215,6 +317,7 @@ export function CategoryDetail({
       recurring,
       pendingClient,
       updateDefaultAccount,
+      ...(projectTag && { projectId: projectTag.projectId, expenditureId: projectTag.expenditureId }),
       // Collections inherit their category's compliance requirement — if the
       // category needs compliance, new entries start pending until cleared.
       ...(category.type === 'collection' && {
@@ -289,7 +392,7 @@ export function CategoryDetail({
         </div>
         {!effectiveShowAddForm && <div style={{ fontSize: 23, fontWeight: 800 }}>{fmtTZS(total)}</div>}
         {effectiveShowAddForm && (
-          <button type="button" onClick={() => setShowAddForm(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none' }}>
+          <button type="button" onClick={() => { setShowAddForm(false); setLogExpenseTarget(null) }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none' }}>
             <div style={{ background: '#eef2ff', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📋</div>
             <span style={{ fontSize: 9, color: '#4b5563', fontWeight: 600 }}>View Transactions</span>
           </button>
@@ -360,6 +463,18 @@ export function CategoryDetail({
                   </label>
                 </div>
               )}
+              {pipelineMode && (
+                <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>Start on Projects</div>
+                    <div className="small">Tapping this card opens straight to its Projects tab instead of the amount-entry screen.</div>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={editStartOnProjects} onChange={e => setEditStartOnProjects(e.target.checked)} />
+                    <span className="toggleTrack" />
+                  </label>
+                </div>
+              )}
               {(category.type === 'allocation' || category.type === 'growth') && (
                 <div>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Opening Balance (TZS)</div>
@@ -401,6 +516,7 @@ export function CategoryDetail({
                         [editName]: {
                           ...(categoryMeta[metaType]?.[category.name] || {}),
                           color: editColor,
+                          ...(pipelineMode && { startOnProjects: editStartOnProjects }),
                           ...(category.type === 'collection' && { needsCompliance: editNeedsCompliance }),
                           ...(category.type === 'expense' && { budget: Number(String(editBudget).replace(/,/g, '')) || 0 }),
                           ...(category.type === 'allocation' && { budgetHistory: budgetUpdate.budgetHistory }),
@@ -454,6 +570,11 @@ export function CategoryDetail({
       {effectiveShowAddForm ? (
         <div className="catDetailForm" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            {logExpenseLabel && (
+              <div style={{ textAlign: 'center', marginBottom: 8, padding: '6px 10px', borderRadius: 10, background: '#eef2ff', color: '#6366f1', fontSize: 11, fontWeight: 700 }}>
+                Logging: {logExpenseLabel}
+              </div>
+            )}
             <div style={{ textAlign: 'center', margin: '0 0 10px', fontWeight: 700, color: '#111827', display: 'flex', flexDirection: 'column' }}>
               {prevValue && operator && <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 2 }}>{formatCommas(prevValue)} {operator}</div>}
               <div style={{ fontSize: 28, color: '#111827', marginBottom: 2, fontWeight: 800 }}>TSh</div>
@@ -596,8 +717,8 @@ export function CategoryDetail({
                     if (prevValue && operator && amount) {
                       finalAmount = execCalc(prevValue, amount, operator);
                     }
-                    onAddTxn(finalAmount, note, accountId, toAccountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: recurringCount } : null, pendingClient, true);
-                    setAmount(''); setNote(''); setPrevValue(''); setOperator(''); setShowAddForm(false);
+                    onAddTxn(finalAmount, note, accountId, toAccountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: recurringCount } : null, pendingClient, true, logExpenseTarget);
+                    setAmount(''); setNote(''); setPrevValue(''); setOperator(''); setShowAddForm(false); setLogExpenseTarget(null);
                   } else if (k === '⌫') {
                     setAmount(prev => prev.slice(0, -1));
                   } else if (k === 'C') {
@@ -634,7 +755,7 @@ export function CategoryDetail({
               This pool funds Upkeep — add transactions there instead.
             </div>
           ) : (
-            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => setShowAddForm(true)}>+ Add {category.name}</button>
+            <button className="btn" style={{ width: '100%', marginBottom: 15, background: '#ffd76a', fontSize: 13, height: 44, marginTop: 12 }} onClick={() => { setLogExpenseTarget(null); setShowAddForm(true) }}>+ Add {category.name}</button>
           )}
 
           <div className="modeSegmented" style={{
@@ -663,52 +784,110 @@ export function CategoryDetail({
             >Future</button>
             {pipelineMode && (
               <button
-                onClick={() => setTxnTab('plans')}
+                onClick={() => setTxnTab('projects')}
                 style={{
                   flex: 1, padding: '8px', borderRadius: 10,
-                  background: txnTab === 'plans' ? '#fff' : 'transparent',
+                  background: txnTab === 'projects' ? '#fff' : 'transparent',
                   border: 'none', fontWeight: 700, fontSize: 12,
-                  color: txnTab === 'plans' ? '#5a5fb0' : '#64748b',
-                  boxShadow: txnTab === 'plans' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none'
+                  color: txnTab === 'projects' ? '#5a5fb0' : '#64748b',
+                  boxShadow: txnTab === 'projects' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none'
                 }}
-              >Plans</button>
+              >Projects</button>
             )}
           </div>
 
-          {txnTab === 'plans' ? (
+          {txnTab === 'projects' ? (
             <div>
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '14px 16px', borderRadius: 16, background: '#eef2ff', marginBottom: 15
               }}>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: 0.3 }}>TOTAL PLANNED</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b' }}>{fmtTZS(totalPlanned)}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: 0.3 }}>TOTAL PROJECTED</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b' }}>{fmtTZS(totalProjected)}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: shortfall > 0 ? '#ef4444' : '#10b981' }}>
+                    {shortfall > 0
+                      ? `Short by ${fmtTZS(shortfall)} against Balance`
+                      : `Balance covers what's left to spend`}
+                  </div>
                 </div>
-                <button className="btn primary" type="button" style={{ height: 36, fontSize: 12, padding: '0 14px' }} onClick={() => setShowAddPlanModal(true)}>+ Add Plan</button>
+                <button className="btn primary" type="button" style={{ height: 36, fontSize: 12, padding: '0 14px' }} onClick={() => setShowAddProjectModal(true)}>+ Add Project</button>
               </div>
 
-              {plans.length === 0 ? (
+              {projectsWithTotals.length === 0 ? (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8' }}>
                   <div style={{ fontSize: 28, marginBottom: 8 }}>🎯</div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#64748b' }}>No planned costs yet for {category.name}.</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#64748b' }}>No projects yet for {category.name}.</div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {plans.map(p => (
-                    <div key={p.id} style={{
-                      padding: '10px 12px', borderRadius: 16, background: '#fff', border: '0.5px solid #eef2ff',
-                      display: 'flex', alignItems: 'center', gap: 12
-                    }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 16, background: '#fff', border: '1px solid #f1f5f9',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0
-                      }}>🎯</div>
-                      <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{p.name}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{fmtTZS(p.amount)}</div>
-                      <button type="button" onClick={() => handleDeletePlan(p.id)} style={{ marginLeft: 4, opacity: 0.4, background: 'none', border: 'none', fontSize: 16 }}>×</button>
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {projectsWithTotals.map(p => {
+                    const isExpanded = expandedProjectId === p.id
+                    const pct = p.projected > 0 ? Math.min(100, Math.round((p.spent / p.projected) * 100)) : 0
+                    const overBudget = p.spent > p.projected
+                    return (
+                      <div key={p.id} style={{ borderRadius: 16, background: '#fff', border: '0.5px solid #eef2ff', overflow: 'hidden' }}>
+                        <div
+                          onClick={() => setExpandedProjectId(isExpanded ? null : p.id)}
+                          style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+                        >
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 16, background: '#fff', border: '1px solid #f1f5f9',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0
+                          }}>📁</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{p.name}</div>
+                            <div style={{ fontSize: 11, color: overBudget ? '#ef4444' : '#94a3b8', marginTop: 2 }}>
+                              {fmtTZS(p.spent)} / {fmtTZS(p.projected)}
+                            </div>
+                            <div style={{ width: '100%', height: 6, background: '#e2e8f0', borderRadius: 10, overflow: 'hidden', marginTop: 6 }}>
+                              <div style={{ width: `${pct}%`, height: '100%', background: overBudget ? '#ef4444' : '#6366f1', borderRadius: 10 }} />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(p) }}
+                            style={{ marginLeft: 4, opacity: 0.4, background: 'none', border: 'none', fontSize: 16 }}
+                          >×</button>
+                        </div>
+
+                        {isExpanded && (
+                          <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {p.expenditures.length === 0 && (
+                              <div style={{ fontSize: 12, color: '#94a3b8', padding: '4px 2px 8px' }}>No expenditures yet.</div>
+                            )}
+                            {p.expenditures.map(e => (
+                              <div key={e.id} style={{
+                                padding: '8px 10px', borderRadius: 12, background: '#f9fafb', border: '0.5px solid #f1f5f9',
+                                display: 'flex', alignItems: 'center', gap: 10
+                              }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{e.name}</div>
+                                  <div style={{ fontSize: 11, color: e.spent > e.amount ? '#ef4444' : '#94a3b8', marginTop: 1 }}>
+                                    {fmtTZS(e.spent)} / {fmtTZS(e.amount)}
+                                  </div>
+                                </div>
+                                {!isSilentGrowth && (
+                                  <button
+                                    type="button"
+                                    className="btn"
+                                    style={{ height: 30, fontSize: 11, padding: '0 10px', background: '#ffd76a' }}
+                                    onClick={() => { setLogExpenseTarget({ projectId: p.id, expenditureId: e.id }); setShowAddForm(true) }}
+                                  >Log Expense</button>
+                                )}
+                                <button type="button" onClick={() => handleDeleteExpenditure(p, e)} style={{ opacity: 0.4, background: 'none', border: 'none', fontSize: 16 }}>×</button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => { setAddExpenditureFor(p.id); setNewExpenditureName(''); setNewExpenditureAmount('') }}
+                              style={{ alignSelf: 'flex-start', fontSize: 12, color: '#6366f1', fontWeight: 700, background: 'none', border: 'none', padding: '4px 2px' }}
+                            >+ Add Expenditure</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -903,34 +1082,57 @@ export function CategoryDetail({
         </div>
       )}
 
-      {showAddPlanModal && (
-        <div className="modalBackdrop" onClick={() => setShowAddPlanModal(false)}>
+      {showAddProjectModal && (
+        <div className="modalBackdrop" onClick={() => setShowAddProjectModal(false)}>
           <div className="modalCard" onClick={e => e.stopPropagation()}>
-            <div className="modalTitle">Add Plan</div>
+            <div className="modalTitle">Add Project</div>
             <div className="field">
-              <label>Plan Name</label>
+              <label>Project Name</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Home Improvement"
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setShowAddProjectModal(false)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={handleAddProject}>Add Project</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addExpenditureFor && (
+        <div className="modalBackdrop" onClick={() => setAddExpenditureFor(null)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Add Expenditure</div>
+            <div className="field">
+              <label>Expenditure Name</label>
               <input
                 type="text"
                 className="input"
                 placeholder="e.g. Toilets (Tiles and Fundi's Costs)"
-                value={newPlanName}
-                onChange={e => setNewPlanName(e.target.value)}
+                value={newExpenditureName}
+                onChange={e => setNewExpenditureName(e.target.value)}
                 autoFocus
               />
             </div>
             <div className="field" style={{ marginTop: 12 }}>
-              <label>Estimated Cost (TZS)</label>
+              <label>Projected Cost (TZS)</label>
               <input
                 inputMode="decimal"
                 className="input"
-                placeholder="e.g. 220000"
-                value={newPlanAmount}
-                onChange={e => setNewPlanAmount(e.target.value)}
+                placeholder="e.g. 220,000"
+                value={formatCommas(newExpenditureAmount)}
+                onChange={e => setNewExpenditureAmount(e.target.value.replace(/,/g, ''))}
               />
             </div>
             <div className="modalActions">
-              <button className="btn" type="button" onClick={() => setShowAddPlanModal(false)}>Cancel</button>
-              <button className="btn primary" type="button" onClick={handleAddPlan}>Add to Plan</button>
+              <button className="btn" type="button" onClick={() => setAddExpenditureFor(null)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={handleAddExpenditure}>Add Expenditure</button>
             </div>
           </div>
         </div>

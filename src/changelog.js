@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.1.1",
+        date: "2026-08-03",
+        changes: [
+            'Transfer Between Buckets now leaves a trail: both buckets\' Activity tabs show the move ("Transferred to/from X"), styled distinctly (dashed indigo card, ⇄ icon) from real expenses/income, with red/green amounts by direction.',
+            'The Transfer Between Buckets amount field now formats with commas as you type.',
+        ]
+    },
+    {
         version: "4.1.0",
         date: "2026-08-03",
         changes: [

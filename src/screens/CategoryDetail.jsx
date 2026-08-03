@@ -20,7 +20,7 @@ export function CategoryDetail({
   setShowAddForm
 }) {
   const {
-    accounts, txns, tab, groups, categories, accountTxns,
+    accounts, txns, tab, groups, categories, accountTxns, book,
     addQuickTxn, updateTxn, delTxn, addReimbursement,
     show, persistBook, categoryMeta, settings, clients, formatMonthLabel
   } = useAppContext()
@@ -291,8 +291,40 @@ export function CategoryDetail({
         })));
       }
     }
-    return [...regular, ...gains].sort((a, b) => b._sortDate.localeCompare(a._sortDate)).slice(0, 50)
-  }, [txns, category.name, accounts, groups, accountTxns, txnTab])
+    // Bucket-to-bucket transfers move money by adjusting openingBalance
+    // directly (see FlowScreen's saveTransfer) — there's no real txns row for
+    // them, so without this they'd vanish from both buckets' history. Merge
+    // in a synthetic row (tap to delete + reverse, see handleDeleteTransfer)
+    // wherever this category was either side of a transfer.
+    let transfers = []
+    if (category.type === 'allocation' || category.type === 'growth') {
+      transfers = (Array.isArray(book?.transfers) ? book.transfers : [])
+        .filter(tr => (tr.fromType === category.type && tr.fromName === category.name) || (tr.toType === category.type && tr.toName === category.name))
+        .map(tr => {
+          const isOutgoing = tr.fromType === category.type && tr.fromName === category.name
+          return {
+            id: `transfer-${tr.id}`,
+            date: tr.date,
+            amount: tr.amount,
+            category: category.name,
+            type: category.type,
+            note: isOutgoing ? `Transferred to ${tr.toName}` : `Transferred from ${tr.fromName}`,
+            _sortDate: tr.date,
+            _isGain: false,
+            _isTransfer: true,
+            _transferIn: !isOutgoing,
+            _transferId: tr.id,
+            _fromType: tr.fromType,
+            _fromName: tr.fromName,
+            _toType: tr.toType,
+            _toName: tr.toName
+          }
+        })
+      transfers = txnTab === 'activity' ? transfers.filter(t => t.date <= today) : transfers.filter(t => t.date > today)
+    }
+
+    return [...regular, ...gains, ...transfers].sort((a, b) => b._sortDate.localeCompare(a._sortDate)).slice(0, 50)
+  }, [txns, category.name, category.type, accounts, groups, accountTxns, txnTab, book])
 
   const groupedTxns = useMemo(() => {
     const map = new Map()
@@ -302,6 +334,33 @@ export function CategoryDetail({
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [recentTxns])
+
+  const isInflowRow = (t) => t._isTransfer ? t._transferIn : (t.type === 'income' || t.type === 'collection')
+
+  // Reverses a transfer: undoes both buckets' openingBalance adjustments
+  // (mirrors FlowScreen's saveTransfer, in the opposite direction) and drops
+  // the log entry, in one persistBook call so neither side is left stale.
+  const handleDeleteTransfer = (t) => {
+    const { _transferId, _fromType, _fromName, _toType, _toName, amount } = t
+    const warn = `Delete this transfer? ${fmtTZS(amount)} will be moved back from ${_toName} to ${_fromName}.`
+    if (!window.confirm(warn)) return
+    const fromMeta = categoryMeta[_fromType]?.[_fromName] || {}
+    const toMeta = categoryMeta[_toType]?.[_toName] || {}
+    const nextCategoryMeta = { ...categoryMeta }
+    nextCategoryMeta[_fromType] = {
+      ...nextCategoryMeta[_fromType],
+      [_fromName]: { ...fromMeta, openingBalance: Number(fromMeta.openingBalance || 0) + amount }
+    }
+    nextCategoryMeta[_toType] = {
+      ...nextCategoryMeta[_toType],
+      [_toName]: { ...(nextCategoryMeta[_toType]?.[_toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) - amount }
+    }
+    persistBook({
+      categoryMeta: nextCategoryMeta,
+      transfers: (Array.isArray(book?.transfers) ? book.transfers : []).filter(tr => tr.id !== _transferId)
+    })
+    show('Transfer deleted — amounts reversed.')
+  }
 
   const onAddTxn = async (amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, projectTag) => {
     return addQuickTxn({
@@ -901,8 +960,8 @@ export function CategoryDetail({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
             {groupedTxns.map(([d, items]) => {
               const dayDate = new Date(d)
-              const totalOut = items.reduce((s, t) => s + (!(t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
-              const totalIn = items.reduce((s, t) => s + ((t.type === 'income' || t.type === 'collection') ? Number(t.amount || 0) : 0), 0)
+              const totalOut = items.reduce((s, t) => s + (!isInflowRow(t) ? Number(t.amount || 0) : 0), 0)
+              const totalIn = items.reduce((s, t) => s + (isInflowRow(t) ? Number(t.amount || 0) : 0), 0)
               return (
                 <div key={d} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{
@@ -920,29 +979,30 @@ export function CategoryDetail({
                     </div>
                   </div>
                   {items.map(t => (
-                    <div key={t.id} className="catHistoryRow" onClick={() => openTxnDetail(t)} style={{
+                    <div key={t.id} className="catHistoryRow" onClick={() => { if (t._isTransfer) handleDeleteTransfer(t); else openTxnDetail(t) }} style={{
                       padding: '10px 12px',
                       borderRadius: 16,
-                      background: '#fff',
-                      border: '0.5px solid #eef2ff',
+                      background: t._isTransfer ? '#eef2ff' : '#fff',
+                      border: t._isTransfer ? '0.5px dashed #c7d2fe' : '0.5px solid #eef2ff',
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
                       transition: 'all 0.2s ease',
-                      position: 'relative'
+                      position: 'relative',
+                      cursor: 'pointer'
                     }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: 16,
-                        background: '#fff', border: '1px solid #f1f5f9',
+                        background: t._isTransfer ? '#e0e7ff' : '#fff', border: t._isTransfer ? '1px solid #c7d2fe' : '1px solid #f1f5f9',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 700, fontSize: 13, color: '#64748b'
+                        fontWeight: 700, fontSize: t._isTransfer ? 15 : 13, color: t._isTransfer ? '#6366f1' : '#64748b'
                       }}>
-                        {category.name.slice(0, 1).toUpperCase()}
+                        {t._isTransfer ? '⇄' : category.name.slice(0, 1).toUpperCase()}
                       </div>
                       <div className="catHistoryInfo">
-                        <div className="catHistoryTitleRow" style={{ fontSize: 13, fontWeight: 700 }}>{t.note || category.name}</div>
-                        <div className="catHistoryMeta" style={{ fontSize: 11 }}>
-                          {t.accountId ? accounts.find(a => a.id === t.accountId)?.name : 'Unallocated'}
+                        <div className="catHistoryTitleRow" style={{ fontSize: 13, fontWeight: 700, fontStyle: t._isTransfer ? 'italic' : 'normal' }}>{t.note || category.name}</div>
+                        <div className="catHistoryMeta" style={{ fontSize: 11, textTransform: t._isTransfer ? 'uppercase' : 'none', letterSpacing: t._isTransfer ? 0.4 : 0 }}>
+                          {t._isTransfer ? 'Bucket Transfer' : (t.accountId ? accounts.find(a => a.id === t.accountId)?.name : 'Unallocated')}
                         </div>
                         {t.reimbursedBy && t.reimbursedBy.length > 0 && (
                           <div className="reimbursedBadge" style={{ fontSize: 9, marginTop: 4 }}>
@@ -950,8 +1010,8 @@ export function CategoryDetail({
                           </div>
                         )}
                       </div>
-                      <div className={`catHistoryAmount ${(t.type === 'income' || t.type === 'collection') ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
-                        {(t.type === 'income' || t.type === 'collection') ? '+' : '-'}{fmtTZS(t.amount)}
+                      <div className={`catHistoryAmount ${isInflowRow(t) ? 'pos' : 'neg'}`} style={{ fontSize: 14, fontWeight: 700 }}>
+                        {isInflowRow(t) ? '+' : '-'}{fmtTZS(t.amount)}
                       </div>
                     </div>
                   ))}

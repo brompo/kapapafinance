@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { useAppContext } from '../context/AppContext'
-import { fmtTZS, todayISO } from '../money'
+import { fmtTZS, todayISO, uid } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
@@ -239,7 +239,7 @@ function SectionDivider({ title, total, color, onAdd, style }) {
 export function FlowScreen() {
   const {
     formatMonthLabel, tab, settings, updateSettings,
-    txns, categories, categoryMeta, persistBook, show, setSelectedCategory
+    txns, categories, categoryMeta, book, persistBook, show, setSelectedCategory
   } = useAppContext()
 
   const bookLabel = tab === 'kapapa' ? 'Kapapa' : 'Family'
@@ -447,7 +447,16 @@ export function FlowScreen() {
       ...nextCategoryMeta[toType],
       [toName]: { ...(nextCategoryMeta[toType]?.[toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) + amt }
     }
-    persistBook({ categoryMeta: nextCategoryMeta })
+    // Transfers only ever moved money by nudging both buckets' openingBalance,
+    // leaving no record either bucket's history could show. This appends a
+    // lightweight log entry (not a real txns row — there's no "credit into a
+    // bucket" transaction type) that both buckets' Activity tabs read from,
+    // so a move shows up wherever the money went.
+    const transferRecord = { id: uid(), date: todayISO(), amount: amt, fromType, fromName, toType, toName }
+    persistBook({
+      categoryMeta: nextCategoryMeta,
+      transfers: [...(Array.isArray(book?.transfers) ? book.transfers : []), transferRecord]
+    })
     show(`Moved ${fmtTZS(amt)}.`)
     setShowTransferModal(false)
     setTransferAmount('')

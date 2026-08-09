@@ -1395,6 +1395,33 @@ function AccountDetail({
   const [newPlanAmount, setNewPlanAmount] = useState("");
   const [newPlanType, setNewPlanType] = useState("expense"); // expense | budget
 
+  // "Due From" tracking is debit-account-to-debit-account only — see AppContext's
+  // markDueFrom/settleDueFrom for the mutators these use.
+  const isDueFromEligible = (t) => t.direction === 'out' && t.kind === 'txn' && !t.dueFrom;
+
+  const dueFromSourceAccounts = useMemo(() => (
+    accounts.filter(a => {
+      if (a.id === account.id || a.archived) return false
+      const type = a.accountType || groups.find(g => g.id === a.groupId)?.type
+      return type === 'debit'
+    })
+  ), [accounts, groups, account.id]);
+
+  const dueFromGroups = useMemo(() => {
+    const pending = accountTxns.filter(t => t.accountId === account.id && t.dueFrom?.status === 'pending');
+    const map = new Map();
+    for (const t of pending) {
+      const key = t.dueFrom.accountId;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(t);
+    }
+    return Array.from(map.entries()).map(([accountId, items]) => ({
+      accountId,
+      items,
+      total: items.reduce((s, t) => s + Number(t.amount || 0), 0)
+    }));
+  }, [accountTxns, account.id]);
+
   function handleOpenTxnEdit(t) {
     setSelectedTxn(t);
     setEditTxnAmount(t.amount || "");
@@ -1494,33 +1521,6 @@ function AccountDetail({
     }
     return Array.from(map.entries());
   }, [entries]);
-
-  // "Due From" tracking is debit-account-to-debit-account only — see AppContext's
-  // markDueFrom/settleDueFrom for the mutators these use.
-  const isDueFromEligible = (t) => t.direction === 'out' && t.kind === 'txn' && !t.dueFrom;
-
-  const dueFromSourceAccounts = useMemo(() => (
-    accounts.filter(a => {
-      if (a.id === account.id || a.archived) return false
-      const type = a.accountType || groups.find(g => g.id === a.groupId)?.type
-      return type === 'debit'
-    })
-  ), [accounts, groups, account.id]);
-
-  const dueFromGroups = useMemo(() => {
-    const pending = accountTxns.filter(t => t.accountId === account.id && t.dueFrom?.status === 'pending');
-    const map = new Map();
-    for (const t of pending) {
-      const key = t.dueFrom.accountId;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(t);
-    }
-    return Array.from(map.entries()).map(([accountId, items]) => ({
-      accountId,
-      items,
-      total: items.reduce((s, t) => s + Number(t.amount || 0), 0)
-    }));
-  }, [accountTxns, account.id]);
 
   function exportToCSV() {
     const rows = [['Date', 'Description', 'Source', exportInLabel, exportOutLabel, 'Cumulative Total']]

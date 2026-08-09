@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.1.3",
+        date: "2026-08-09",
+        changes: [
+            'Fixed a crash on the Accounts tab caused by the new Due From feature (a variable was referenced before it was initialized).',
+        ]
+    },
+    {
         version: "4.1.2",
         date: "2026-08-09",
         changes: [

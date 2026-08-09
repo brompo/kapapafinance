@@ -49,6 +49,9 @@ export default function Accounts({
   onUpdateGroups,
   onUpdateAccounts,
   onReallocateBuckets,
+  onMarkDueFrom,
+  onUnmarkDueFrom,
+  onSettleDueFrom,
   settings = {},
   onUpdateSettings,
   categories = {}, // { income: [], expense: [] }
@@ -748,6 +751,9 @@ export default function Accounts({
         onUpdateAccountTxnMeta={onUpdateAccountTxnMeta}
         onDeleteAccountTxn={onDeleteAccountTxn}
         onReallocateBuckets={onReallocateBuckets}
+        onMarkDueFrom={onMarkDueFrom}
+        onUnmarkDueFrom={onUnmarkDueFrom}
+        onSettleDueFrom={onSettleDueFrom}
         onToast={onToast}
         clients={clients}
       />
@@ -1258,6 +1264,9 @@ function AccountDetail({
   onUpdateAccountTxnMeta,
   onDeleteAccountTxn,
   onReallocateBuckets,
+  onMarkDueFrom,
+  onUnmarkDueFrom,
+  onSettleDueFrom,
   getAccountBalance,
   clients,
 }) {
@@ -1352,9 +1361,16 @@ function AccountDetail({
   const [reallocFromId, setReallocFromId] = useState('')
   const [reallocToId, setReallocToId] = useState('')
   const [reallocAmount, setReallocAmount] = useState('')
-  const [activeTab, setActiveTab] = useState("activity") // activity | future | planner
+  const [activeTab, setActiveTab] = useState("activity") // activity | future | duefrom | planner
   const [primaryTab, setPrimaryTab] = useState("activity") // activity | goals
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState([]);
+  const [showMarkDueFromModal, setShowMarkDueFromModal] = useState(false);
+  const [markDueFromAccountId, setMarkDueFromAccountId] = useState('');
+  const [markDueFromDate, setMarkDueFromDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [settleGroup, setSettleGroup] = useState(null); // { accountId, entryIds, total }
+  const [settleDate, setSettleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const isAnyModalOpen = !!(
     mode ||
     showAddPlanModal ||
@@ -1370,7 +1386,9 @@ function AccountDetail({
     editingSubAccountId ||
     showAddBucketModal ||
     showReallocateModal ||
-    showMergeModal
+    showMergeModal ||
+    showMarkDueFromModal ||
+    settleGroup
   );
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
@@ -1410,6 +1428,13 @@ function AccountDetail({
   useEffect(() => {
     setEditName(account.name || "");
   }, [account.id, account.name]);
+
+  useEffect(() => {
+    if (!showMarkDueFromModal) return;
+    if (!markDueFromAccountId && dueFromSourceAccounts.length) {
+      setMarkDueFromAccountId(dueFromSourceAccounts[0].id);
+    }
+  }, [showMarkDueFromModal, markDueFromAccountId, dueFromSourceAccounts]);
 
   useEffect(() => {
     if (!showCreditModal) return;
@@ -1469,6 +1494,33 @@ function AccountDetail({
     }
     return Array.from(map.entries());
   }, [entries]);
+
+  // "Due From" tracking is debit-account-to-debit-account only — see AppContext's
+  // markDueFrom/settleDueFrom for the mutators these use.
+  const isDueFromEligible = (t) => t.direction === 'out' && t.kind === 'txn' && !t.dueFrom;
+
+  const dueFromSourceAccounts = useMemo(() => (
+    accounts.filter(a => {
+      if (a.id === account.id || a.archived) return false
+      const type = a.accountType || groups.find(g => g.id === a.groupId)?.type
+      return type === 'debit'
+    })
+  ), [accounts, groups, account.id]);
+
+  const dueFromGroups = useMemo(() => {
+    const pending = accountTxns.filter(t => t.accountId === account.id && t.dueFrom?.status === 'pending');
+    const map = new Map();
+    for (const t of pending) {
+      const key = t.dueFrom.accountId;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(t);
+    }
+    return Array.from(map.entries()).map(([accountId, items]) => ({
+      accountId,
+      items,
+      total: items.reduce((s, t) => s + Number(t.amount || 0), 0)
+    }));
+  }, [accountTxns, account.id]);
 
   function exportToCSV() {
     const rows = [['Date', 'Description', 'Source', exportInLabel, exportOutLabel, 'Cumulative Total']]
@@ -3018,7 +3070,25 @@ function AccountDetail({
                       ✓ Paid back {fmtTZS(selectedTxn.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
                     </div>
                   )}
+                  {selectedTxn.dueFrom && (
+                    <div className={`dueFromBadge ${selectedTxn.dueFrom.status}`} style={{ marginBottom: 4 }}>
+                      {selectedTxn.dueFrom.status === 'pending' ? 'Due from ' : '✓ Received from '}
+                      {accounts.find(a => a.id === selectedTxn.dueFrom.accountId)?.name || 'account'}
+                    </div>
+                  )}
                   <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                    {selectedTxn.dueFrom?.status === 'pending' && (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => {
+                          onUnmarkDueFrom?.(selectedTxn.id);
+                          setSelectedTxn(null);
+                        }}
+                      >
+                        Unmark Due From
+                      </button>
+                    )}
                     {selectedTxn.direction === 'in' && (
                       <button
                         className="btn"
@@ -3574,6 +3644,19 @@ function AccountDetail({
                     Show All
                   </button>
                 )}
+                {effectiveType === 'debit' && activeTab === 'activity' && (
+                  <button
+                    className="miniBtn"
+                    type="button"
+                    style={{ fontSize: 11 }}
+                    onClick={() => {
+                      setSelectMode(m => !m);
+                      setSelectedEntryIds([]);
+                    }}
+                  >
+                    {selectMode ? 'Cancel' : 'Select'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -3595,9 +3678,66 @@ function AccountDetail({
                   return count > 0 ? <span className="accTabBadge">{count}</span> : null;
                 })()}
               </div>
+              {effectiveType === 'debit' && (
+                <div
+                  className={`accTab ${activeTab === 'duefrom' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('duefrom')}
+                >
+                  Due From
+                  {dueFromGroups.length > 0 && <span className="accTabBadge">{dueFromGroups.length}</span>}
+                </div>
+              )}
             </div>
 
-            {grouped.length === 0 ? (
+            {activeTab === 'duefrom' ? (
+              dueFromGroups.length === 0 ? (
+                <div className="emptyRow">Nothing marked as Due From yet.</div>
+              ) : (
+                dueFromGroups.map(group => {
+                  const sourceAcct = accounts.find(a => a.id === group.accountId);
+                  return (
+                    <div className="accHistoryCard" key={group.accountId}>
+                      <div className="accHistoryHead">
+                        <div className="accHistoryInfo">
+                          <div className="accHistoryTitleRow"><span>{sourceAcct?.name || 'Unknown account'}</span></div>
+                          <div className="accHistoryMeta">{group.items.length} transaction{group.items.length === 1 ? '' : 's'}</div>
+                        </div>
+                        <div className="accHistoryTotals">
+                          <div className="totalGroup">
+                            <div className="totalValue out">{fmtTZS(group.total)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="accHistoryBody">
+                        {group.items.map(t => (
+                          <div className="accHistoryRow" key={t.id} style={{ cursor: 'default' }}>
+                            <div className="accHistoryIcon">{(t.note || 'A').slice(0, 1).toUpperCase()}</div>
+                            <div className="accHistoryInfo">
+                              <div className="accHistoryTitleRow"><span>{t.note || 'Transaction'}</span></div>
+                              <div className="accHistoryMeta">{t.date}</div>
+                            </div>
+                            <div className="accHistoryAmount neg">{fmtTZS(t.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ padding: '10px 16px' }}>
+                        <button
+                          className="btn primary"
+                          type="button"
+                          style={{ width: '100%' }}
+                          onClick={() => {
+                            setSettleGroup(group);
+                            setSettleDate(new Date().toISOString().slice(0, 10));
+                          }}
+                        >
+                          Settle {fmtTZS(group.total)} from {sourceAcct?.name || 'account'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )
+            ) : grouped.length === 0 ? (
               <div className="emptyRow">
                 {activeTab === 'future' ? 'No future expenses planned.' : 'No activity yet.'}
               </div>
@@ -3660,20 +3800,41 @@ function AccountDetail({
                         }
 
                         const isFuture = t.date > new Date().toISOString().slice(0, 10);
+                        const eligible = isDueFromEligible(t);
+                        const isSelected = selectedEntryIds.includes(t.id);
+                        const rowClick = () => {
+                          if (selectMode) {
+                            if (!eligible) return;
+                            setSelectedEntryIds(ids => (
+                              ids.includes(t.id) ? ids.filter(id => id !== t.id) : [...ids, t.id]
+                            ));
+                          } else {
+                            handleOpenTxnEdit(t);
+                          }
+                        };
+                        const sourceAcctName = t.dueFrom
+                          ? accounts.find(a => a.id === t.dueFrom.accountId)?.name || 'account'
+                          : null;
                         return (
                           <div
-                            className="accHistoryRow"
+                            className={`accHistoryRow ${selectMode && !eligible ? 'accHistoryRowDisabled' : ''}`}
                             key={t.id}
                             role="button"
                             tabIndex={0}
-                            onClick={() => handleOpenTxnEdit(t)}
+                            onClick={rowClick}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") handleOpenTxnEdit(t);
+                              if (e.key === "Enter" || e.key === " ") rowClick();
                             }}
                           >
-                            <div className="accHistoryIcon">
-                              {(title || "A").slice(0, 1).toUpperCase()}
-                            </div>
+                            {selectMode ? (
+                              <div className={`selectCheckbox ${isSelected ? 'checked' : ''} ${!eligible ? 'disabled' : ''}`}>
+                                {isSelected ? '✓' : ''}
+                              </div>
+                            ) : (
+                              <div className="accHistoryIcon">
+                                {(title || "A").slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
                             <div className="accHistoryInfo">
                               <div className="accHistoryTitleRow">
                                 <span style={isFuture ? { fontStyle: 'italic', opacity: 0.7 } : {}}>{title}</span>
@@ -3684,6 +3845,12 @@ function AccountDetail({
                                 <div className="reimbursedBadge">
                                   ✓ Paid back {fmtTZS(t.paidBack.reduce((s, r) => s + Number(r.amount || 0), 0))}
                                 </div>
+                              )}
+                              {t.dueFrom?.status === 'pending' && (
+                                <div className="dueFromBadge pending">Due from {sourceAcctName}</div>
+                              )}
+                              {t.dueFrom?.status === 'received' && (
+                                <div className="dueFromBadge received">✓ Received from {sourceAcctName}</div>
                               )}
                             </div>
                             <div className={`accHistoryAmount ${t.direction === "in" ? "pos" : "neg"}`} style={isFuture ? { fontStyle: 'italic', opacity: 0.7 } : {}}>
@@ -3747,8 +3914,116 @@ function AccountDetail({
         )}
       </div>
 
+      {selectMode && (
+        <div className="selectActionBar">
+          <span>{selectedEntryIds.length} selected</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" type="button" onClick={() => { setSelectMode(false); setSelectedEntryIds([]); }}>
+              Done
+            </button>
+            <button
+              className="btn primary"
+              type="button"
+              disabled={selectedEntryIds.length === 0}
+              onClick={() => setShowMarkDueFromModal(true)}
+            >
+              Mark as Due From
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showMarkDueFromModal && (
+        <div className="modalBackdrop" onClick={() => setShowMarkDueFromModal(false)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Mark as Due From</div>
+            <div className="accQuickForm">
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>
+                {selectedEntryIds.length} transaction{selectedEntryIds.length === 1 ? '' : 's'} selected
+              </div>
+              {dueFromSourceAccounts.length === 0 ? (
+                <div style={{ color: '#888' }}>No other debit accounts available to select as the source.</div>
+              ) : (
+                <div className="field">
+                  <label>Expected from account</label>
+                  <select value={markDueFromAccountId} onChange={e => setMarkDueFromAccountId(e.target.value)}>
+                    {dueFromSourceAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="field">
+                <label>Date</label>
+                <input type="date" value={markDueFromDate} onChange={e => setMarkDueFromDate(e.target.value)} />
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowMarkDueFromModal(false)}>Cancel</button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={!markDueFromAccountId}
+                  onClick={async () => {
+                    await onMarkDueFrom?.({
+                      entryIds: selectedEntryIds,
+                      fromAccountId: markDueFromAccountId,
+                      date: markDueFromDate
+                    });
+                    setShowMarkDueFromModal(false);
+                    setSelectMode(false);
+                    setSelectedEntryIds([]);
+                  }}
+                >
+                  Mark {selectedEntryIds.length}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settleGroup && (() => {
+        const sourceAcct = accounts.find(a => a.id === settleGroup.accountId);
+        return (
+          <div className="modalBackdrop" onClick={() => setSettleGroup(null)}>
+            <div className="modalCard" onClick={e => e.stopPropagation()}>
+              <div className="modalTitle">Settle Due From</div>
+              <div className="accQuickForm">
+                <div className="reimburseOriginal">
+                  <div className="reimburseOriginalLabel">From {sourceAcct?.name || 'account'}</div>
+                  <div className="reimburseOriginalInfo">
+                    <span>{settleGroup.items.length} transaction{settleGroup.items.length === 1 ? '' : 's'}</span>
+                    <span className="reimburseOriginalAmt" style={{ color: '#2fbf71' }}>+{fmtTZS(settleGroup.total)}</span>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Date received</label>
+                  <input type="date" value={settleDate} onChange={e => setSettleDate(e.target.value)} />
+                </div>
+                <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="btn" type="button" onClick={() => setSettleGroup(null)}>Cancel</button>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={async () => {
+                      await onSettleDueFrom?.({
+                        toAccountId: account.id,
+                        fromAccountId: settleGroup.accountId,
+                        entryIds: settleGroup.items.map(t => t.id),
+                        date: settleDate
+                      });
+                      setSettleGroup(null);
+                    }}
+                  >
+                    Settle {fmtTZS(settleGroup.total)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Account FAB Action System */}
-      {!isAnyModalOpen && (
+      {!isAnyModalOpen && !selectMode && (
         <div className="accountFabContainer">
           {showFabMenu && (
             <div className="accountFabOverlay" onClick={() => setShowFabMenu(false)}>

@@ -893,6 +893,95 @@ export function AppProvider({ children }) {
     show('Transfer completed.')
   }
 
+  // "Due From" tracks money that was spent out of this account but really
+  // belongs to another (debit) account's budget — e.g. fronting a shared
+  // expense for someone else. Marking is purely a status flag on the
+  // accountTxns entry (no effect on balances or reports); settling is a real
+  // transfer that credits this account back, mirroring transferAccount.
+  function resolveDefaultSubId(acct) {
+    const subs = Array.isArray(acct?.subAccounts) ? acct.subAccounts : []
+    if (!subs.length) return null
+    return subs.find(s => s.isUnallocated)?.id || subs[0]?.id
+  }
+
+  async function markDueFrom({ entryIds, fromAccountId, date }) {
+    if (!fromAccountId) return show('Select an account.')
+    if (!Array.isArray(entryIds) || !entryIds.length) return show('Select at least one transaction.')
+
+    const markedAt = date || todayISO()
+    const idSet = new Set(entryIds)
+    const nextAccountTxns = allAccountTxns.map(t => (
+      idSet.has(t.id) ? { ...t, dueFrom: { accountId: fromAccountId, status: 'pending', markedAt, receivedAt: null } } : t
+    ))
+
+    persistBookAndAccounts({ bookId: currentBookId, nextAccountTxns })
+    show(`Marked ${entryIds.length} as Due From.`)
+  }
+
+  async function unmarkDueFrom(entryId) {
+    const nextAccountTxns = allAccountTxns.map(t => {
+      if (t.id !== entryId || t.dueFrom?.status !== 'pending') return t
+      const { dueFrom, ...rest } = t
+      return rest
+    })
+
+    persistBookAndAccounts({ bookId: currentBookId, nextAccountTxns })
+    show('Unmarked.')
+  }
+
+  async function settleDueFrom({ toAccountId, fromAccountId, entryIds, date }) {
+    if (!Array.isArray(entryIds) || !entryIds.length) return show('Nothing to settle.')
+
+    const idSet = new Set(entryIds)
+    const items = allAccountTxns.filter(t => idSet.has(t.id))
+    const amt = items.reduce((s, t) => s + Number(t.amount || 0), 0)
+    if (!amt) return show('Nothing to settle.')
+
+    const toAcct = findAccountByIdOrName(toAccountId)
+    const fromAcct = findAccountByIdOrName(fromAccountId)
+    const toSubId = resolveDefaultSubId(toAcct)
+    const fromSubId = resolveDefaultSubId(fromAcct)
+    const settleDate = date || todayISO()
+
+    const tid = uid()
+    const outEntry = {
+      id: `txn-${tid}-out`,
+      accountId: fromAccountId,
+      subAccountId: fromSubId,
+      amount: amt,
+      direction: 'out',
+      note: 'Due From settlement',
+      date: settleDate,
+      kind: 'txn',
+      relatedAccountId: toAccountId
+    }
+    const inEntry = {
+      id: `txn-${tid}-in`,
+      accountId: toAccountId,
+      subAccountId: toSubId,
+      amount: amt,
+      direction: 'in',
+      note: 'Due From settlement',
+      date: settleDate,
+      kind: 'txn',
+      relatedAccountId: fromAccountId
+    }
+
+    let nextAccounts = applyAccountDelta(allAccounts, fromAccountId, fromSubId, -amt)
+    nextAccounts = applyAccountDelta(nextAccounts, toAccountId, toSubId, amt)
+
+    const nextAccountTxns = allAccountTxns.map(t => (
+      idSet.has(t.id) ? { ...t, dueFrom: { ...t.dueFrom, status: 'received', receivedAt: settleDate } } : t
+    ))
+
+    persistBookAndAccounts({
+      bookId: currentBookId,
+      nextAccounts,
+      nextAccountTxns: [outEntry, inEntry, ...nextAccountTxns]
+    })
+    show('Settled.')
+  }
+
   async function payCreditBack({ creditAccountId, creditSubAccountId, fromAccountId, fromSubAccountId, amount, note, date, patchTxn }) {
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')
@@ -1058,6 +1147,9 @@ export function AppProvider({ children }) {
     updateAccountTxn,
     deleteAccountTxn,
     reallocateBuckets,
+    markDueFrom,
+    unmarkDueFrom,
+    settleDueFrom,
 
     // Transaction Helpers
     addQuickTxn,

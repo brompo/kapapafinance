@@ -18,6 +18,7 @@ function VaultApp() {
     show, upsertAccount, deleteAccount, mergeAccounts, addAccountTxn, issueLoan,
     transferAccount, payCreditBack, updateAccountTxn,
     deleteAccountTxn, updateAccountGroups, updateAccounts, reallocateBuckets,
+    markDueFrom, unmarkDueFrom, settleDueFrom,
     updateSettings
   } = useAppContext()
 
@@ -72,6 +73,9 @@ function VaultApp() {
             onPayCreditBack={payCreditBack}
             onReallocateBuckets={reallocateBuckets}
             onUpdateAccountTxn={updateAccountTxn}
+            onMarkDueFrom={markDueFrom}
+            onUnmarkDueFrom={unmarkDueFrom}
+            onSettleDueFrom={settleDueFrom}
             onToast={show}
           />
         )}

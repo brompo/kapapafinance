@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.1.2",
+        date: "2026-08-09",
+        changes: [
+            'Added Due From tracking on debit accounts: multi-select transactions in a debit account\'s History and mark them as owed by another debit account. The new Due From tab groups pending items by that source account — settling a group moves the total from the source account into this one as a real transfer and marks the items received.',
+        ]
+    },
+    {
         version: "4.1.1",
         date: "2026-08-03",
         changes: [

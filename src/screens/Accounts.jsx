@@ -3714,19 +3714,7 @@ function AccountDetail({
                           </div>
                         </div>
                       </div>
-                      <div className="accHistoryBody">
-                        {group.items.map(t => (
-                          <div className="accHistoryRow" key={t.id} style={{ cursor: 'default' }}>
-                            <div className="accHistoryIcon">{(t.note || 'A').slice(0, 1).toUpperCase()}</div>
-                            <div className="accHistoryInfo">
-                              <div className="accHistoryTitleRow"><span>{t.note || 'Transaction'}</span></div>
-                              <div className="accHistoryMeta">{t.date}</div>
-                            </div>
-                            <div className="accHistoryAmount neg">{fmtTZS(t.amount)}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ padding: '10px 16px' }}>
+                      <div style={{ padding: '0 16px 12px' }}>
                         <button
                           className="btn primary"
                           type="button"
@@ -3738,6 +3726,18 @@ function AccountDetail({
                         >
                           Settle {fmtTZS(group.total)} from {sourceAcct?.name || 'account'}
                         </button>
+                      </div>
+                      <div className="accHistoryBody">
+                        {group.items.map(t => (
+                          <div className="accHistoryRow" key={t.id} style={{ cursor: 'default' }}>
+                            <div className="accHistoryIcon">{(t.note || 'A').slice(0, 1).toUpperCase()}</div>
+                            <div className="accHistoryInfo">
+                              <div className="accHistoryTitleRow"><span>{t.note || 'Transaction'}</span></div>
+                              <div className="accHistoryMeta">{t.date}</div>
+                            </div>
+                            <div className="accHistoryAmount neg">{fmtTZS(t.amount)}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );

@@ -153,6 +153,30 @@ export function withUpkeepGoalPercentForMonth(goal, monthKey, percent) {
   return { ...existing, percentHistory: history }
 }
 
+// The Kapapa return goal (target annualized "x" multiple, e.g. 1.5 for a 50%/yr
+// return) follows the same month-scoped history approach as the Family Upkeep
+// goal above: editing it only changes the goal from that month forward. No
+// goal ever set falls back to 1.5x.
+export function getKapapaGoalMultipleForMonth(goal, monthKey) {
+  const history = Array.isArray(goal?.multipleHistory) ? goal.multipleHistory : []
+  let effective = null
+  for (const entry of history) {
+    if (entry.month <= monthKey) effective = entry.multiple
+    else break
+  }
+  if (effective === null) effective = goal?.multiple
+  return Number(effective ?? 1.5)
+}
+
+export function withKapapaGoalMultipleForMonth(goal, monthKey, multiple) {
+  const existing = goal && typeof goal === 'object' ? goal : {}
+  const history = (Array.isArray(existing.multipleHistory) ? existing.multipleHistory : [])
+    .filter(entry => entry.month !== monthKey)
+  history.push({ month: monthKey, multiple })
+  history.sort((a, b) => a.month.localeCompare(b.month))
+  return { ...existing, multipleHistory: history }
+}
+
 // Growth pools are first-class categories (like Lifestyle/allocation buckets)
 // so real transactions can be logged against them via CategoryDetail.
 function resolveGrowthCategories(growthCategories, growthMeta) {

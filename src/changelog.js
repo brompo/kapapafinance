@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.2.0",
+        date: "2026-08-09",
+        changes: [
+            'Rebuilt the Kapapa tab around a single question: is your money generating at least your target return per year? It now shows a blended trailing-12-month annualized return (money-weighted, across every Invest/Shares/Real Estate account) as an "x" multiple against an editable goal (default 1.5x), a 12-month trend chart, and a breakdown by asset group. Business capital accounts are netted against any linked debt so the return reflects your own equity. Budget Watch is replaced by this Returns view; DSE Watch stays as a toggle alongside it.',
+        ]
+    },
+    {
         version: "4.1.4",
         date: "2026-08-09",
         changes: [

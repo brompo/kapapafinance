@@ -6,6 +6,7 @@ import { FinanceInsightsScreen } from './screens/FinanceInsightsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import AccountsScreen from './screens/Accounts'
 import { FlowScreen } from './screens/FlowScreen'
+import KapapaScreen from './screens/KapapaScreen'
 import BottomNav from './components/BottomNav'
 
 import { LandingStage, PinStage, UnlockStage } from './stages/AuthStages'
@@ -47,7 +48,7 @@ function VaultApp() {
       <main className="mainContent">
         {(tab === 'tx' || selectedCategory) && <HomeScreen />}
         {tab === 'flow' && !selectedCategory && settings.flowEnabled && <FlowScreen />}
-        {tab === 'kapapa' && !selectedCategory && settings.kapapaEnabled && <FlowScreen />}
+        {tab === 'kapapa' && !selectedCategory && settings.kapapaEnabled && <KapapaScreen />}
         {tab === 'insights' && settings.insightsEnabled && <FinanceInsightsScreen />}
         {tab === 'accounts' && (
           <AccountsScreen

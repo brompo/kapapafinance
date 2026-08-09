@@ -1407,6 +1407,12 @@ function AccountDetail({
     })
   ), [accounts, groups, account.id]);
 
+  const selectedTotal = useMemo(() => {
+    if (!selectedEntryIds.length) return 0;
+    const idSet = new Set(selectedEntryIds);
+    return accountTxns.reduce((s, t) => (idSet.has(t.id) ? s + Number(t.amount || 0) : s), 0);
+  }, [accountTxns, selectedEntryIds]);
+
   const dueFromGroups = useMemo(() => {
     const pending = accountTxns.filter(t => t.accountId === account.id && t.dueFrom?.status === 'pending');
     const map = new Map();
@@ -3916,7 +3922,7 @@ function AccountDetail({
 
       {selectMode && (
         <div className="selectActionBar">
-          <span>{selectedEntryIds.length} selected</span>
+          <span>{selectedEntryIds.length} selected{selectedEntryIds.length > 0 ? ` · ${fmtTZS(selectedTotal)}` : ''}</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn" type="button" onClick={() => { setSelectMode(false); setSelectedEntryIds([]); }}>
               Done

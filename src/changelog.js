@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.1.4",
+        date: "2026-08-09",
+        changes: [
+            'The Due From selection bar now shows the total amount of the selected transactions alongside the count.',
+        ]
+    },
+    {
         version: "4.1.3",
         date: "2026-08-09",
         changes: [

@@ -1,9 +1,17 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Tooltip } from 'recharts'
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { useAppContext } from '../context/AppContext'
-import { computeKapapaReturns, computeKapapaTrend } from '../utils/returns'
+import { computeKapapaReturns } from '../utils/returns'
 import { getKapapaGoalMultipleForMonth, withKapapaGoalMultipleForMonth } from '../utils/ledger'
+import { fmtTZS } from '../money.js'
 import DSEWatchScreen from './DSEWatchScreen'
+
+// Fixed-order categorical palette (dataviz skill default, validated for
+// adjacent-pair CVD/normal-vision separation) — assigned to asset groups by
+// position, never cycled or reassigned by rank, so a group keeps its color
+// across the pie chart and its section header in the holdings list.
+const GROUP_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948']
+const RADIAN = Math.PI / 180
 
 function fmtMultiple(m) {
   if (m == null || !Number.isFinite(m)) return '—'
@@ -16,24 +24,77 @@ function fmtAnnualPercent(rate) {
   return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%/yr`
 }
 
-function GroupRow({ name, result, goalMultiple }) {
-  const meetsGoal = result.multiple != null && result.multiple >= goalMultiple
-  const color = result.multiple == null ? '#94a3b8' : meetsGoal ? '#16a34a' : '#ef4444'
+function fmtPercent(rate) {
+  if (rate == null || !Number.isFinite(rate)) return '—'
+  const pct = rate * 100
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+}
+
+function goalColor(rate, goalMultiple) {
+  if (rate == null || !Number.isFinite(rate)) return '#94a3b8'
+  return 1 + rate >= goalMultiple ? '#16a34a' : '#ef4444'
+}
+
+function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
+  if (percent < 0.05) return null
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.6
+  const x = cx + radius * Math.cos(-midAngle * RADIAN)
+  const y = cy + radius * Math.sin(-midAngle * RADIAN)
+  return (
+    <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={800}>
+      {Math.round(percent * 100)}%
+    </text>
+  )
+}
+
+function AssetRow({ name, value, rate, goalMultiple, isLast }) {
+  const color = goalColor(rate, goalMultiple)
   return (
     <div style={{
-      padding: '12px 14px', borderRadius: 14, background: `${color}0f`, border: `1px solid ${color}33`,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8
+      padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      borderBottom: isLast ? 'none' : '1px solid #f1f5f9'
     }}>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{name}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>
-          {result.accountCount} account{result.accountCount === 1 ? '' : 's'}
-          {result.isPartial ? ' · partial history' : ''}
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{name}</div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtTZS(value)}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color }}>{fmtPercent(rate)}</div>
+      </div>
+    </div>
+  )
+}
+
+function GroupSection({ group, color, goalMultiple }) {
+  return (
+    <div style={{
+      borderRadius: 14, background: `${color}0f`, border: `1px solid ${color}33`, marginBottom: 10, overflow: 'hidden'
+    }}>
+      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{group.name}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+              {group.accountCount} account{group.accountCount === 1 ? '' : 's'}
+              {group.isPartial ? ' · partial history' : ''}
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtMultiple(group.multiple)}</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtAnnualPercent(group.rate)}</div>
         </div>
       </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtMultiple(result.multiple)}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtAnnualPercent(result.rate)}</div>
+      <div>
+        {group.holdings.map((h, i) => (
+          <AssetRow
+            key={h.accountId}
+            name={h.name}
+            value={h.value}
+            rate={h.rate}
+            goalMultiple={goalMultiple}
+            isLast={i === group.holdings.length - 1}
+          />
+        ))}
       </div>
     </div>
   )
@@ -42,8 +103,8 @@ function GroupRow({ name, result, goalMultiple }) {
 // Kapapa answers one question: is my money generating at least the goal
 // multiple (e.g. 1.5x) per year? Blended headline pools cash flows across
 // every asset account (Invest/Shares/Real Estate/etc — any group of type
-// 'asset'); the by-group breakdown below reruns the same calc per group. See
-// src/utils/returns.js for the trailing-12mo XIRR math and debt netting.
+// 'asset'); the holdings list below breaks that same universe down to
+// individual assets, grouped for orientation but ranked by their own return.
 export default function KapapaScreen() {
   const { settings, updateSettings, accounts, groups, accountTxns, show, setTab } = useAppContext()
 
@@ -63,9 +124,22 @@ export default function KapapaScreen() {
     () => computeKapapaReturns(accounts, groups, accountTxns),
     [accounts, groups, accountTxns]
   )
-  const trend = useMemo(
-    () => computeKapapaTrend(accounts, groups, accountTxns, 12),
-    [accounts, groups, accountTxns]
+
+  const allocation = useMemo(() => {
+    const withValue = returns.byGroup.filter(g => g.totalValue > 0)
+    const total = withValue.reduce((s, g) => s + g.totalValue, 0)
+    const slices = withValue.map((g, i) => ({
+      groupId: g.groupId,
+      name: g.name,
+      value: g.totalValue,
+      color: GROUP_PALETTE[i] || '#94a3b8'
+    }))
+    return { total, slices }
+  }, [returns.byGroup])
+
+  const groupColors = useMemo(
+    () => new Map(allocation.slices.map(s => [s.groupId, s.color])),
+    [allocation.slices]
   )
 
   const blended = returns.blended
@@ -89,8 +163,6 @@ export default function KapapaScreen() {
     show('Updated.')
     setShowGoalEdit(false)
   }
-
-  const chartData = trend.map(p => ({ label: p.month.slice(2).replace('-', '/'), multiple: p.multiple }))
 
   return (
     <div className="ledgerScreen">
@@ -149,26 +221,57 @@ export default function KapapaScreen() {
               </div>
             </div>
 
-            <div className="card" style={{ margin: '18px 0 4px', padding: '16px 14px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 10 }}>Trailing 12mo return, by month</div>
-              <div style={{ width: '100%', height: 140 }}>
-                <ResponsiveContainer>
-                  <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v.toFixed(1)}x`} width={36} />
-                    <ReferenceLine y={goalMultiple} stroke="#16a34a" strokeDasharray="4 4" />
-                    <Tooltip formatter={(value) => [fmtMultiple(value), 'Multiple']} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #f1f5f9' }} />
-                    <Line type="monotone" dataKey="multiple" stroke="#5a5fb0" strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+            {allocation.total > 0 && (
+              <div className="card" style={{ margin: '18px 0 4px', padding: '16px 14px' }}>
+                <div style={{ textAlign: 'center', fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>
+                  Total Assets: {fmtTZS(allocation.total)}
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={allocation.slices}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={90}
+                        isAnimationActive={false}
+                        label={renderPieLabel}
+                        labelLine={false}
+                      >
+                        {allocation.slices.map(s => <Cell key={s.groupId} fill={s.color} stroke="#fff" strokeWidth={2} />)}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name) => [`${fmtTZS(value)} (${Math.round((value / allocation.total) * 100)}%)`, name]}
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #f1f5f9' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  {allocation.slices.map(s => (
+                    <div key={s.groupId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 2px', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 4, background: s.color, flexShrink: 0 }} />
+                        <span style={{ color: '#1e293b', fontWeight: 600 }}>{s.name}</span>
+                      </div>
+                      <div style={{ color: '#64748b' }}>
+                        {Math.round((s.value / allocation.total) * 100)}% · {fmtTZS(s.value)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', letterSpacing: 0.3, margin: '0 4px 10px' }}>BY GROUP</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', letterSpacing: 0.3, margin: '0 4px 10px' }}>HOLDINGS</div>
               {returns.byGroup.map(g => (
-                <GroupRow key={g.groupId} name={g.name} result={g} goalMultiple={goalMultiple} />
+                <GroupSection
+                  key={g.groupId}
+                  group={g}
+                  color={groupColors.get(g.groupId) || '#94a3b8'}
+                  goalMultiple={goalMultiple}
+                />
               ))}
             </div>
           </>

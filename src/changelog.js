@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.2.1",
+        date: "2026-08-15",
+        changes: [
+            'The Kapapa tab now shows a portfolio allocation pie chart (by asset group) in place of the 12-month trend chart, and the group breakdown below (renamed HOLDINGS) lists each individual asset with its own annualized return instead of only a group rollup — sorted best to worst, with group headers keeping a consistent color between the chart and the list.',
+        ]
+    },
+    {
         version: "4.2.0",
         date: "2026-08-09",
         changes: [

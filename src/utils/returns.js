@@ -109,58 +109,85 @@ export function computeAccountReturn(account, accountTxns, allAccounts, groupsBy
   return { hasData: true, flows, isPartial, netStart, netEnd }
 }
 
-function pooledReturn(accounts, accountTxns, allAccounts, groupsById, asOfDate, windowMonths) {
-  const per = accounts
-    .map(a => computeAccountReturn(a, accountTxns, allAccounts, groupsById, asOfDate, windowMonths))
-    .filter(r => r.hasData)
-  if (!per.length) return { hasData: false }
-  const flows = per.flatMap(r => r.flows)
-  const rate = xirr(flows)
+// Wraps computeAccountReturn with the two things a holding row needs beyond
+// the raw XIRR flows: the annualized rate itself, and the account's current
+// gross market value (undiscounted by any linked debt — that netting only
+// applies to the return math, not the displayed value).
+function accountHoldingResult(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths) {
+  const r = computeAccountReturn(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths)
+  const marketValue = calculateAssetMetrics(account, accountTxns, 'asset', asOfDate).marketValue || 0
   return {
-    hasData: true,
-    rate,
-    multiple: rate == null ? null : 1 + rate,
-    isPartial: per.some(r => r.isPartial),
-    accountCount: per.length
+    accountId: account.id,
+    name: account.name,
+    value: marketValue,
+    rate: r.hasData ? xirr(r.flows) : null,
+    isPartial: r.hasData ? r.isPartial : false,
+    flows: r.hasData ? r.flows : null
   }
 }
 
+function sortByRateDesc(holdings) {
+  return [...holdings].sort((a, b) => {
+    if (a.rate == null && b.rate == null) return 0
+    if (a.rate == null) return 1
+    if (b.rate == null) return -1
+    return b.rate - a.rate
+  })
+}
+
 // Top-level entry point: blended XIRR across every asset-type account, plus
-// one XIRR per asset group, both as of `asOfDate` over a trailing
-// `windowMonths` window (annualized regardless of how much history actually
-// exists inside it — see computeAccountReturn's effectiveStart).
+// one entry per asset group — each carrying its own pooled XIRR, total
+// current value, and a per-account holdings breakdown (sorted best → worst
+// annualized return) so the UI can show individual asset performance instead
+// of only the group rollup. Holdings with too little cash-flow history for
+// XIRR still appear (value-only, rate: null) rather than being dropped.
 export function computeKapapaReturns(accounts, groups, accountTxns, asOfDate = todayISO(), windowMonths = 12) {
   const groupsById = new Map((groups || []).map(g => [g.id, g]))
   const assetGroups = (groups || []).filter(g => g.type === 'asset')
   const assetAccounts = (accounts || []).filter(a => !a.archived && groupsById.get(a.groupId)?.type === 'asset')
 
-  const byGroup = assetGroups
+  const groupResults = assetGroups
     .map(g => {
       const groupAccounts = assetAccounts.filter(a => a.groupId === g.id)
       if (!groupAccounts.length) return null
-      const result = pooledReturn(groupAccounts, accountTxns, accounts, groupsById, asOfDate, windowMonths)
-      return result.hasData ? { groupId: g.id, name: g.name, ...result } : null
+      const holdings = groupAccounts.map(a =>
+        accountHoldingResult(a, accountTxns, accounts, groupsById, asOfDate, windowMonths)
+      )
+      const flows = holdings.filter(h => h.flows).flatMap(h => h.flows)
+      const rate = flows.length ? xirr(flows) : null
+      return {
+        groupId: g.id,
+        name: g.name,
+        rate,
+        isPartial: holdings.some(h => h.isPartial),
+        accountCount: groupAccounts.length,
+        totalValue: holdings.reduce((s, h) => s + h.value, 0),
+        holdings
+      }
     })
     .filter(Boolean)
 
-  const blended = pooledReturn(assetAccounts, accountTxns, accounts, groupsById, asOfDate, windowMonths)
+  const blendedFlows = groupResults.flatMap(g => g.holdings.filter(h => h.flows).flatMap(h => h.flows))
+  const blendedRate = blendedFlows.length ? xirr(blendedFlows) : null
+  const blended = {
+    hasData: blendedRate != null,
+    rate: blendedRate,
+    multiple: blendedRate == null ? null : 1 + blendedRate,
+    isPartial: groupResults.some(g => g.isPartial),
+    accountCount: assetAccounts.length
+  }
+
+  const byGroup = groupResults.map(g => ({
+    groupId: g.groupId,
+    name: g.name,
+    hasData: g.rate != null,
+    rate: g.rate,
+    multiple: g.rate == null ? null : 1 + g.rate,
+    isPartial: g.isPartial,
+    accountCount: g.accountCount,
+    totalValue: g.totalValue,
+    holdings: sortByRateDesc(g.holdings).map(({ flows, ...rest }) => rest)
+  }))
 
   return { blended, byGroup, hasAssets: assetAccounts.length > 0 }
-}
-
-// Recomputes the blended trailing-window XIRR as of each of the last `months`
-// month-ends, purely from existing txn history (no stored snapshots needed).
-export function computeKapapaTrend(accounts, groups, accountTxns, months = 12, windowMonths = 12) {
-  const points = []
-  const today = new Date()
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i + 1, 0) // last day of that month
-    const asOfDate = d.toISOString().slice(0, 10)
-    const { blended } = computeKapapaReturns(accounts, groups, accountTxns, asOfDate, windowMonths)
-    points.push({
-      month: asOfDate.slice(0, 7),
-      multiple: blended.hasData && blended.rate != null ? 1 + blended.rate : null
-    })
-  }
-  return points
 }

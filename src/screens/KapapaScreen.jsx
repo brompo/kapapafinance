@@ -13,11 +13,6 @@ import DSEWatchScreen from './DSEWatchScreen'
 const GROUP_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948']
 const RADIAN = Math.PI / 180
 
-function fmtMultiple(m) {
-  if (m == null || !Number.isFinite(m)) return '—'
-  return `${m.toFixed(2)}x`
-}
-
 function fmtAnnualPercent(rate) {
   if (rate == null || !Number.isFinite(rate)) return ''
   const pct = rate * 100
@@ -81,7 +76,7 @@ function GroupSection({ group, color, goalMultiple }) {
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtMultiple(group.multiple)}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtPercent(group.simpleRate)}</div>
           <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtAnnualPercent(group.xirrRate)}</div>
         </div>
       </div>
@@ -107,7 +102,7 @@ function GroupSection({ group, color, goalMultiple }) {
 }
 
 // Kapapa answers one question: is my money generating at least the goal
-// multiple (e.g. 1.5x) per year? Blended headline pools cash flows across
+// percentage (e.g. 50%) per year? Blended headline pools cash flows across
 // every asset account (Invest/Shares/Real Estate/etc — any group of type
 // 'asset'); the holdings list below breaks that same universe down to
 // individual assets, grouped for orientation but ranked by their own return.
@@ -155,16 +150,17 @@ export default function KapapaScreen() {
     : 0
 
   const openGoalEdit = () => {
-    setEditGoalValue(String(goalMultiple))
+    setEditGoalValue(String(Math.round((goalMultiple - 1) * 1000) / 10))
     setShowGoalEdit(true)
   }
 
   const saveGoalEdit = () => {
-    const nextValue = Number(String(editGoalValue).replace(/,/g, '')) || 0
-    if (nextValue <= 0) return show('Enter a valid target multiple.')
+    const nextPct = Number(String(editGoalValue).replace(/,/g, ''))
+    const nextMultiple = 1 + nextPct / 100
+    if (!Number.isFinite(nextPct) || nextMultiple <= 0) return show('Enter a valid target percentage.')
     updateSettings({
       ...settings,
-      kapapaReturnGoal: withKapapaGoalMultipleForMonth(settings.kapapaReturnGoal, monthKey, nextValue)
+      kapapaReturnGoal: withKapapaGoalMultipleForMonth(settings.kapapaReturnGoal, monthKey, nextMultiple)
     })
     show('Updated.')
     setShowGoalEdit(false)
@@ -202,7 +198,7 @@ export default function KapapaScreen() {
           <div style={{ textAlign: 'center', padding: '60px 16px', color: '#94a3b8' }}>
             <div style={{ fontSize: 14, marginBottom: 12 }}>No investment accounts yet.</div>
             <div style={{ fontSize: 12, marginBottom: 16 }}>
-              Add an Invest, Shares, or Real Estate account to start tracking whether your money is generating {fmtMultiple(goalMultiple)}/year.
+              Add an Invest, Shares, or Real Estate account to start tracking whether your money is generating at least {fmtPercent(goalMultiple - 1)} a year.
             </div>
             <button className="miniBtn" type="button" onClick={() => setTab('accounts')}>Go to Accounts</button>
           </div>
@@ -211,7 +207,7 @@ export default function KapapaScreen() {
             <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
               <div onClick={openGoalEdit} style={{ cursor: 'pointer' }} role="button" aria-label="Edit Kapapa Goal">
                 <div style={{ fontSize: 30, fontWeight: 800, color: blended.hasData ? (meetsGoal ? '#16a34a' : '#ef4444') : '#111827' }}>
-                  {fmtMultiple(blended.multiple)} <span style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>/ year</span>
+                  {fmtPercent(blended.simpleRate)} <span style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>for the year</span>
                 </div>
                 <div className="familyGoalBarBg">
                   <div
@@ -219,7 +215,7 @@ export default function KapapaScreen() {
                     style={{ width: `${progressPct}%`, background: meetsGoal ? '#16a34a' : '#ef4444' }}
                   />
                 </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≥{fmtMultiple(goalMultiple)} ✎</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≥{fmtPercent(goalMultiple - 1)} ✎</div>
                 <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
                   put in vs. got out, trailing 12 months
                   {blended.isPartial ? ' · partial history' : ''}
@@ -292,8 +288,8 @@ export default function KapapaScreen() {
           <div className="modalCard" onClick={e => e.stopPropagation()}>
             <div className="modalTitle">Kapapa Goal</div>
             <div className="field">
-              <label>Money should generate at least (x per year)</label>
-              <input inputMode="decimal" value={editGoalValue} onChange={e => setEditGoalValue(e.target.value)} placeholder="e.g. 1.5" autoFocus />
+              <label>Money should generate at least (% per year)</label>
+              <input inputMode="decimal" value={editGoalValue} onChange={e => setEditGoalValue(e.target.value)} placeholder="e.g. 50" autoFocus />
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
                 Applies from this month onward — earlier months keep their existing goal.
               </div>

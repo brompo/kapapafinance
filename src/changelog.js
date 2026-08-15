@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.2.3",
+        date: "2026-08-15",
+        changes: [
+            'Kapapa now displays returns as percentages throughout (the goal ring, goal target, group headers, and empty-state copy) instead of an "x" multiple, matching the per-asset rows. The goal-edit modal now asks for a target percentage (e.g. 50) rather than a multiplier (e.g. 1.5).',
+        ]
+    },
+    {
         version: "4.2.2",
         date: "2026-08-15",
         changes: [

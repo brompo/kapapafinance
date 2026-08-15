@@ -47,8 +47,8 @@ function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   )
 }
 
-function AssetRow({ name, value, rate, goalMultiple, isLast }) {
-  const color = goalColor(rate, goalMultiple)
+function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast }) {
+  const color = goalColor(simpleRate, goalMultiple)
   return (
     <div style={{
       padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -57,7 +57,8 @@ function AssetRow({ name, value, rate, goalMultiple, isLast }) {
       <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{name}</div>
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtTZS(value)}</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color }}>{fmtPercent(rate)}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color }}>{fmtPercent(simpleRate)}</div>
+        {xirrRate != null && <div style={{ fontSize: 10, color: '#94a3b8' }}>{fmtAnnualPercent(xirrRate)}</div>}
       </div>
     </div>
   )
@@ -81,20 +82,25 @@ function GroupSection({ group, color, goalMultiple }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtMultiple(group.multiple)}</div>
-          <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtAnnualPercent(group.rate)}</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtAnnualPercent(group.xirrRate)}</div>
         </div>
       </div>
       <div>
-        {group.holdings.map((h, i) => (
-          <AssetRow
-            key={h.accountId}
-            name={h.name}
-            value={h.value}
-            rate={h.rate}
-            goalMultiple={goalMultiple}
-            isLast={i === group.holdings.length - 1}
-          />
-        ))}
+        {group.holdings.length === 0 ? (
+          <div style={{ padding: '10px 14px', fontSize: 12, color: '#94a3b8' }}>No current holdings — fully divested.</div>
+        ) : (
+          group.holdings.map((h, i) => (
+            <AssetRow
+              key={h.accountId}
+              name={h.name}
+              value={h.value}
+              simpleRate={h.simpleRate}
+              xirrRate={h.xirrRate}
+              goalMultiple={goalMultiple}
+              isLast={i === group.holdings.length - 1}
+            />
+          ))
+        )}
       </div>
     </div>
   )
@@ -215,8 +221,11 @@ export default function KapapaScreen() {
                 </div>
                 <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≥{fmtMultiple(goalMultiple)} ✎</div>
                 <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
-                  {fmtAnnualPercent(blended.rate)} annualized, trailing 12 months
+                  put in vs. got out, trailing 12 months
                   {blended.isPartial ? ' · partial history' : ''}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                  {fmtAnnualPercent(blended.xirrRate)} annualized (XIRR)
                 </div>
               </div>
             </div>

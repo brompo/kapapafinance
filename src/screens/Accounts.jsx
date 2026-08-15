@@ -1361,7 +1361,7 @@ function AccountDetail({
   const [reallocFromId, setReallocFromId] = useState('')
   const [reallocToId, setReallocToId] = useState('')
   const [reallocAmount, setReallocAmount] = useState('')
-  const [activeTab, setActiveTab] = useState("activity") // activity | future | duefrom | planner
+  const [activeTab, setActiveTab] = useState("activity") // activity | future | duefrom | valuations | planner
   const [primaryTab, setPrimaryTab] = useState("activity") // activity | goals
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -1512,8 +1512,10 @@ function AccountDetail({
     const today = new Date().toISOString().slice(0, 10);
     if (activeTab === "future") {
       filtered = filtered.filter((t) => t.date > today);
+    } else if (activeTab === "valuations") {
+      filtered = filtered.filter((t) => t.date <= today && t.kind === 'valuation');
     } else {
-      filtered = filtered.filter((t) => t.date <= today);
+      filtered = filtered.filter((t) => t.date <= today && t.kind !== 'valuation');
     }
 
     return filtered.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
@@ -3586,7 +3588,7 @@ function AccountDetail({
                       const label = sub?.isUnallocated ? 'Unallocated' : (sub?.name || (effectiveType === 'debit' ? 'Bucket' : 'Sub-account'))
                       return `${label} activity`
                     })()
-                  : activeTab === 'future' ? 'Future Expenses' : 'Recent activity'
+                  : activeTab === 'future' ? 'Future Expenses' : activeTab === 'valuations' ? 'Valuations' : 'Recent activity'
                 }
               </span>
 
@@ -3693,6 +3695,18 @@ function AccountDetail({
                   {dueFromGroups.length > 0 && <span className="accTabBadge">{dueFromGroups.length}</span>}
                 </div>
               )}
+              {effectiveType === 'asset' && (
+                <div
+                  className={`accTab ${activeTab === 'valuations' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('valuations')}
+                >
+                  Valuations
+                  {(() => {
+                    const count = accountTxns.filter(t => t.accountId === account.id && t.kind === 'valuation').length;
+                    return count > 0 ? <span className="accTabBadge">{count}</span> : null;
+                  })()}
+                </div>
+              )}
             </div>
 
             {activeTab === 'duefrom' ? (
@@ -3745,7 +3759,7 @@ function AccountDetail({
               )
             ) : grouped.length === 0 ? (
               <div className="emptyRow">
-                {activeTab === 'future' ? 'No future expenses planned.' : 'No activity yet.'}
+                {activeTab === 'future' ? 'No future expenses planned.' : activeTab === 'valuations' ? 'No valuations yet.' : 'No activity yet.'}
               </div>
             ) : (
               grouped.map(([date, items]) => {

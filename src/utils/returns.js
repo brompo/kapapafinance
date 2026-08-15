@@ -109,10 +109,24 @@ export function computeAccountReturn(account, accountTxns, allAccounts, groupsBy
   return { hasData: true, flows, isPartial, netStart, netEnd }
 }
 
+// Total money put in vs. total money got out (sale proceeds + what you still
+// hold today) over the same flow set XIRR uses — no compounding/annualizing.
+// This is the number that answers "of everything I put into this, what do I
+// have to show for it now"; XIRR answers a different question ("what
+// constant yearly rate would this be equivalent to"), which explodes for
+// gains realized quickly (a 44-day 52% gain annualizes past 3000%). Both are
+// kept: simple return is primary display, XIRR is secondary context.
+function simpleReturn(flows) {
+  const putIn = (flows || []).reduce((s, f) => s + (f.amount < 0 ? -f.amount : 0), 0)
+  const gotOut = (flows || []).reduce((s, f) => s + (f.amount > 0 ? f.amount : 0), 0)
+  return { putIn, gotOut, rate: putIn > 0 ? (gotOut - putIn) / putIn : null }
+}
+
 // Wraps computeAccountReturn with the two things a holding row needs beyond
-// the raw XIRR flows: the annualized rate itself, and the account's current
-// gross market value (undiscounted by any linked debt — that netting only
-// applies to the return math, not the displayed value).
+// the raw flows: both return figures (simple put-in-vs-got-out, and
+// annualized XIRR), and the account's current gross market value
+// (undiscounted by any linked debt — that netting only applies to the
+// return math, not the displayed value).
 function accountHoldingResult(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths) {
   const r = computeAccountReturn(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths)
   const marketValue = calculateAssetMetrics(account, accountTxns, 'asset', asOfDate).marketValue || 0
@@ -120,18 +134,19 @@ function accountHoldingResult(account, accountTxns, allAccounts, groupsById, asO
     accountId: account.id,
     name: account.name,
     value: marketValue,
-    rate: r.hasData ? xirr(r.flows) : null,
+    simpleRate: r.hasData ? simpleReturn(r.flows).rate : null,
+    xirrRate: r.hasData ? xirr(r.flows) : null,
     isPartial: r.hasData ? r.isPartial : false,
     flows: r.hasData ? r.flows : null
   }
 }
 
-function sortByRateDesc(holdings) {
+function sortBySimpleRateDesc(holdings) {
   return [...holdings].sort((a, b) => {
-    if (a.rate == null && b.rate == null) return 0
-    if (a.rate == null) return 1
-    if (b.rate == null) return -1
-    return b.rate - a.rate
+    if (a.simpleRate == null && b.simpleRate == null) return 0
+    if (a.simpleRate == null) return 1
+    if (b.simpleRate == null) return -1
+    return b.simpleRate - a.simpleRate
   })
 }
 
@@ -140,7 +155,12 @@ function sortByRateDesc(holdings) {
 // current value, and a per-account holdings breakdown (sorted best → worst
 // annualized return) so the UI can show individual asset performance instead
 // of only the group rollup. Holdings with too little cash-flow history for
-// XIRR still appear (value-only, rate: null) rather than being dropped.
+// XIRR still appear (value-only, rate: null) rather than being dropped — but
+// a fully divested account (current value 0, e.g. all shares sold) is left
+// out of the displayed holdings/totalValue/accountCount entirely, even
+// though its historical cash flows still feed the group's and the blended
+// pooled XIRR (a closed position's realized gain is still part of the track
+// record, it's just no longer something you're "holding").
 export function computeKapapaReturns(accounts, groups, accountTxns, asOfDate = todayISO(), windowMonths = 12) {
   const groupsById = new Map((groups || []).map(g => [g.id, g]))
   const assetGroups = (groups || []).filter(g => g.type === 'asset')
@@ -150,29 +170,35 @@ export function computeKapapaReturns(accounts, groups, accountTxns, asOfDate = t
     .map(g => {
       const groupAccounts = assetAccounts.filter(a => a.groupId === g.id)
       if (!groupAccounts.length) return null
-      const holdings = groupAccounts.map(a =>
+      const allHoldings = groupAccounts.map(a =>
         accountHoldingResult(a, accountTxns, accounts, groupsById, asOfDate, windowMonths)
       )
-      const flows = holdings.filter(h => h.flows).flatMap(h => h.flows)
-      const rate = flows.length ? xirr(flows) : null
+      const flows = allHoldings.filter(h => h.flows).flatMap(h => h.flows)
+      const simpleRate = flows.length ? simpleReturn(flows).rate : null
+      const xirrRate = flows.length ? xirr(flows) : null
+      const currentHoldings = allHoldings.filter(h => h.value > 0)
       return {
         groupId: g.id,
         name: g.name,
-        rate,
-        isPartial: holdings.some(h => h.isPartial),
-        accountCount: groupAccounts.length,
-        totalValue: holdings.reduce((s, h) => s + h.value, 0),
-        holdings
+        simpleRate,
+        xirrRate,
+        isPartial: allHoldings.some(h => h.isPartial),
+        accountCount: currentHoldings.length,
+        totalValue: currentHoldings.reduce((s, h) => s + h.value, 0),
+        holdings: currentHoldings,
+        flows
       }
     })
     .filter(Boolean)
 
-  const blendedFlows = groupResults.flatMap(g => g.holdings.filter(h => h.flows).flatMap(h => h.flows))
-  const blendedRate = blendedFlows.length ? xirr(blendedFlows) : null
+  const blendedFlows = groupResults.flatMap(g => g.flows)
+  const blendedSimple = simpleReturn(blendedFlows)
+  const blendedXirrRate = blendedFlows.length ? xirr(blendedFlows) : null
   const blended = {
-    hasData: blendedRate != null,
-    rate: blendedRate,
-    multiple: blendedRate == null ? null : 1 + blendedRate,
+    hasData: blendedFlows.length > 0,
+    simpleRate: blendedSimple.rate,
+    multiple: blendedSimple.rate == null ? null : 1 + blendedSimple.rate,
+    xirrRate: blendedXirrRate,
     isPartial: groupResults.some(g => g.isPartial),
     accountCount: assetAccounts.length
   }
@@ -180,13 +206,14 @@ export function computeKapapaReturns(accounts, groups, accountTxns, asOfDate = t
   const byGroup = groupResults.map(g => ({
     groupId: g.groupId,
     name: g.name,
-    hasData: g.rate != null,
-    rate: g.rate,
-    multiple: g.rate == null ? null : 1 + g.rate,
+    hasData: g.simpleRate != null,
+    simpleRate: g.simpleRate,
+    multiple: g.simpleRate == null ? null : 1 + g.simpleRate,
+    xirrRate: g.xirrRate,
     isPartial: g.isPartial,
     accountCount: g.accountCount,
     totalValue: g.totalValue,
-    holdings: sortByRateDesc(g.holdings).map(({ flows, ...rest }) => rest)
+    holdings: sortBySimpleRateDesc(g.holdings).map(({ flows, ...rest }) => rest)
   }))
 
   return { blended, byGroup, hasAssets: assetAccounts.length > 0 }

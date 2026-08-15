@@ -1,5 +1,14 @@
 export const CHANGELOG = [
     {
+        version: "4.2.2",
+        date: "2026-08-15",
+        changes: [
+            'Kapapa now shows a simple "put in vs. got out" return as the primary number on the goal ring, group headers, and each asset row, with the annualized (XIRR) rate kept underneath as context — a quick, large gain no longer dominates the headline figure the way it did when XIRR alone was annualized to a compounded yearly rate.',
+            'Fully divested assets (e.g. a stock you\'ve sold out of entirely) no longer clutter the Kapapa holdings list or account counts — their historical gains still feed the group and blended totals.',
+            'Asset accounts now have a separate Valuations tab (DSE auto-prices, manual valuations) so History only shows real purchases, sales, and transfers.',
+        ]
+    },
+    {
         version: "4.2.1",
         date: "2026-08-15",
         changes: [

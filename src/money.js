@@ -2,6 +2,13 @@ export function uid() {
   return Math.random().toString(36).substring(2, 9)
 }
 
+export function calculateBucketSpentYTD(subId, accountTxns) {
+  const year = String(new Date().getFullYear())
+  return accountTxns
+    .filter(t => t.subAccountId === subId && t.direction === 'out' && String(t.date || '').startsWith(year))
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+}
+
 export function fmtTZS(amount) {
   const n = Number(amount || 0)
   try {
@@ -189,4 +196,99 @@ export function calculateSavingsMetrics(account, accountTxns, allAccounts, actua
     planned,
     total: owned + Math.max(0, netLent)
   };
+}
+
+export function computeAccruedForAccount(account, accountTxns, balanceType = 'current') {
+  const creditEntries = accountTxns.filter((t) => t.accountId === account.id && t.kind === "credit");
+  const today = new Date().toISOString().slice(0, 10);
+  let accrued = 0;
+  creditEntries.forEach((t) => {
+    if (balanceType === 'current' && t.date > today) return;
+    const rate = Number(t.creditRate || 0) / 100;
+    if (!rate || !t.interestStartDate || t.creditType === "none") return;
+    const start = t.interestStartDate;
+    if (t.creditType === "compound") {
+      const months = monthsBetween(start, today);
+      const monthlyRate = rate / 12;
+      const compounded = Number(t.amount || 0) * Math.pow(1 + monthlyRate, months);
+      const monthStart = new Date(start);
+      monthStart.setMonth(monthStart.getMonth() + months);
+      const remDays = daysBetween(monthStart.toISOString().slice(0, 10), today);
+      const dailyRate = rate / 365;
+      accrued += compounded * dailyRate * remDays + (compounded - Number(t.amount || 0));
+    } else {
+      const days = daysBetween(start, today);
+      accrued += Number(t.amount || 0) * rate * (days / 365);
+    }
+  });
+  return accrued;
+}
+
+/**
+ * Computes an account's balance from its transactions, mirroring the ledger
+ * logic used across Accounts/AccountDetail/Kapapa so all three stay in sync.
+ */
+export function computeAccountBalance(account, accountTxns, groups, balanceType = 'current', ignoreLedgerFilter = false) {
+  const today = new Date().toISOString().slice(0, 10);
+  const subs = Array.isArray(account.subAccounts) ? account.subAccounts : [];
+
+  const getBaseBalance = (acc) => {
+    let b = Number(acc.balance || 0);
+    if (balanceType === 'current') {
+      const futureTxns = accountTxns.filter(t => t.accountId === acc.id && t.date > today);
+      futureTxns.forEach(t => {
+        const amt = Number(t.amount || 0);
+        if (t.direction === 'out') b += amt;
+        else if (t.direction === 'in') b -= amt;
+      });
+    }
+    return b;
+  };
+
+  const base = subs.length > 0
+    ? subs.reduce((s, sub) => s + getBaseBalance(sub), 0)
+    : getBaseBalance(account);
+
+  const group = groups.find((g) => g.id === account.groupId);
+  const groupType = account.accountType || group?.type;
+
+  // Fixed: Savings accounts should sum their transactions (Allocations, etc)
+  if (group?.metaCategory === 'savings') {
+    if (subs.length > 0) return base;
+    let cleanBase = 0;
+    const txns = accountTxns.filter(t => t.accountId === account.id);
+    for (const t of txns) {
+      if (balanceType === 'current' && t.date > today) continue;
+      const amt = Number(t.amount || 0);
+      if (t.direction === 'in') cleanBase += amt;
+      if (t.direction === 'out') cleanBase -= amt;
+    }
+    return cleanBase;
+  }
+
+  if (groupType === "credit") return base + computeAccruedForAccount(account, accountTxns, balanceType);
+
+  if (groupType === "asset") {
+    // If account has subaccounts, trust the base sum (which filters subs by ledger)
+    if (subs.length > 0) return base;
+
+    // Fix ledger corruption: Dynamically calculate raw base from valid cash-flow transactions
+    let cleanBase = 0;
+    const txns = accountTxns.filter(t => t.accountId === account.id);
+    for (const t of txns) {
+      if (t.kind === 'valuation') continue;
+      if (balanceType === 'current' && t.date > today) continue;
+      const amt = Number(t.amount || 0);
+      if (t.direction === 'in') cleanBase += amt;
+      if (t.direction === 'out') cleanBase -= amt;
+    }
+
+    const info = calculateAssetMetrics(account, accountTxns, groupType, balanceType === 'current' ? today : null);
+    if (info.hasData) {
+      const uninvestedCash = cleanBase - (info.costBasis || 0) + (info.realizedGain || 0);
+      return (info.value || 0) + uninvestedCash;
+    }
+  }
+
+  return base;
 }

@@ -1040,6 +1040,41 @@ label {
   vertical-align: middle;
 }
 
+.trendsStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 4px 10px;
+}
+
+.trendsStat {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.trendsStatLabel {
+  font-size: 11px;
+  color: #8b90b2;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.trendsStatValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.trendsStatValue.pos {
+  color: #2fbf71;
+}
+
+.trendsStatValue.neg {
+  color: #e24b4b;
+}
+
 .accHistoryRow {
   display: flex;
   align-items: center;

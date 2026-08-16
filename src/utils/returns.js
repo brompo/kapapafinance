@@ -127,7 +127,7 @@ function simpleReturn(flows) {
 // annualized XIRR), and the account's current gross market value
 // (undiscounted by any linked debt — that netting only applies to the
 // return math, not the displayed value).
-function accountHoldingResult(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths) {
+export function accountHoldingResult(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths) {
   const r = computeAccountReturn(account, accountTxns, allAccounts, groupsById, asOfDate, windowMonths)
   const marketValue = calculateAssetMetrics(account, accountTxns, 'asset', asOfDate).marketValue || 0
   return {

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.2.4",
+        date: "2026-08-16",
+        changes: [
+            'Tapping an asset in Kapapa now opens its account detail view on a new Trends tab, showing a chart of invested (cost basis) vs. market value over time — sampled at each real purchase, sale, or valuation — plus summary stats (current value, total invested, unrealized gain, simple return, XIRR). The same Trends tab is now available for any asset account from the Accounts tab too.',
+        ]
+    },
+    {
         version: "4.2.3",
         date: "2026-08-15",
         changes: [

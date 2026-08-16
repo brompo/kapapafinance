@@ -3,8 +3,9 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { useAppContext } from '../context/AppContext'
 import { computeKapapaReturns } from '../utils/returns'
 import { getKapapaGoalMultipleForMonth, withKapapaGoalMultipleForMonth } from '../utils/ledger'
-import { fmtTZS } from '../money.js'
+import { fmtTZS, computeAccountBalance } from '../money.js'
 import DSEWatchScreen from './DSEWatchScreen'
+import AccountDetail from './AccountDetail'
 
 // Fixed-order categorical palette (dataviz skill default, validated for
 // adjacent-pair CVD/normal-vision separation) — assigned to asset groups by
@@ -42,14 +43,17 @@ function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   )
 }
 
-function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast, index }) {
+function AssetRow({ accountId, name, value, simpleRate, xirrRate, goalMultiple, isLast, index, onSelect }) {
   const color = goalColor(simpleRate, goalMultiple)
   return (
-    <div style={{
-      padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      borderBottom: isLast ? 'none' : '1px solid #e2e8f0',
-      background: index % 2 === 1 ? '#f8fafc' : '#fff'
-    }}>
+    <div
+      onClick={() => onSelect?.(accountId)}
+      style={{
+        padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: isLast ? 'none' : '1px solid #e2e8f0',
+        background: index % 2 === 1 ? '#f8fafc' : '#fff',
+        cursor: 'pointer'
+      }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{name}</div>
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtTZS(value)}</div>
@@ -60,7 +64,7 @@ function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast, ind
   )
 }
 
-function GroupSection({ group, color, goalMultiple }) {
+function GroupSection({ group, color, goalMultiple, onSelectAsset }) {
   return (
     <div style={{
       borderRadius: 14, background: '#fff', border: `1px solid ${color}33`, marginBottom: 10, overflow: 'hidden'
@@ -88,6 +92,7 @@ function GroupSection({ group, color, goalMultiple }) {
           group.holdings.map((h, i) => (
             <AssetRow
               key={h.accountId}
+              accountId={h.accountId}
               name={h.name}
               value={h.value}
               simpleRate={h.simpleRate}
@@ -95,6 +100,7 @@ function GroupSection({ group, color, goalMultiple }) {
               goalMultiple={goalMultiple}
               isLast={i === group.holdings.length - 1}
               index={i}
+              onSelect={onSelectAsset}
             />
           ))
         )}
@@ -109,7 +115,17 @@ function GroupSection({ group, color, goalMultiple }) {
 // 'asset'); the holdings list below breaks that same universe down to
 // individual assets, grouped for orientation but ranked by their own return.
 export default function KapapaScreen() {
-  const { settings, updateSettings, accounts, groups, accountTxns, show, setTab } = useAppContext()
+  const {
+    settings, updateSettings, accounts, allAccounts, groups, accountTxns, show, setTab,
+    categories, clients,
+    upsertAccount, deleteAccount, mergeAccounts, addAccountTxn, issueLoan,
+    transferAccount, payCreditBack, updateAccountTxn, deleteAccountTxn,
+    reallocateBuckets, markDueFrom, unmarkDueFrom, settleDueFrom,
+  } = useAppContext()
+
+  const [selectedAssetId, setSelectedAssetId] = useState(null)
+  const getAccountBalance = (account, balanceType = 'current', ignoreLedgerFilter = false) =>
+    computeAccountBalance(account, accountTxns, groups, balanceType, ignoreLedgerFilter)
 
   const [view, setView] = useState('returns')
   useEffect(() => {
@@ -166,6 +182,38 @@ export default function KapapaScreen() {
     })
     show('Updated.')
     setShowGoalEdit(false)
+  }
+
+  const selectedAsset = selectedAssetId ? accounts.find(a => a.id === selectedAssetId) : null
+  if (selectedAsset) {
+    return (
+      <AccountDetail
+        account={selectedAsset}
+        accounts={accounts}
+        allAccounts={allAccounts}
+        groups={groups}
+        accountTxns={accountTxns}
+        categories={categories}
+        onClose={() => setSelectedAssetId(null)}
+        getAccountBalance={getAccountBalance}
+        onAddAccountTxn={addAccountTxn}
+        onIssueLoan={issueLoan}
+        onTransferAccount={transferAccount}
+        onPayCreditBack={payCreditBack}
+        onUpsertAccount={upsertAccount}
+        onDeleteAccount={deleteAccount}
+        onMergeAccounts={mergeAccounts}
+        onUpdateAccountTxn={updateAccountTxn}
+        onDeleteAccountTxn={deleteAccountTxn}
+        onReallocateBuckets={reallocateBuckets}
+        onMarkDueFrom={markDueFrom}
+        onUnmarkDueFrom={unmarkDueFrom}
+        onSettleDueFrom={settleDueFrom}
+        onToast={show}
+        clients={clients}
+        initialTab="trends"
+      />
+    )
   }
 
   return (
@@ -278,6 +326,7 @@ export default function KapapaScreen() {
                   group={g}
                   color={groupColors.get(g.groupId) || '#94a3b8'}
                   goalMultiple={goalMultiple}
+                  onSelectAsset={setSelectedAssetId}
                 />
               ))}
             </div>

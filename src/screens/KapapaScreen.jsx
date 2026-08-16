@@ -48,7 +48,7 @@ function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast, ind
     <div style={{
       padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       borderBottom: isLast ? 'none' : '1px solid #e2e8f0',
-      background: index % 2 === 1 ? 'rgba(255,255,255,0.55)' : 'transparent'
+      background: index % 2 === 1 ? '#f8fafc' : '#fff'
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{name}</div>
       <div style={{ textAlign: 'right' }}>
@@ -63,9 +63,9 @@ function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast, ind
 function GroupSection({ group, color, goalMultiple }) {
   return (
     <div style={{
-      borderRadius: 14, background: `${color}0f`, border: `1px solid ${color}33`, marginBottom: 10, overflow: 'hidden'
+      borderRadius: 14, background: '#fff', border: `1px solid ${color}33`, marginBottom: 10, overflow: 'hidden'
     }}>
-      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: `${color}22` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
           <div>

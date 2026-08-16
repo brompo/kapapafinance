@@ -42,12 +42,13 @@ function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   )
 }
 
-function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast }) {
+function AssetRow({ name, value, simpleRate, xirrRate, goalMultiple, isLast, index }) {
   const color = goalColor(simpleRate, goalMultiple)
   return (
     <div style={{
       padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      borderBottom: isLast ? 'none' : '1px solid #f1f5f9'
+      borderBottom: isLast ? 'none' : '1px solid #e2e8f0',
+      background: index % 2 === 1 ? 'rgba(255,255,255,0.55)' : 'transparent'
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{name}</div>
       <div style={{ textAlign: 'right' }}>
@@ -93,6 +94,7 @@ function GroupSection({ group, color, goalMultiple }) {
               xirrRate={h.xirrRate}
               goalMultiple={goalMultiple}
               isLast={i === group.holdings.length - 1}
+              index={i}
             />
           ))
         )}

@@ -104,6 +104,47 @@ function SegmentedPie({ segments, size = 132 }) {
   )
 }
 
+// Single-wedge ring for "how much of Upkeep's target has been funded so far"
+// — shown instead of SegmentedPie while Upkeep isn't fully funded yet, since
+// a 3-way distribution split isn't meaningful until Lifestyle/Growth start
+// receiving anything at all.
+function UpkeepProgressRing({ percent, size = 132 }) {
+  const cx = size / 2
+  const cy = size / 2
+  const r = size / 2
+  const fraction = Math.max(0, Math.min(100, percent)) / 100
+  const deg = -90 + fraction * 360
+  const rad = (deg * Math.PI) / 180
+  const x = cx + r * Math.cos(rad)
+  const y = cy + r * Math.sin(rad)
+  const largeArc = fraction > 0.5 ? 1 : 0
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="#e2e8f0" />
+        {fraction >= 1 ? (
+          <circle cx={cx} cy={cy} r={r} fill={UPKEEP_COLOR} />
+        ) : fraction > 0 ? (
+          <path
+            d={`M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${largeArc} 1 ${x} ${y} Z`}
+            fill={UPKEEP_COLOR}
+            stroke="#fff"
+            strokeWidth={2}
+            strokeLinejoin="round"
+          />
+        ) : null}
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, fontWeight: 800, color: '#1e293b'
+      }}>
+        {Math.round(Math.max(0, Math.min(100, percent)))}%
+      </div>
+    </div>
+  )
+}
+
 function RingLegendItem({ color, label, percent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -494,6 +535,14 @@ export function FlowScreen() {
   const ringTotal = ringSegments.reduce((s, seg) => s + Math.max(0, seg.value), 0)
   const percentOf = (v) => ringTotal > 0 ? (Math.max(0, v) / ringTotal) * 100 : 0
 
+  // While this period's Upkeep budget isn't fully funded yet, the 3-way split
+  // ring is misleading (it's always 100/0/0 until Upkeep's target is met) —
+  // show single-wedge funding progress instead. No target at all (no Expense
+  // budgets configured) counts as trivially covered, same as target === 0.
+  const upkeepTargetThisPeriod = envelopeSummary.upkeep.targetThisPeriod
+  const upkeepFundingComplete = upkeepTargetThisPeriod <= 0 || upkeepDistributedTotal >= upkeepTargetThisPeriod
+  const upkeepFundingPercent = upkeepTargetThisPeriod > 0 ? (upkeepDistributedTotal / upkeepTargetThisPeriod) * 100 : 100
+
   // Family Goal: Upkeep's Distribution (not raw spend) as a share of this
   // period's income, checked against a month-scoped target — see
   // getUpkeepGoalPercentForMonth in ledger.js for why it's resolved per month
@@ -579,14 +628,25 @@ export function FlowScreen() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
-        <SegmentedPie segments={ringSegments} />
+        {upkeepFundingComplete
+          ? <SegmentedPie segments={ringSegments} />
+          : <UpkeepProgressRing percent={upkeepFundingPercent} />}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
-        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
-        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
-      </div>
+      {upkeepFundingComplete ? (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
+          <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
+          <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
+          <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center', padding: '0 16px 8px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{Math.round(upkeepFundingPercent)}% toward Upkeep</div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+            {fmtTZS(upkeepDistributedTotal)} of {fmtTZS(upkeepTargetThisPeriod)} funded
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
         <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.2.5",
+        date: "2026-08-21",
+        changes: [
+            'The Family tab ring no longer shows a misleading "100% on Upkeep" split the instant any income lands. Until this period\'s Upkeep budget is fully funded, it shows a single funding-progress ring instead (e.g. "62% toward Upkeep", with the amount funded vs. target underneath) — the normal Upkeep/Lifestyle/Growth split ring only returns once Upkeep is fully covered.',
+        ]
+    },
+    {
         version: "4.2.4",
         date: "2026-08-16",
         changes: [

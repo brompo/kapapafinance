@@ -8,14 +8,21 @@ import { getGrowthPercentForMonth, getBudgetForMonth } from './ledger.js'
 // for each month of history so it can feed a rolling Balance. None of this touches
 // any real Account — only real Expenditure (type 'expense'/'allocation'/'growth'
 // ledger transactions, entered in Transactions) does that.
+// Upkeep's target isn't month-versioned like allocation/growth budgets are —
+// it's just the current sum of Expense category budgets, applied uniformly
+// whichever month is being looked at.
+function upkeepTargetFor(ledger) {
+  const expenseCats = ledger?.categories?.expense || []
+  const expenseMeta = ledger?.categoryMeta?.expense || {}
+  return expenseCats.reduce((s, name) => s + Number(expenseMeta[name]?.budget || 0), 0)
+}
+
 function cascadeForMonth(ledger, monthKey) {
   const monthTxns = (ledger?.txns || []).filter(t => (t.date || '').startsWith(monthKey))
   const { income } = computeIncome(monthTxns)
   let available = Math.max(0, income)
 
-  const expenseCats = ledger?.categories?.expense || []
-  const expenseMeta = ledger?.categoryMeta?.expense || {}
-  const upkeepTarget = expenseCats.reduce((s, name) => s + Number(expenseMeta[name]?.budget || 0), 0)
+  const upkeepTarget = upkeepTargetFor(ledger)
   const upkeepDistributed = Math.min(upkeepTarget, available)
   available -= upkeepDistributed
 
@@ -139,9 +146,16 @@ export function computeEnvelopeSummary(ledger, period) {
   // All feed the same rolling Balance, but stay separate, individually-displayed
   // lines going in.
   const upkeepBalance = upkeepDistributedCum + upkeepFundedByGrowthCum + upkeepFundedByGrowthReserve - upkeepSpentTotal
+  // Target isn't derived from the income-driven `months` list above (a month
+  // with zero income recorded so far would simply be absent from it) — it's
+  // owed regardless of whether any income has landed yet, so it's computed
+  // straight from the current Expense budgets and scaled to how many months
+  // this period spans (1 for a month view, 12 for a year view).
+  const upkeepTargetThisPeriod = upkeepTargetFor(ledger) * (period.length === 4 ? 12 : 1)
   const upkeep = {
     distributedThisPeriod: upkeepDistributedThisPeriod,
     fundedByGrowthThisPeriod: upkeepFundedByGrowthThisPeriod,
+    targetThisPeriod: upkeepTargetThisPeriod,
     spentThisPeriod: upkeepSpentThisPeriod,
     spentTotal: upkeepSpentTotal,
     balance: upkeepBalance,

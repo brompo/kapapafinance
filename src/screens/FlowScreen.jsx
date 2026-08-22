@@ -621,25 +621,27 @@ export function FlowScreen() {
 
       <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
         <div onClick={openGoalEdit} style={{ cursor: 'pointer' }} role="button" aria-label="Edit Family Goal">
-          <div style={{ fontSize: 30, fontWeight: 800, color: upkeepGoalOver ? '#ef4444' : '#111827' }}>
-            {Math.round(upkeepActualPercent)}% <span style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>on Upkeep</span>
+          <div style={{ fontSize: 22, fontWeight: 800, color: upkeepGoalOver ? '#ef4444' : '#111827' }}>
+            {Math.round(upkeepActualPercent)}% <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>on Upkeep</span>
           </div>
-          <div className="familyGoalBarBg">
+          <div className="familyGoalBarBg" style={{ height: 4 }}>
             <div
               className="familyGoalBarFill"
               style={{ width: `${Math.min(upkeepActualPercent, 100)}%`, background: upkeepGoalOver ? '#ef4444' : '#16a34a' }}
             />
           </div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
         </div>
-        <div
-          onClick={(e) => { e.stopPropagation(); setShowIncomeList(true) }}
-          style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
-          role="button"
-          aria-label="View income transactions"
-        >
-          Income this {viewGranularity}: {fmtTZS(incomeInfo.income)} ›
-        </div>
+        {upkeepFundingComplete && (
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowIncomeList(true) }}
+            style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+            role="button"
+            aria-label="View income transactions"
+          >
+            Income this {viewGranularity}: {fmtTZS(incomeInfo.income)} ›
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
@@ -655,10 +657,19 @@ export function FlowScreen() {
           <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '0 16px 8px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{Math.round(upkeepFundingPercent)}% toward Upkeep</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-            {fmtTZS(upkeepDistributedTotal)} of {fmtTZS(upkeepTargetThisPeriod)} funded
+        // The "X of Y funded" figure already carries the income total (X ==
+        // this period's income, since every shilling of it went to Upkeep),
+        // so this caption doubles as the income-drilldown entry point instead
+        // of repeating a separate "Income this month" line.
+        <div
+          onClick={() => setShowIncomeList(true)}
+          style={{ textAlign: 'center', padding: '0 16px 8px', cursor: 'pointer' }}
+          role="button"
+          aria-label="View income transactions"
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{Math.round(upkeepFundingPercent)}% of Upkeep Raised</div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+            {fmtTZS(upkeepDistributedTotal)} of {fmtTZS(upkeepTargetThisPeriod)} funded ›
           </div>
         </div>
       )}

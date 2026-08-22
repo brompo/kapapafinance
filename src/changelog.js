@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.2.6",
+        date: "2026-08-22",
+        changes: [
+            'The Family tab now always shows the Upkeep/Lifestyle/Growth legend under the ring, even while Upkeep is still funding, instead of hiding it until the split kicks in.',
+            'The funding-progress ring is now labeled "of Upkeep raised" so it reads clearly on its own, and the caption underneath it is a straightforward "Income collected this month/week" drill-down link rather than a repeated funded-vs-target figure.',
+        ]
+    },
+    {
         version: "4.2.5",
         date: "2026-08-21",
         changes: [

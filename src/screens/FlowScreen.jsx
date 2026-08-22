@@ -106,9 +106,10 @@ function SegmentedPie({ segments, size = 132 }) {
 }
 
 // Single-wedge ring for "how much of Upkeep's target has been funded so far"
-// — shown instead of SegmentedPie while Upkeep isn't fully funded yet, since
-// a 3-way distribution split isn't meaningful until Lifestyle/Growth start
-// receiving anything at all.
+// — the split ring (SegmentedPie) reads 100/0/0 for this whole phase (money
+// hasn't reached Lifestyle/Growth yet), which is accurate for the legend but
+// looks like a static, un-moving solid wedge; this instead visualizes the
+// number that's actually changing as income comes in.
 function UpkeepProgressRing({ percent, size = 132 }) {
   const cx = size / 2
   const cy = size / 2
@@ -137,10 +138,13 @@ function UpkeepProgressRing({ percent, size = 132 }) {
         ) : null}
       </svg>
       <div style={{
-        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 22, fontWeight: 800, color: '#1e293b'
+        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', textAlign: 'center'
       }}>
-        {Math.round(Math.max(0, Math.min(100, percent)))}%
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b' }}>
+          {Math.round(Math.max(0, Math.min(100, percent)))}%
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 1 }}>of Upkeep raised</div>
       </div>
     </div>
   )
@@ -632,16 +636,6 @@ export function FlowScreen() {
           </div>
           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
         </div>
-        {upkeepFundingComplete && (
-          <div
-            onClick={(e) => { e.stopPropagation(); setShowIncomeList(true) }}
-            style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
-            role="button"
-            aria-label="View income transactions"
-          >
-            Income this {viewGranularity}: {fmtTZS(incomeInfo.income)} ›
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
@@ -650,29 +644,23 @@ export function FlowScreen() {
           : <UpkeepProgressRing percent={upkeepFundingPercent} />}
       </div>
 
-      {upkeepFundingComplete ? (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-          <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
-          <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
-          <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
+      <div
+        onClick={() => setShowIncomeList(true)}
+        style={{ textAlign: 'center', padding: '0 16px 8px', cursor: 'pointer' }}
+        role="button"
+        aria-label="View income transactions"
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Income collected this {viewGranularity}</div>
+        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+          {fmtTZS(incomeInfo.income)} ›
         </div>
-      ) : (
-        // The "X of Y funded" figure already carries the income total (X ==
-        // this period's income, since every shilling of it went to Upkeep),
-        // so this caption doubles as the income-drilldown entry point instead
-        // of repeating a separate "Income this month" line.
-        <div
-          onClick={() => setShowIncomeList(true)}
-          style={{ textAlign: 'center', padding: '0 16px 8px', cursor: 'pointer' }}
-          role="button"
-          aria-label="View income transactions"
-        >
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{Math.round(upkeepFundingPercent)}% of Upkeep Raised</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textDecoration: 'underline', textUnderlineOffset: 2 }}>
-            {fmtTZS(upkeepDistributedTotal)} of {fmtTZS(upkeepTargetThisPeriod)} funded ›
-          </div>
-        </div>
-      )}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
+        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
+        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
+        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
         <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>

@@ -4,6 +4,7 @@ import { fmtTZS, todayISO, uid } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
+import { TransactionDetail } from '../components/TransactionDetail'
 
 // Theme bases mirror the category-card colors HomeScreen assigns per section
 // (Transactions tab), so a category opened from Flow gets the same header
@@ -279,7 +280,8 @@ function SectionDivider({ title, total, color, onAdd, style }) {
 export function FlowScreen() {
   const {
     formatMonthLabel, settings, updateSettings,
-    txns, categories, categoryMeta, book, persistBook, show, setSelectedCategory
+    txns, categories, categoryMeta, book, persistBook, show, setSelectedCategory,
+    accounts, clients, updateTxn, delTxn
   } = useAppContext()
 
   // Budget/percent aren't transactions — they're just category settings — so
@@ -311,6 +313,12 @@ export function FlowScreen() {
   // already map 1:1 to a category.
   const [showUpkeepPicker, setShowUpkeepPicker] = useState(false)
   const [showIncomePicker, setShowIncomePicker] = useState(false)
+
+  // Tapping "Income this {period}" drills into the Collections that make up
+  // that total (see incomeInfo.collectionRows below) — a separate flow from
+  // the "+ Add Income" picker above, which is for logging a new one.
+  const [showIncomeList, setShowIncomeList] = useState(false)
+  const [selectedIncomeTxn, setSelectedIncomeTxn] = useState(null)
 
   // Same "+ Add" pattern as Transactions' category grid — Flow/Kapapa have
   // their own independent category lists now, so each needs its own way to
@@ -623,7 +631,14 @@ export function FlowScreen() {
             />
           </div>
           <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Income this {viewGranularity}: {fmtTZS(incomeInfo.income)}</div>
+        </div>
+        <div
+          onClick={(e) => { e.stopPropagation(); setShowIncomeList(true) }}
+          style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+          role="button"
+          aria-label="View income transactions"
+        >
+          Income this {viewGranularity}: {fmtTZS(incomeInfo.income)} ›
         </div>
       </div>
 
@@ -883,6 +898,76 @@ export function FlowScreen() {
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowIncomePicker(false)}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showIncomeList && (
+        <div className="modalBackdrop" onClick={() => { setShowIncomeList(false); setSelectedIncomeTxn(null) }}>
+          <div className="modalCard" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+            {selectedIncomeTxn ? (
+              <TransactionDetail
+                txn={selectedIncomeTxn}
+                accounts={accounts}
+                expenseCats={categories?.expense || []}
+                incomeCats={categories?.income || []}
+                allocationCats={categories?.allocation || []}
+                growthCats={categories?.growth || []}
+                settings={settings}
+                show={show}
+                categoryMeta={categoryMeta}
+                clients={clients}
+                onSave={(next) => { updateTxn(selectedIncomeTxn.raw, next); setSelectedIncomeTxn(null) }}
+                onClose={() => setSelectedIncomeTxn(null)}
+                onDelete={() => { delTxn(selectedIncomeTxn.raw.id); setSelectedIncomeTxn(null) }}
+              />
+            ) : (
+              <>
+                <div className="modalTitle">Income this {viewGranularity} — {fmtTZS(incomeInfo.income)}</div>
+                {incomeInfo.collectionRows.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>No income recorded this {viewGranularity}.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[...incomeInfo.collectionRows]
+                      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                      .map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => setSelectedIncomeTxn({
+                            id: `txn-${t.id}`,
+                            date: t.date,
+                            title: t.category || 'Income',
+                            sub: t.note || '',
+                            amount: Number(t.amount || 0),
+                            direction: 'in',
+                            type: t.type,
+                            category: t.category || '',
+                            accountId: t.accountId || '',
+                            note: t.note || '',
+                            kind: 'txn',
+                            raw: t
+                          })}
+                          style={{
+                            padding: '10px 12px', borderRadius: 14, background: '#f8fafc', border: '1px solid #f1f5f9',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: 'pointer'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{t.category || 'Income'}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                              {t.date}{t.note ? ` · ${t.note}` : ''}{t.pending ? ' · Pending compliance' : ''}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#16a34a', flexShrink: 0 }}>{fmtTZS(t.net)}</div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+                <div className="modalActions">
+                  <button className="btn" type="button" onClick={() => setShowIncomeList(false)}>Close</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

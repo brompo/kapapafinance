@@ -1,6 +1,6 @@
 {
-  "date": "2026-08-24",
-  "scrapedAt": "2026-08-24T14:20:03.640Z",
+  "date": "2026-08-25",
+  "scrapedAt": "2026-08-25T14:23:09.113Z",
   "companies": [
     {
       "symbol": "DSE",
@@ -14,14 +14,7 @@
       "turnover": 15188790,
       "volume": 1141,
       "deals": 35,
-      "marketCap": 9252,
-      "pe": null,
-      "eps": null,
-      "dividendYield": null,
-      "dividendPerShare": null,
-      "bookValue": null,
-      "pb": null,
-      "sharesOutstanding": null
+      "marketCap": 9252
     },
     {
       "symbol": "CRDB",

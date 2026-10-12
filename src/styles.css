@@ -2419,6 +2419,19 @@ label {
   margin-top: auto;
 }
 
+/* Transactions tab: slightly tighter spacing so more categories fit per screen */
+.ledgerCompact { gap: 14px; padding-top: 12px; }
+.ledgerCompact .ledgerSummaryCard { padding: 9px 15px 7px; }
+.ledgerCompact .ledgerSummaryBalanceValue { font-size: 21px; }
+.ledgerCompact .ledgerSection { gap: 12px; }
+.ledgerCompact .ledgerSection + .ledgerSection { margin-top: 18px; }
+.ledgerCompact .ledgerAddBtn { padding: 5px 11px; }
+.ledgerCompact .ledgerCollapseBtn { padding: 5px 10px; }
+.ledgerCompact .ledgerGrid { gap: 10px; }
+.ledgerCompact .ledgerCard { border-radius: 21px; padding: 13px 7px 10px; min-height: 112px; }
+.ledgerCompact .ledgerCardTitle { height: 32px; margin-bottom: 4px; }
+.ledgerCompact .ledgerCardIcon { width: 42px; height: 29px; margin: 3px 0 8px; font-size: 15px; }
+
 .ledgerCard.theme-1 {
   background: #fff8e1;
   border: 0.5px solid #fde68a;

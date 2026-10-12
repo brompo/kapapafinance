@@ -208,7 +208,7 @@ function ClassicHomeScreen() {
   }
 
   return (
-    <div className="ledgerScreen">
+    <div className="ledgerScreen ledgerCompact">
       <div className="ledgerHeader">
         <div className="ledgerGhost" style={{ cursor: 'default' }}>Transaction</div>
         <div className="ledgerPeriod">

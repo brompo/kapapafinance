@@ -897,9 +897,14 @@ export function FlowScreen() {
                 Upkeep can't be a transfer endpoint — its Balance is fixed spend-vs-distributed and holds no movable top-up.
               </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, fontWeight: 600 }}>
-              <input type="checkbox" checked={transferIsLoan} onChange={e => setTransferIsLoan(e.target.checked)} />
-              Lend (expect repayment)
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, fontSize: 14, fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={transferIsLoan}
+                onChange={e => setTransferIsLoan(e.target.checked)}
+                style={{ width: 20, height: 20, padding: 0, flexShrink: 0, accentColor: '#6366f1' }}
+              />
+              <span>Lend (expect repayment)</span>
             </label>
             {transferIsLoan && (
               <div className="field" style={{ marginTop: 8 }}>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react'
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react'
 import {
   uid, normalizeVault, isVaultEmpty, BOOK_IDS, resolveDefaultTab
 } from '../utils/ledger.js'
@@ -10,7 +10,6 @@ import {
 import { useVault } from '../hooks/useVault.js'
 import { useGoogleDrive } from '../hooks/useGoogleDrive.js'
 import { loadVaultPlain, exportEncryptedBackup, importEncryptedBackup, resetAll, hasPin } from '../cryptoVault.js'
-import { useDSEPrices, buildAutoValuations } from '../hooks/useDSEPrices.js'
 
 const AppContext = createContext()
 
@@ -106,36 +105,6 @@ export function AppProvider({ children }) {
     setStage
   })
 
-  // DSE live price sync
-  const dse = useDSEPrices()
-  const dseSyncedRef = useRef(false)
-
-  useEffect(() => {
-    if (stage !== 'app' || !dse.prices?.companies?.length || dseSyncedRef.current) return
-    if (!allAccounts.length) return
-
-    const updates = buildAutoValuations(allAccounts, allAccountTxns, dse.prices.companies)
-    if (!updates.length) {
-      dseSyncedRef.current = true
-      return
-    }
-
-    const today = todayISO()
-    const valuations = updates.map(u => ({
-      accountId: u.accountId,
-      amount: 0,
-      direction: 'in',
-      kind: 'valuation',
-      receiveDate: today,
-      unitPrice: u.unitPrice,
-      note: `DSE auto-price ${u.symbol} @ ${u.unitPrice.toLocaleString()}`,
-    }))
-
-    addAccountTxn(valuations)
-    dseSyncedRef.current = true
-    console.log(`[DSE] Auto-priced ${updates.length} share(s):`, updates.map(u => `${u.symbol}=${u.unitPrice}`).join(', '))
-  }, [stage, dse.prices, allAccounts, allAccountTxns])
-
   function handleReset() {
     if (window.confirm('Wipe all data and reset?')) {
       resetAll()
@@ -143,11 +112,11 @@ export function AppProvider({ children }) {
     }
   }
 
-  // Which book (transaction / flow / kapapa) the current tab operates on.
-  // Transaction is the default/fallback for every tab that isn't Flow or
-  // Kapapa themselves (Accounts, Insights, Settings, etc. all read/write
-  // Transaction's data when they touch categories/txns at all).
-  const currentBookId = tab === 'flow' ? 'flow' : tab === 'kapapa' ? 'kapapa' : 'transaction'
+  // Which book (transaction / flow) the current tab operates on. Transaction
+  // is the default/fallback for every tab that isn't Flow itself (Accounts,
+  // Insights, Settings, etc. all read/write Transaction's data when they
+  // touch categories/txns at all).
+  const currentBookId = tab === 'flow' ? 'flow' : 'transaction'
   const book = vault[currentBookId] || vault.transaction
 
   // Convenience wrappers so screens can persist "the book I'm looking at"
@@ -1168,9 +1137,6 @@ export function AppProvider({ children }) {
     pin, setPin, pin2, setPin2,
     handleSetPin, handleUnlock, handleReset,
     handlePinToggle,
-
-    // DSE Market Data
-    dse,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

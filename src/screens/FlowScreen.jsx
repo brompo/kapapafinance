@@ -5,6 +5,7 @@ import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
 import { TransactionDetail } from '../components/TransactionDetail'
+import { getOpenLoans, loanOutstanding, shiftOpening } from '../utils/bucketLoans'
 
 // Theme bases mirror the category-card colors HomeScreen assigns per section
 // (Transactions tab), so a category opened from Flow gets the same header
@@ -274,7 +275,7 @@ function SectionDivider({ title, total, color, onAdd, style }) {
   )
 }
 
-// Budget report + primary spend/income entry point for the Flow/Kapapa books:
+// Budget report + primary spend/income entry point for the Flow book:
 // for each category (Upkeep lump, Lifestyle buckets, Growth pools) shows how
 // much was Distributed this period and the running Balance (Distributed minus
 // real spend, carried over month to month) — and tapping a row opens the
@@ -309,6 +310,11 @@ export function FlowScreen() {
   const [transferFrom, setTransferFrom] = useState('')
   const [transferTo, setTransferTo] = useState('')
   const [transferAmount, setTransferAmount] = useState('')
+  const [transferIsLoan, setTransferIsLoan] = useState(false)
+  const [transferDueDate, setTransferDueDate] = useState('')
+  const [repayLoan, setRepayLoan] = useState(null)
+  const [repayAmount, setRepayAmount] = useState('')
+  const [repayDate, setRepayDate] = useState(todayISO())
 
   // Upkeep has no single category to spend against (it's every Expense
   // category lumped together), and Collections has no rows on this screen at
@@ -324,8 +330,8 @@ export function FlowScreen() {
   const [showIncomeList, setShowIncomeList] = useState(false)
   const [selectedIncomeTxn, setSelectedIncomeTxn] = useState(null)
 
-  // Same "+ Add" pattern as Transactions' category grid — Flow/Kapapa have
-  // their own independent category lists now, so each needs its own way to
+  // Same "+ Add" pattern as Transactions' category grid — Flow has
+  // its own independent category list now, so it needs its own way to
   // add one, not just Transactions'.
   const addCategory = (type) => {
     const listKey = type === 'collection' ? 'income' : type
@@ -463,6 +469,8 @@ export function FlowScreen() {
     setTransferFrom(`${transferBuckets[0].type}::${transferBuckets[0].name}`)
     setTransferTo(`${transferBuckets[1].type}::${transferBuckets[1].name}`)
     setTransferAmount('')
+    setTransferIsLoan(false)
+    setTransferDueDate('')
     setShowTransferModal(true)
   }
 
@@ -476,30 +484,53 @@ export function FlowScreen() {
     if (!transferFrom || !transferTo || transferFrom === transferTo) return show('Choose two different buckets.')
     const [fromType, fromName] = transferFrom.split('::')
     const [toType, toName] = transferTo.split('::')
-    const fromMeta = categoryMeta[fromType]?.[fromName] || {}
-    const toMeta = categoryMeta[toType]?.[toName] || {}
-    const nextCategoryMeta = { ...categoryMeta }
-    nextCategoryMeta[fromType] = {
-      ...nextCategoryMeta[fromType],
-      [fromName]: { ...fromMeta, openingBalance: Number(fromMeta.openingBalance || 0) - amt }
-    }
-    nextCategoryMeta[toType] = {
-      ...nextCategoryMeta[toType],
-      [toName]: { ...(nextCategoryMeta[toType]?.[toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) + amt }
-    }
+    const nextCategoryMeta = shiftOpening(categoryMeta, fromType, fromName, toType, toName, amt)
     // Transfers only ever moved money by nudging both buckets' openingBalance,
     // leaving no record either bucket's history could show. This appends a
     // lightweight log entry (not a real txns row — there's no "credit into a
     // bucket" transaction type) that both buckets' Activity tabs read from,
     // so a move shows up wherever the money went.
-    const transferRecord = { id: uid(), date: todayISO(), amount: amt, fromType, fromName, toType, toName }
+    const transferRecord = {
+      id: uid(), date: todayISO(), amount: amt, fromType, fromName, toType, toName,
+      ...(transferIsLoan && { isLoan: true, repaid: 0, ...(transferDueDate && { dueDate: transferDueDate }) })
+    }
     persistBook({
       categoryMeta: nextCategoryMeta,
       transfers: [...(Array.isArray(book?.transfers) ? book.transfers : []), transferRecord]
     })
-    show(`Moved ${fmtTZS(amt)}.`)
+    show(transferIsLoan ? `Lent ${fmtTZS(amt)}.` : `Moved ${fmtTZS(amt)}.`)
     setShowTransferModal(false)
     setTransferAmount('')
+  }
+
+  const openLoans = useMemo(() => getOpenLoans(book?.transfers), [book])
+  const enteredRepayAmount = Number(String(repayAmount).replace(/,/g, '')) || 0
+
+  // A repayment is a plain reverse move (borrower -> lender) logged as its own
+  // transfer row, plus a bump to the loan's `repaid` so outstanding shrinks.
+  const saveRepay = () => {
+    const loan = repayLoan
+    if (!loan) return
+    const amt = enteredRepayAmount
+    const outstanding = loanOutstanding(loan)
+    if (!amt || amt <= 0) return show('Enter a valid amount.')
+    if (amt > outstanding) return show(`Only ${fmtTZS(outstanding)} is outstanding.`)
+    const nextCategoryMeta = shiftOpening(categoryMeta, loan.toType, loan.toName, loan.fromType, loan.fromName, amt)
+    const repayment = {
+      id: uid(), date: repayDate || todayISO(), amount: amt,
+      fromType: loan.toType, fromName: loan.toName, toType: loan.fromType, toName: loan.fromName,
+      repaysLoanId: loan.id
+    }
+    persistBook({
+      categoryMeta: nextCategoryMeta,
+      transfers: [
+        ...(Array.isArray(book?.transfers) ? book.transfers : []).map(tr => tr.id === loan.id ? { ...tr, repaid: Number(tr.repaid || 0) + amt } : tr),
+        repayment
+      ]
+    })
+    show(`Repaid ${fmtTZS(amt)}.`)
+    setRepayLoan(null)
+    setRepayAmount('')
   }
 
   const lifestyleDistributed = envelopeSummary.lifestyle.reduce((s, b) => s + b.distributedThisPeriod, 0)
@@ -623,21 +654,6 @@ export function FlowScreen() {
         <div style={{ width: 40 }} />
       </div>
 
-      <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
-        <div onClick={openGoalEdit} style={{ cursor: 'pointer' }} role="button" aria-label="Edit Family Goal">
-          <div style={{ fontSize: 22, fontWeight: 800, color: upkeepGoalOver ? '#ef4444' : '#111827' }}>
-            {Math.round(upkeepActualPercent)}% <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>on Upkeep</span>
-          </div>
-          <div className="familyGoalBarBg" style={{ height: 4 }}>
-            <div
-              className="familyGoalBarFill"
-              style={{ width: `${Math.min(upkeepActualPercent, 100)}%`, background: upkeepGoalOver ? '#ef4444' : '#16a34a' }}
-            />
-          </div>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Goal: ≤{upkeepGoalPercent}% ✎</div>
-        </div>
-      </div>
-
       <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
         {upkeepFundingComplete
           ? <SegmentedPie segments={ringSegments} />
@@ -660,6 +676,15 @@ export function FlowScreen() {
         <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
         <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
         <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
+      </div>
+
+      <div
+        onClick={openGoalEdit}
+        style={{ textAlign: 'center', fontSize: 11, color: upkeepGoalOver ? '#ef4444' : '#94a3b8', padding: '0 16px 4px', cursor: 'pointer' }}
+        role="button"
+        aria-label="Edit Family Goal"
+      >
+        Goal: ≤{upkeepGoalPercent}% ✎
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
@@ -755,6 +780,24 @@ export function FlowScreen() {
             tagValue={envelopeSummary.growthUnallocated.balance}
             color="#94a3b8"
           />
+        )}
+
+        {openLoans.length > 0 && (
+          <div style={{ padding: '24px 16px 0' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: '#64748b', marginBottom: 8 }}>LOANS BETWEEN BUCKETS</div>
+            {openLoans.map(loan => (
+              <div key={loan.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6, borderRadius: 14, background: '#eef2ff', border: '0.5px dashed #c7d2fe' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{loan.toName} owes {loan.fromName}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    {fmtTZS(loanOutstanding(loan))} outstanding{Number(loan.repaid) > 0 ? ` of ${fmtTZS(loan.amount)}` : ''}
+                    {loan.dueDate ? ` · due ${loan.dueDate}` : ''}
+                  </div>
+                </div>
+                <button className="miniBtn" type="button" onClick={() => { setRepayLoan(loan); setRepayAmount(String(loanOutstanding(loan))); setRepayDate(todayISO()) }}>Repay</button>
+              </div>
+            ))}
+          </div>
         )}
 
         <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
@@ -854,9 +897,42 @@ export function FlowScreen() {
                 Upkeep can't be a transfer endpoint — its Balance is fixed spend-vs-distributed and holds no movable top-up.
               </div>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, fontWeight: 600 }}>
+              <input type="checkbox" checked={transferIsLoan} onChange={e => setTransferIsLoan(e.target.checked)} />
+              Lend (expect repayment)
+            </label>
+            {transferIsLoan && (
+              <div className="field" style={{ marginTop: 8 }}>
+                <label>Due date (optional)</label>
+                <input type="date" value={transferDueDate} onChange={e => setTransferDueDate(e.target.value)} />
+              </div>
+            )}
             <div className="modalActions">
               <button className="btn" type="button" onClick={() => setShowTransferModal(false)}>Cancel</button>
-              <button className="btn primary" type="button" onClick={saveTransfer}>Move</button>
+              <button className="btn primary" type="button" onClick={saveTransfer}>{transferIsLoan ? 'Lend' : 'Move'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {repayLoan && (
+        <div className="modalBackdrop" onClick={() => setRepayLoan(null)}>
+          <div className="modalCard" onClick={e => e.stopPropagation()}>
+            <div className="modalTitle">Repay Loan</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+              {repayLoan.toName} repays {repayLoan.fromName} — {fmtTZS(loanOutstanding(repayLoan))} outstanding.
+            </div>
+            <div className="field">
+              <label>Amount (TZS)</label>
+              <input inputMode="decimal" value={formatCommas(repayAmount)} onChange={e => setRepayAmount(e.target.value.replace(/,/g, ''))} autoFocus />
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Date</label>
+              <input type="date" value={repayDate} onChange={e => setRepayDate(e.target.value)} />
+            </div>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setRepayLoan(null)}>Cancel</button>
+              <button className="btn primary" type="button" onClick={saveRepay}>Repay</button>
             </div>
           </div>
         </div>

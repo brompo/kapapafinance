@@ -40,18 +40,6 @@ export default function BottomNav({ tab, setTab, variant }) {
       )
     },
     {
-      id: 'kapapa',
-      label: 'Kapapa',
-      content: (active) => (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="9" cy="9" r="3.2" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
-          <circle cx="16" cy="11" r="2.6" stroke={active ? activeColor : inactiveColor} strokeWidth="2"/>
-          <path d="M3.5 19c.6-2.8 2.7-4.5 5.5-4.5s4.9 1.7 5.5 4.5" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
-          <path d="M14.8 15.2c2.1.2 3.6 1.6 4.1 3.8" stroke={active ? activeColor : inactiveColor} strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-      )
-    },
-    {
       id: 'accounts',
       label: 'Accounts',
       content: (active) => (
@@ -76,7 +64,6 @@ export default function BottomNav({ tab, setTab, variant }) {
 
   const visibleIcons = icons.filter(i => {
     if (i.id === 'flow') return settings.flowEnabled
-    if (i.id === 'kapapa') return settings.kapapaEnabled
     if (i.id === 'insights') return settings.insightsEnabled
     return true
   })

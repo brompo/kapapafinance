@@ -1,5 +1,19 @@
 export const CHANGELOG = [
     {
+        version: "4.3.0",
+        date: "2026-10-12",
+        changes: [
+            'Buckets can now lend to each other. In Transfer Between Buckets, tick "Lend (expect repayment)" (optionally with a due date) and the move is tracked as a loan: the Flow tab lists who owes whom with a Repay button (partial repayments allowed), and each bucket shows what it is owed or owes. Plain transfers work exactly as before.',
+        ]
+    },
+    {
+        version: "4.2.7",
+        date: "2026-08-30",
+        changes: [
+            'Removed the Kapapa tab (shared/community expenditure book, its budget cascade, and the return-goal tracking) and DSE Watch, including the stock-price auto-valuation of asset accounts — that functionality has moved to a separate app. Transaction, Family, Accounts, Insights, and Settings are unchanged.',
+        ]
+    },
+    {
         version: "4.2.6",
         date: "2026-08-22",
         changes: [

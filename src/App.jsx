@@ -6,7 +6,6 @@ import { FinanceInsightsScreen } from './screens/FinanceInsightsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import AccountsScreen from './screens/Accounts'
 import { FlowScreen } from './screens/FlowScreen'
-import KapapaScreen from './screens/KapapaScreen'
 import BottomNav from './components/BottomNav'
 
 import { LandingStage, PinStage, UnlockStage } from './stages/AuthStages'
@@ -28,14 +27,13 @@ function VaultApp() {
     setTab(next)
   }
 
-  // Optional tabs (Flow, Kapapa, Insights) fall back to Transactions if their
+  // Optional tabs (Flow, Insights) fall back to Transactions if their
   // Settings toggle is off while they're the active tab — e.g. turning one
   // off from Settings itself, or a stale tab from before a toggle changed.
   useEffect(() => {
     if (tab === 'flow' && !settings.flowEnabled) setTab('tx')
-    else if (tab === 'kapapa' && !settings.kapapaEnabled) setTab('tx')
     else if (tab === 'insights' && !settings.insightsEnabled) setTab('tx')
-  }, [tab, settings.flowEnabled, settings.kapapaEnabled, settings.insightsEnabled, setTab])
+  }, [tab, settings.flowEnabled, settings.insightsEnabled, setTab])
 
   if (stage === 'loading') return <div className="loading">Kapapa Finance...</div>
   if (stage === 'landing') return <LandingStage />
@@ -48,7 +46,6 @@ function VaultApp() {
       <main className="mainContent">
         {(tab === 'tx' || selectedCategory) && <HomeScreen />}
         {tab === 'flow' && !selectedCategory && settings.flowEnabled && <FlowScreen />}
-        {tab === 'kapapa' && !selectedCategory && settings.kapapaEnabled && <KapapaScreen />}
         {tab === 'insights' && settings.insightsEnabled && <FinanceInsightsScreen />}
         {tab === 'accounts' && (
           <AccountsScreen

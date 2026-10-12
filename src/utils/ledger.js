@@ -6,7 +6,7 @@ import {
   CATEGORY_SUBS, DEFAULT_TAB
 } from '../constants.js'
 
-export const BOOK_IDS = ['transaction', 'flow', 'kapapa']
+export const BOOK_IDS = ['transaction', 'flow']
 
 export function resolveDefaultTab(vaultData) {
   const settings = vaultData?.settings || {}
@@ -153,30 +153,6 @@ export function withUpkeepGoalPercentForMonth(goal, monthKey, percent) {
   return { ...existing, percentHistory: history }
 }
 
-// The Kapapa return goal (target annualized "x" multiple, e.g. 1.5 for a 50%/yr
-// return) follows the same month-scoped history approach as the Family Upkeep
-// goal above: editing it only changes the goal from that month forward. No
-// goal ever set falls back to 1.5x.
-export function getKapapaGoalMultipleForMonth(goal, monthKey) {
-  const history = Array.isArray(goal?.multipleHistory) ? goal.multipleHistory : []
-  let effective = null
-  for (const entry of history) {
-    if (entry.month <= monthKey) effective = entry.multiple
-    else break
-  }
-  if (effective === null) effective = goal?.multiple
-  return Number(effective ?? 1.5)
-}
-
-export function withKapapaGoalMultipleForMonth(goal, monthKey, multiple) {
-  const existing = goal && typeof goal === 'object' ? goal : {}
-  const history = (Array.isArray(existing.multipleHistory) ? existing.multipleHistory : [])
-    .filter(entry => entry.month !== monthKey)
-  history.push({ month: monthKey, multiple })
-  history.sort((a, b) => a.month.localeCompare(b.month))
-  return { ...existing, multipleHistory: history }
-}
-
 // Growth pools are first-class categories (like Lifestyle/allocation buckets)
 // so real transactions can be logged against them via CategoryDetail.
 function resolveGrowthCategories(growthCategories, growthMeta) {
@@ -217,8 +193,8 @@ function resolveAllocationMeta(allocationCategories, allocationMeta) {
   return meta
 }
 
-// A "book" is one of the app's three fixed transaction ledgers — transaction,
-// flow, kapapa — sharing one vault. Its identity is its key in the vault
+// A "book" is one of the app's two fixed transaction ledgers — transaction,
+// flow — sharing one vault. Its identity is its key in the vault
 // object, not an id/name/type field like the old multi-ledger model had.
 export function createBook({ txns = [], categories, categoryMeta } = {}) {
   const resolvedGrowth = resolveGrowthCategories(categories?.growth, categoryMeta?.growth)
@@ -244,8 +220,7 @@ export function createBook({ txns = [], categories, categoryMeta } = {}) {
   }
 }
 
-// Fully empty starting point — used for the Kapapa book, which (unlike Flow)
-// has no legacy config to inherit.
+// Fully empty starting point for a book with no legacy config to inherit.
 export function createBlankBook() {
   return {
     txns: [],
@@ -264,7 +239,7 @@ export function normalizeBook(data) {
 }
 
 export function isVaultEmpty(v) {
-  const books = [v?.transaction, v?.flow, v?.kapapa]
+  const books = [v?.transaction, v?.flow]
   const noTxns = books.every(b => !b?.txns || b.txns.length === 0)
   return noTxns && (!v?.accounts || v.accounts.length === 0) && (!v?.accountTxns || v.accountTxns.length === 0)
 }
@@ -278,7 +253,6 @@ function defaultSettings(overrides) {
     insightTabOrder: ['transactions', 'summary', 'cashflow'],
     appTabOrder: ['insights', 'tx', 'accounts', 'settings'],
     flowEnabled: false,
-    kapapaEnabled: false,
     insightsEnabled: true,
     ...overrides
   }
@@ -297,12 +271,23 @@ function stripLedgerScoping(accounts) {
   })
 }
 
+// Historical vaults may still carry a `kapapa` book plus its settings flags
+// (kapapaEnabled, dseEnabled) and a stale 'kapapa' entry in appTabOrder from
+// before the feature was removed — dropped here rather than carried forward
+// forever as dead data.
+function stripLegacyKapapa(settings) {
+  const { kapapaEnabled, dseEnabled, ...rest } = settings
+  if (Array.isArray(rest.appTabOrder) && rest.appTabOrder.includes('kapapa')) {
+    rest.appTabOrder = rest.appTabOrder.filter(id => id !== 'kapapa')
+  }
+  return rest
+}
+
 export function normalizeVault(data) {
   if (!data) {
     return {
       transaction: createBook(),
       flow: createBlankBook(),
-      kapapa: createBlankBook(),
       groups: getDefaultGroups(),
       accounts: [],
       accountTxns: [],
@@ -316,7 +301,6 @@ export function normalizeVault(data) {
     return {
       transaction: createBook({ txns: data }),
       flow: createBlankBook(),
-      kapapa: createBlankBook(),
       groups: getDefaultGroups(),
       accounts: [],
       accountTxns: [],
@@ -331,18 +315,16 @@ export function normalizeVault(data) {
     return {
       transaction: normalizeBook(data.transaction),
       flow: normalizeBook(data.flow),
-      kapapa: normalizeBook(data.kapapa),
       groups,
       accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
-      settings: defaultSettings({
+      settings: defaultSettings(stripLegacyKapapa({
         ...(data.settings || {}),
         pinLockEnabled: !!data.settings?.pinLockEnabled,
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         flowEnabled: !!data.settings?.flowEnabled,
-        kapapaEnabled: !!data.settings?.kapapaEnabled,
         insightsEnabled: data.settings?.insightsEnabled !== false
-      }),
+      })),
       clients: Array.isArray(data.clients) ? data.clients : []
     }
   }
@@ -351,7 +333,7 @@ export function normalizeVault(data) {
   // active ledger into `transaction` verbatim (minus the unused cos/opps
   // business fields), seed `flow` from its Lifestyle/Growth budget config
   // (copied, not moved — the active ledger's own transactions all stay put
-  // in `transaction`), and leave `kapapa` blank.
+  // in `transaction`).
   if (Array.isArray(data.ledgers)) {
     const ledgers = data.ledgers.filter(Boolean)
     const activeLedger = ledgers.find(l => l.id === data.activeLedgerId) || ledgers[0] || {}
@@ -389,7 +371,6 @@ export function normalizeVault(data) {
     return {
       transaction: transactionBook,
       flow: flowBook,
-      kapapa: createBlankBook(),
       groups,
       accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
       accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],
@@ -398,7 +379,6 @@ export function normalizeVault(data) {
         pinLockEnabled: !!data.settings?.pinLockEnabled,
         requireAccountForTxns: !!data.settings?.requireAccountForTxns,
         flowEnabled: !!data.settings?.moneyPipelineEnabled,
-        kapapaEnabled: false,
         insightsEnabled: true
       }),
       clients: Array.isArray(data.clients) ? data.clients : []
@@ -416,7 +396,6 @@ export function normalizeVault(data) {
   return {
     transaction: transactionBook,
     flow: createBlankBook(),
-    kapapa: createBlankBook(),
     groups,
     accounts: normalizeAccountsWithGroups(stripLedgerScoping(data.accounts), groups),
     accountTxns: Array.isArray(data.accountTxns) ? data.accountTxns : [],

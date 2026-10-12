@@ -6,13 +6,13 @@ import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 
 // Transactions tab: the single system of record for personal expense/income
-// (and Lifestyle/Growth, if you've logged anything under those). Flow and
-// Kapapa (separate, opt-in tabs) are independent books with their own
+// (and Lifestyle/Growth, if you've logged anything under those). Flow
+// (a separate, opt-in tab) is an independent book with its own
 // budget-cascade math — this screen never shows cascade/balance figures,
 // only plain totals.
 //
-// CategoryDetail is also reused, unchanged, by Flow/Kapapa: tapping a row
-// there sets `selectedCategory` while `tab` stays 'flow'/'kapapa', which
+// CategoryDetail is also reused, unchanged, by Flow: tapping a row
+// there sets `selectedCategory` while `tab` stays 'flow', which
 // mounts this component (see App.jsx's `tab === 'tx' || selectedCategory`)
 // so the same add/edit-transaction UI works against whichever book is
 // current — `isEnvelopeBook` below is what tells the two cases apart.
@@ -30,7 +30,7 @@ function ClassicHomeScreen() {
     clients, addQuickTxn
   } = useAppContext()
 
-  // Flow/Kapapa (opt-in books) get the budget-cascade treatment — Collections
+  // Flow (an opt-in book) gets the budget-cascade treatment — Collections
   // instead of plain Income, and Lifestyle/Growth cards show Balance instead
   // of a flat sum. Transaction itself never does.
   const isEnvelopeBook = tab !== 'tx'
@@ -120,7 +120,7 @@ function ClassicHomeScreen() {
     return map
   }, [filteredTxns, growthCats])
 
-  // Only meaningful for Flow/Kapapa (isEnvelopeBook) — cheap enough to always
+  // Only meaningful for Flow (isEnvelopeBook) — cheap enough to always
   // compute against whichever book is current.
   const envelopeSummary = useMemo(
     () => computeEnvelopeSummary({ txns, categories, categoryMeta }, month),
@@ -254,7 +254,7 @@ function ClassicHomeScreen() {
           ? { title: 'Collections', type: 'collection', list: incomeCats, totals: collectionTotals, kpi: incomeCats.reduce((s, c) => s + (collectionTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4, note: incomeInfo?.isLegacyFallback ? 'No Collections recorded yet this month — totals include legacy income entries shown as already-clean.' : null }
           : { title: 'Income', type: 'income', list: incomeCats, totals: incomeTotals, kpi: incomeCats.reduce((s, c) => s + (incomeTotals.get(c) || 0), 0), collapse: collapseIncome, setCollapse: setCollapseIncome, theme: 4 },
         { title: 'Expenses', type: 'expense', list: expenseCats, totals: expenseTotals, kpi: expenseCats.reduce((s, c) => s + (expenseTotals.get(c) || 0), 0), collapse: collapseExpense, setCollapse: setCollapseExpense, theme: 1 },
-        // Lifestyle/Growth are Flow/Kapapa's budget-cascade concepts — Transaction
+        // Lifestyle/Growth are Flow's budget-cascade concepts — Transaction
         // itself stays to plain Income/Expenses only, see module comment above.
         ...(isEnvelopeBook ? [
           { title: 'Lifestyle', type: 'allocation', list: allocationCats, totals: lifestyleCardTotals, kpi: allocationCats.reduce((s, c) => s + (lifestyleCardTotals.get(c) || 0), 0), collapse: collapseAllocation, setCollapse: setCollapseAllocation, theme: 2, secondaryTotals: lifestyleBalances },

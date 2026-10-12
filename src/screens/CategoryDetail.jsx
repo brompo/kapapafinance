@@ -4,6 +4,7 @@ import { todayISO, fmtTZS, fmtCompact, calculateAssetMetrics, uid } from '../mon
 import { CATEGORY_SUBS } from '../constants'
 import { getGrowthPercentForMonth, withGrowthPercentForMonth, getBudgetForMonth, withBudgetForMonth } from '../utils/ledger'
 import { TransactionDetail } from '../components/TransactionDetail'
+import { getOpenLoans, loanOutstanding, shiftOpening } from '../utils/bucketLoans'
 
 export function CategoryDetail({
   category,
@@ -308,7 +309,11 @@ export function CategoryDetail({
             amount: tr.amount,
             category: category.name,
             type: category.type,
-            note: isOutgoing ? `Transferred to ${tr.toName}` : `Transferred from ${tr.fromName}`,
+            note: tr.isLoan
+              ? (isOutgoing ? `Lent to ${tr.toName}` : `Borrowed from ${tr.fromName}`)
+              : tr.repaysLoanId
+                ? (isOutgoing ? `Repaid ${tr.toName}` : `Repayment from ${tr.fromName}`)
+                : (isOutgoing ? `Transferred to ${tr.toName}` : `Transferred from ${tr.fromName}`),
             _sortDate: tr.date,
             _isGain: false,
             _isTransfer: true,
@@ -335,29 +340,40 @@ export function CategoryDetail({
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [recentTxns])
 
+  const bucketLoans = useMemo(() => {
+    if (category.type !== 'allocation' && category.type !== 'growth') return []
+    return getOpenLoans(book?.transfers).filter(l =>
+      (l.fromType === category.type && l.fromName === category.name) || (l.toType === category.type && l.toName === category.name))
+  }, [book, category.type, category.name])
+
   const isInflowRow = (t) => t._isTransfer ? t._transferIn : (t.type === 'income' || t.type === 'collection')
 
   // Reverses a transfer: undoes both buckets' openingBalance adjustments
   // (mirrors FlowScreen's saveTransfer, in the opposite direction) and drops
   // the log entry, in one persistBook call so neither side is left stale.
   const handleDeleteTransfer = (t) => {
-    const { _transferId, _fromType, _fromName, _toType, _toName, amount } = t
-    const warn = `Delete this transfer? ${fmtTZS(amount)} will be moved back from ${_toName} to ${_fromName}.`
+    const { _transferId, amount } = t
+    const all = Array.isArray(book?.transfers) ? book.transfers : []
+    const target = all.find(tr => tr.id === _transferId)
+    if (!target) return
+    // Deleting a loan also removes its repayments (each reversed on its own);
+    // deleting a repayment just reopens that much of its loan.
+    const repayments = target.isLoan ? all.filter(tr => tr.repaysLoanId === target.id) : []
+    const removed = [target, ...repayments]
+    const warn = target.isLoan && repayments.length
+      ? `Delete this loan and its ${repayments.length} repayment(s)? All amounts will be reversed.`
+      : `Delete this transfer? ${fmtTZS(amount)} will be moved back from ${target.toName} to ${target.fromName}.`
     if (!window.confirm(warn)) return
-    const fromMeta = categoryMeta[_fromType]?.[_fromName] || {}
-    const toMeta = categoryMeta[_toType]?.[_toName] || {}
-    const nextCategoryMeta = { ...categoryMeta }
-    nextCategoryMeta[_fromType] = {
-      ...nextCategoryMeta[_fromType],
-      [_fromName]: { ...fromMeta, openingBalance: Number(fromMeta.openingBalance || 0) + amount }
-    }
-    nextCategoryMeta[_toType] = {
-      ...nextCategoryMeta[_toType],
-      [_toName]: { ...(nextCategoryMeta[_toType]?.[_toName] || toMeta), openingBalance: Number(toMeta.openingBalance || 0) - amount }
-    }
+    const removedIds = new Set(removed.map(tr => tr.id))
+    const nextCategoryMeta = removed.reduce(
+      (meta, tr) => shiftOpening(meta, tr.toType, tr.toName, tr.fromType, tr.fromName, Number(tr.amount || 0)),
+      categoryMeta
+    )
     persistBook({
       categoryMeta: nextCategoryMeta,
-      transfers: (Array.isArray(book?.transfers) ? book.transfers : []).filter(tr => tr.id !== _transferId)
+      transfers: all
+        .filter(tr => !removedIds.has(tr.id))
+        .map(tr => tr.id === target.repaysLoanId ? { ...tr, repaid: Math.max(0, Number(tr.repaid || 0) - Number(target.amount || 0)) } : tr)
     })
     show('Transfer deleted — amounts reversed.')
   }
@@ -952,6 +968,19 @@ export function CategoryDetail({
             </div>
           ) : (
           <>
+          {bucketLoans.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              {bucketLoans.map(l => {
+                const lent = l.fromType === category.type && l.fromName === category.name
+                return (
+                  <div key={l.id} style={{ fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 12, background: lent ? '#ecfdf5' : '#fef2f2', color: lent ? '#047857' : '#b91c1c' }}>
+                    {lent ? `${l.toName} owes this bucket ` : `Owes ${l.fromName} `}{fmtTZS(loanOutstanding(l))}
+                    {l.dueDate ? ` · due ${l.dueDate}` : ''}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{txnTab === 'activity' ? 'Recent' : 'Upcoming'} {category.name}</span>
             <button onClick={() => setIsSelectMode(!isSelectMode)} style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>{isSelectMode ? 'Cancel' : 'Select'}</button>

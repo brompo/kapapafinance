@@ -226,7 +226,7 @@ export function computeAccruedForAccount(account, accountTxns, balanceType = 'cu
 
 /**
  * Computes an account's balance from its transactions, mirroring the ledger
- * logic used across Accounts/AccountDetail/Kapapa so all three stay in sync.
+ * logic used across Accounts/AccountDetail so both stay in sync.
  */
 export function computeAccountBalance(account, accountTxns, groups, balanceType = 'current', ignoreLedgerFilter = false) {
   const today = new Date().toISOString().slice(0, 10);

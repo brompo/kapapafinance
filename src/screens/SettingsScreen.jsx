@@ -95,27 +95,6 @@ export function SettingsScreen() {
           <div className="hr" />
 
           <div className="stgRow" style={{ cursor: 'default' }}>
-            <div className="stgRowIcon">📈</div>
-            <div className="stgRowBody" style={{ flex: 1 }}>
-              <div className="stgRowText">DSE Watch</div>
-              <div className="stgRowSub">Show DSE stock market view inside the Kapapa tab</div>
-            </div>
-            <label className="toggle" style={{ marginLeft: 'auto' }}>
-              <input
-                type="checkbox"
-                checked={!!settings.dseEnabled}
-                onChange={e => {
-                  updateSettings({ ...settings, dseEnabled: e.target.checked })
-                  show(e.target.checked ? 'DSE Watch enabled.' : 'DSE Watch hidden.')
-                }}
-              />
-              <span className="toggleTrack" />
-            </label>
-          </div>
-
-          <div className="hr" />
-
-          <div className="stgRow" style={{ cursor: 'default' }}>
             <div className="stgRowIcon">👨‍👩‍👧‍👦</div>
             <div className="stgRowBody" style={{ flex: 1 }}>
               <div className="stgRowText">Family</div>
@@ -128,27 +107,6 @@ export function SettingsScreen() {
                 onChange={e => {
                   updateSettings({ ...settings, flowEnabled: e.target.checked })
                   show(e.target.checked ? 'Family enabled.' : 'Family disabled.')
-                }}
-              />
-              <span className="toggleTrack" />
-            </label>
-          </div>
-
-          <div className="hr" />
-
-          <div className="stgRow" style={{ cursor: 'default' }}>
-            <div className="stgRowIcon">🤝</div>
-            <div className="stgRowBody" style={{ flex: 1 }}>
-              <div className="stgRowText">Kapapa</div>
-              <div className="stgRowSub">Adds a Kapapa tab for shared/community expenditure, with its own budget cascade</div>
-            </div>
-            <label className="toggle" style={{ marginLeft: 'auto' }}>
-              <input
-                type="checkbox"
-                checked={!!settings.kapapaEnabled}
-                onChange={e => {
-                  updateSettings({ ...settings, kapapaEnabled: e.target.checked })
-                  show(e.target.checked ? 'Kapapa enabled.' : 'Kapapa disabled.')
                 }}
               />
               <span className="toggleTrack" />

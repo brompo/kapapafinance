@@ -7,6 +7,7 @@ import { todayISO, monthsBetween, daysBetween, calculateAssetMetrics, monthKey, 
 import {
   SEED_KEY, PIN_FLOW_KEY, DEFAULT_TAB
 } from '../constants.js'
+import { adjustOpening, accountLoanOutstanding } from '../utils/bucketLoans.js'
 import { useVault } from '../hooks/useVault.js'
 import { useGoogleDrive } from '../hooks/useGoogleDrive.js'
 import { loadVaultPlain, exportEncryptedBackup, importEncryptedBackup, resetAll, hasPin } from '../cryptoVault.js'
@@ -784,8 +785,15 @@ export function AppProvider({ children }) {
     show('Transaction added.')
   }
 
+  // Applies a bucket openingBalance change to the Flow book of a vault update
+  // being persisted as a whole (account loans can be issued from any tab).
+  function withBucketAdjust(vaultUpdate, bucket, delta) {
+    const flow = vaultUpdate.flow || vault.flow
+    return { ...vaultUpdate, flow: { ...flow, categoryMeta: adjustOpening(flow.categoryMeta, bucket.type, bucket.name, delta) } }
+  }
+
   async function issueLoan(params) {
-    const { loanAccountId, fromAccountId, fromSubAccountId, amount, note, receiveDate, creditRate, creditType, interestStartDate } = params
+    const { loanAccountId, fromAccountId, fromSubAccountId, amount, note, receiveDate, creditRate, creditType, interestStartDate, bucket } = params
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')
 
@@ -804,6 +812,7 @@ export function AppProvider({ children }) {
       interestStartDate: interestStartDate || null,
       creditToAccountId: fromAccountId,
       creditToSubAccountId: fromSubAccountId || null,
+      ...(bucket?.type && bucket?.name && { bucket: { type: bucket.type, name: bucket.name } }),
     }
     const outEntry = {
       id: `txn-${tid}-out`,
@@ -818,12 +827,18 @@ export function AppProvider({ children }) {
     }
     let nextAccounts = applyAccountDelta(allAccounts, loanAccountId, null, amt)
     nextAccounts = applyAccountDelta(nextAccounts, fromAccountId, fromSubAccountId, -amt)
-    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [loanEntry, outEntry, ...allAccountTxns] })
+    const nextAccountTxns = [loanEntry, outEntry, ...allAccountTxns]
+    if (loanEntry.bucket) {
+      // The money also leaves the funding bucket (see utils/bucketLoans.js).
+      persist(withBucketAdjust({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns }, loanEntry.bucket, -amt))
+    } else {
+      persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns })
+    }
     show('Loan issued.')
   }
 
   async function transferAccount(params) {
-    const { fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date, patchTxn } = params
+    const { fromId, toId, amount, note, fromSubAccountId, toSubAccountId, date, patchTxn, bucketRestore } = params
     const amt = Number(amount || 0)
     if (!amt) return show('Enter amount.')
 
@@ -858,7 +873,13 @@ export function AppProvider({ children }) {
       ? allAccountTxns.map(t => t.id === patchTxn.id ? { ...t, ...patchTxn.fields } : t)
       : allAccountTxns
 
-    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns: [outEntry, inEntry, ...baseTxns] })
+    const nextAccountTxns = [outEntry, inEntry, ...baseTxns]
+    if (bucketRestore?.type && bucketRestore?.name) {
+      // A loan payback returns the money to the bucket that funded the loan.
+      persist(withBucketAdjust({ ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns }, bucketRestore, amt))
+    } else {
+      persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns })
+    }
     show('Transfer completed.')
   }
 
@@ -1056,7 +1077,18 @@ export function AppProvider({ children }) {
       ? { ...book, txns: txns.filter(t => !catIdsToDelete.has(t.id)) }
       : undefined
 
-    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
+    // Deleting a bucket-funded loan gives its still-unpaid part back to the bucket.
+    const bucketRefunds = [...toDelete]
+      .map(id => allAccountTxns.find(x => x.id === id))
+      .filter(x => x?.kind === 'credit' && x.bucket)
+    if (bucketRefunds.length) {
+      let vaultUpdate = { ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns }
+      if (nextBook) vaultUpdate[currentBookId] = { ...book, ...nextBook }
+      for (const x of bucketRefunds) vaultUpdate = withBucketAdjust(vaultUpdate, x.bucket, accountLoanOutstanding(x))
+      persist(vaultUpdate)
+    } else {
+      persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
+    }
     show('Deleted.')
   }
 

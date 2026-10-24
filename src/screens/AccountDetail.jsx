@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { fmtTZS, fmtCompact, calculateAssetMetrics, calculateSavingsMetrics, calculateBucketSpentYTD, todayISO } from "../money.js";
 import { accountHoldingResult } from "../utils/returns";
+import { useAppContext } from "../context/AppContext";
 
 function formatDay(dateStr) {
   if (!dateStr) return "";
@@ -200,6 +201,17 @@ export default function AccountDetail({
   const [saleCategory, setSaleCategory] = useState("");
   const [creditToAccountId, setCreditToAccountId] = useState("");
   const [creditToSubId, setCreditToSubId] = useState("");
+  // Flow bucket that funds an issued loan ("type::name"); optional.
+  const [creditBucket, setCreditBucket] = useState("");
+  const { vault: appVault } = useAppContext();
+  const loanBuckets = useMemo(() => {
+    const flow = appVault?.flow;
+    const gm = flow?.categoryMeta?.growth || {};
+    return [
+      ...(flow?.categories?.allocation || []).map(name => ({ type: 'allocation', name })),
+      ...(flow?.categories?.growth || []).filter(name => !gm[name]?.fundsUpkeep).map(name => ({ type: 'growth', name })),
+    ];
+  }, [appVault]);
   const [creditNote, setCreditNote] = useState("");
   const [error, setError] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -960,6 +972,7 @@ export default function AccountDetail({
         creditRate: rate,
         creditType,
         interestStartDate: creditType !== 'none' ? interestStartDate : null,
+        bucket: creditBucket ? { type: creditBucket.split('::')[0], name: creditBucket.split('::')[1] } : null,
       });
     } else {
       await onAddAccountTxn({
@@ -980,6 +993,7 @@ export default function AccountDetail({
     setCreditRate("");
     setCreditToAccountId("");
     setCreditToSubId("");
+    setCreditBucket("");
     setCreditNote("");
     setShowCreditModal(false);
   }
@@ -1555,6 +1569,17 @@ export default function AccountDetail({
                       </div>
                     );
                   })()}
+                  {effectiveType === 'loan' && loanBuckets.length > 0 && (
+                    <div className="field">
+                      <label>From bucket (optional)</label>
+                      <select value={creditBucket} onChange={(e) => setCreditBucket(e.target.value)}>
+                        <option value="">— None —</option>
+                        {loanBuckets.map(b => (
+                          <option key={`${b.type}::${b.name}`} value={`${b.type}::${b.name}`}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {creditType !== 'none' && (
                     <div className="field">
                       <label>Interest Start Date</label>
@@ -2219,6 +2244,7 @@ export default function AccountDetail({
                           fromSubAccountId: paybackTxn.subAccountId || null,
                           toSubAccountId: paybackSubAccountId || null,
                           date: paybackDate,
+                          bucketRestore: paybackTxn.bucket || null,
                           patchTxn: { id: paybackTxn.id, fields: { paidBack: updatedPaidBack } }
                         })
                       }

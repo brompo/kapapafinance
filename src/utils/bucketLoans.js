@@ -9,9 +9,29 @@ export const loanOutstanding = (tr) => Math.max(0, Number(tr.amount || 0) - Numb
 export const getOpenLoans = (transfers) =>
   (Array.isArray(transfers) ? transfers : []).filter(tr => tr.isLoan && loanOutstanding(tr) > 0)
 
-// What a bucket is owed (lent out) and owes (borrowed) across open loans.
-export function bucketLoanTotals(transfers, type, name) {
+// Account loans (Issue Loan on a loan account) can be funded from a bucket:
+// the loan entry carries `bucket: { type, name }` and the amount left unpaid
+// is what that bucket is still owed.
+export const accountLoanOutstanding = (txn) =>
+  Math.max(0, Number(txn.amount || 0) - (txn.paidBack || []).reduce((s, r) => s + Number(r.amount || 0), 0))
+
+// Returns a new categoryMeta with `delta` added to one bucket's openingBalance
+// (negative = money left the bucket, positive = it came back).
+export function adjustOpening(categoryMeta, type, name, delta) {
+  const meta = categoryMeta?.[type]?.[name] || {}
+  return {
+    ...categoryMeta,
+    [type]: { ...categoryMeta?.[type], [name]: { ...meta, openingBalance: Number(meta.openingBalance || 0) + delta } }
+  }
+}
+
+// What a bucket is owed (lent out) and owes (borrowed) across open loans,
+// including account loans it funded (pass accountTxns to count those).
+export function bucketLoanTotals(transfers, type, name, accountTxns) {
   let lent = 0, borrowed = 0
+  for (const t of Array.isArray(accountTxns) ? accountTxns : []) {
+    if (t.kind === 'credit' && t.bucket?.type === type && t.bucket?.name === name) lent += accountLoanOutstanding(t)
+  }
   for (const l of getOpenLoans(transfers)) {
     if (l.fromType === type && l.fromName === name) lent += loanOutstanding(l)
     if (l.toType === type && l.toName === name) borrowed += loanOutstanding(l)

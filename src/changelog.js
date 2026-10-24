@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.3.5",
+        date: "2026-10-24",
+        changes: [
+            'Issue Loan on a loan account can now be funded from a Family bucket (optional "From bucket"). The amount leaves that bucket, paybacks return to it automatically, deleting the loan gives back the unpaid part, and the bucket card shows "Lent out" for it.',
+        ]
+    },
+    {
         version: "4.3.4",
         date: "2026-10-24",
         changes: [

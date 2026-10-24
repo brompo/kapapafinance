@@ -751,8 +751,8 @@ export function FlowScreen() {
             name={b.name}
             sub={`B/F: ${fmtTZS(b.broughtForward)}`}
             heldIn={heldInName('allocation', b.name)}
-            loanLent={bucketLoanTotals(book?.transfers, 'allocation', b.name).lent}
-            loanBorrowed={bucketLoanTotals(book?.transfers, 'allocation', b.name).borrowed}
+            loanLent={bucketLoanTotals(book?.transfers, 'allocation', b.name, accountTxns).lent}
+            loanBorrowed={bucketLoanTotals(book?.transfers, 'allocation', b.name, accountTxns).borrowed}
             expense={b.spentThisPeriod}
             amount={b.distributedThisPeriod}
             preTag={`Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}`}
@@ -775,8 +775,8 @@ export function FlowScreen() {
             name={`${p.name} (${p.percent}%)`}
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
             heldIn={heldInName('growth', p.name)}
-            loanLent={bucketLoanTotals(book?.transfers, 'growth', p.name).lent}
-            loanBorrowed={bucketLoanTotals(book?.transfers, 'growth', p.name).borrowed}
+            loanLent={bucketLoanTotals(book?.transfers, 'growth', p.name, accountTxns).lent}
+            loanBorrowed={bucketLoanTotals(book?.transfers, 'growth', p.name, accountTxns).borrowed}
             expense={p.spentThisPeriod}
             amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
             preTag={`Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}`}

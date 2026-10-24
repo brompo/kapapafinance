@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.3.1",
+        date: "2026-10-24",
+        changes: [
+            'Fixed bucket transfers and loans disappearing after the app reloaded or unlocked: the transfer log was being dropped when the vault loaded, so loans vanished from the Flow tab and from each bucket\'s Activity even though the balances had moved.',
+        ]
+    },
+    {
         version: "4.3.0",
         date: "2026-10-12",
         changes: [

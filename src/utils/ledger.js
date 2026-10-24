@@ -196,7 +196,7 @@ function resolveAllocationMeta(allocationCategories, allocationMeta) {
 // A "book" is one of the app's two fixed transaction ledgers — transaction,
 // flow — sharing one vault. Its identity is its key in the vault
 // object, not an id/name/type field like the old multi-ledger model had.
-export function createBook({ txns = [], categories, categoryMeta } = {}) {
+export function createBook({ txns = [], categories, categoryMeta, transfers } = {}) {
   const resolvedGrowth = resolveGrowthCategories(categories?.growth, categoryMeta?.growth)
 
   const resolvedCategories = {
@@ -216,7 +216,10 @@ export function createBook({ txns = [], categories, categoryMeta } = {}) {
   return {
     txns: Array.isArray(txns) ? txns : [],
     categories: resolvedCategories,
-    categoryMeta: resolvedMeta
+    categoryMeta: resolvedMeta,
+    // Bucket-to-bucket transfer/loan log (see utils/bucketLoans.js). Must be
+    // carried through here or every vault load silently discards it.
+    ...(Array.isArray(transfers) && transfers.length && { transfers })
   }
 }
 
@@ -234,7 +237,8 @@ export function normalizeBook(data) {
   return createBook({
     txns: data.txns,
     categories: data.categories,
-    categoryMeta: data.categoryMeta
+    categoryMeta: data.categoryMeta,
+    transfers: data.transfers
   })
 }
 

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.3.2",
+        date: "2026-10-24",
+        changes: [
+            'Family tab: buckets with an open loan now show it on their card — "Lent out" under the lender and "Owes" under the borrower.',
+        ]
+    },
+    {
         version: "4.3.1",
         date: "2026-10-24",
         changes: [

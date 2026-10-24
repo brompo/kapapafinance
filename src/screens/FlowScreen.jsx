@@ -5,7 +5,7 @@ import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
 import { TransactionDetail } from '../components/TransactionDetail'
-import { getOpenLoans, loanOutstanding, shiftOpening } from '../utils/bucketLoans'
+import { getOpenLoans, loanOutstanding, shiftOpening, bucketLoanTotals } from '../utils/bucketLoans'
 
 // Theme bases mirror the category-card colors HomeScreen assigns per section
 // (Transactions tab), so a category opened from Flow gets the same header
@@ -166,7 +166,7 @@ function RingLegendItem({ color, label, percent }) {
 // deliberately different hit-targets on the same row rather than one click
 // doing both, since "log a spend" and "change my target" are different jobs
 // a person reaches for at different times.
-function FlowRow({ name, sub, expense, note, amount, preTag, preTagValue, tag, tagValue, tagColor, color, onSpend, onEdit }) {
+function FlowRow({ name, sub, loanLent, loanBorrowed, expense, note, amount, preTag, preTagValue, tag, tagValue, tagColor, color, onSpend, onEdit }) {
   return (
     <div
       onClick={onSpend}
@@ -185,6 +185,8 @@ function FlowRow({ name, sub, expense, note, amount, preTag, preTagValue, tag, t
         <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
         {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Exp: {fmtTZS(expense)}</div>}
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
+        {loanLent > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#047857' }}>Lent out: {fmtTZS(loanLent)}</div>}
+        {loanBorrowed > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#b91c1c' }}>Owes: {fmtTZS(loanBorrowed)}</div>}
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(amount)}</div>
@@ -734,6 +736,8 @@ export function FlowScreen() {
             key={b.name}
             name={b.name}
             sub={`B/F: ${fmtTZS(b.broughtForward)}`}
+            loanLent={bucketLoanTotals(book?.transfers, 'allocation', b.name).lent}
+            loanBorrowed={bucketLoanTotals(book?.transfers, 'allocation', b.name).borrowed}
             expense={b.spentThisPeriod}
             amount={b.distributedThisPeriod}
             preTag={`Before Dist: ${fmtTZS(b.broughtForward - b.spentThisPeriod)}`}
@@ -755,6 +759,8 @@ export function FlowScreen() {
             key={p.name}
             name={`${p.name} (${p.percent}%)`}
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
+            loanLent={bucketLoanTotals(book?.transfers, 'growth', p.name).lent}
+            loanBorrowed={bucketLoanTotals(book?.transfers, 'growth', p.name).borrowed}
             expense={p.spentThisPeriod}
             amount={p.fundsUpkeep ? p.redirectedToUpkeepThisPeriod : p.distributedThisPeriod}
             preTag={`Before Dist: ${fmtTZS(p.broughtForward - p.spentThisPeriod)}`}

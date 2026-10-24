@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.3.3",
+        date: "2026-10-24",
+        changes: [
+            'Family tab: each Lifestyle and Growth bucket can now be tagged with the account its money is held in (✎ → "Held in"). The account shows as a small badge under the bucket name, and a new "Where the money sits" section at the bottom groups bucket balances by account, comparing them with the real account balance. It is only a label — no money moves.',
+        ]
+    },
+    {
         version: "4.3.2",
         date: "2026-10-24",
         changes: [

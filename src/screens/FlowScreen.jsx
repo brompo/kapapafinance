@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useAppContext } from '../context/AppContext'
-import { fmtTZS, todayISO, uid } from '../money'
+import { fmtTZS, todayISO, uid, computeAccountBalance } from '../money'
 import { computeIncome } from '../utils/pipeline'
 import { computeEnvelopeSummary } from '../utils/envelopes'
 import { withGrowthPercentForMonth, getGrowthPercentForMonth, withBudgetForMonth, getUpkeepGoalPercentForMonth, withUpkeepGoalPercentForMonth } from '../utils/ledger'
@@ -166,7 +166,7 @@ function RingLegendItem({ color, label, percent }) {
 // deliberately different hit-targets on the same row rather than one click
 // doing both, since "log a spend" and "change my target" are different jobs
 // a person reaches for at different times.
-function FlowRow({ name, sub, loanLent, loanBorrowed, expense, note, amount, preTag, preTagValue, tag, tagValue, tagColor, color, onSpend, onEdit }) {
+function FlowRow({ name, sub, heldIn, loanLent, loanBorrowed, expense, note, amount, preTag, preTagValue, tag, tagValue, tagColor, color, onSpend, onEdit }) {
   return (
     <div
       onClick={onSpend}
@@ -183,6 +183,13 @@ function FlowRow({ name, sub, loanLent, loanBorrowed, expense, note, amount, pre
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+        {heldIn && (
+          <span style={{
+            display: 'inline-block', maxWidth: '100%', fontSize: 9, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+            color: '#64748b', background: '#e2e8f0', borderRadius: 6, padding: '1px 5px', margin: '2px 0',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'top'
+          }}>{heldIn}</span>
+        )}
         {expense > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 400 }}>Exp: {fmtTZS(expense)}</div>}
         <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
         {loanLent > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#047857' }}>Lent out: {fmtTZS(loanLent)}</div>}
@@ -288,7 +295,7 @@ export function FlowScreen() {
   const {
     formatMonthLabel, settings, updateSettings,
     txns, categories, categoryMeta, book, persistBook, show, setSelectedCategory,
-    accounts, clients, updateTxn, delTxn
+    accounts, accountTxns, groups, clients, updateTxn, delTxn
   } = useAppContext()
 
   // Budget/percent aren't transactions — they're just category settings — so
@@ -296,6 +303,7 @@ export function FlowScreen() {
   const [editTarget, setEditTarget] = useState(null) // { metaType: 'allocation'|'growth', name, field: 'budget'|'percent' }
   const [editValue, setEditValue] = useState('')
   const [editOpeningBalance, setEditOpeningBalance] = useState('')
+  const [editHeldIn, setEditHeldIn] = useState('')
 
   // The Family Goal (Upkeep as a % of income) is a Family-tab-only concept
   // stored flat on settings, not per-category — its own small modal rather
@@ -367,6 +375,7 @@ export function FlowScreen() {
     setEditTarget({ metaType, name, field })
     setEditValue(String(currentValue || 0))
     setEditOpeningBalance(String(categoryMeta[metaType]?.[name]?.openingBalance || 0))
+    setEditHeldIn(categoryMeta[metaType]?.[name]?.heldIn || '')
   }
 
   const saveEdit = () => {
@@ -387,6 +396,8 @@ export function FlowScreen() {
           : { ...existingMeta, [field]: nextValue }),
       openingBalance: Number(String(editOpeningBalance).replace(/,/g, '')) || 0
     }
+    if (editHeldIn) nextMeta.heldIn = editHeldIn
+    else delete nextMeta.heldIn
     persistBook({
       categoryMeta: {
         ...categoryMeta,
@@ -503,6 +514,45 @@ export function FlowScreen() {
     show(transferIsLoan ? `Lent ${fmtTZS(amt)}.` : `Moved ${fmtTZS(amt)}.`)
     setShowTransferModal(false)
     setTransferAmount('')
+  }
+
+  // "Where the money sits": each bucket's Balance grouped under the account it
+  // is tagged as held in (categoryMeta[..].heldIn). Purely a view — account
+  // balances remain the source of truth, this just shows how much of each is
+  // spoken for by buckets. A fundsUpkeep pool carries no Balance of its own
+  // (it folds into Upkeep), so its pre-distribution carry stands in.
+  const heldInSummary = useMemo(() => {
+    const rows = [
+      ...envelopeSummary.lifestyle.map(b => ({ type: 'allocation', name: b.name, amount: b.balance })),
+      ...envelopeSummary.growth.map(p => ({
+        type: 'growth', name: p.name,
+        amount: p.fundsUpkeep ? p.broughtForward - p.spentThisPeriod : p.balance
+      }))
+    ]
+    const byAccount = new Map()
+    const unassigned = []
+    for (const r of rows) {
+      const id = categoryMeta[r.type]?.[r.name]?.heldIn
+      const acc = id && accounts.find(a => a.id === id)
+      if (!acc) { unassigned.push(r); continue }
+      if (!byAccount.has(acc.id)) byAccount.set(acc.id, { account: acc, buckets: [], total: 0 })
+      const entry = byAccount.get(acc.id)
+      entry.buckets.push(r)
+      entry.total += r.amount
+    }
+    const groupsList = Array.from(byAccount.values()).map(e => ({
+      ...e, actual: computeAccountBalance(e.account, accountTxns || [], groups || [])
+    })).sort((a, b) => b.total - a.total)
+    return {
+      groups: groupsList,
+      unassigned,
+      unassignedTotal: unassigned.reduce((s, r) => s + r.amount, 0)
+    }
+  }, [envelopeSummary, categoryMeta, accounts, accountTxns, groups])
+
+  const heldInName = (type, name) => {
+    const id = categoryMeta[type]?.[name]?.heldIn
+    return id ? accounts.find(a => a.id === id)?.name : undefined
   }
 
   const openLoans = useMemo(() => getOpenLoans(book?.transfers), [book])
@@ -736,6 +786,7 @@ export function FlowScreen() {
             key={b.name}
             name={b.name}
             sub={`B/F: ${fmtTZS(b.broughtForward)}`}
+            heldIn={heldInName('allocation', b.name)}
             loanLent={bucketLoanTotals(book?.transfers, 'allocation', b.name).lent}
             loanBorrowed={bucketLoanTotals(book?.transfers, 'allocation', b.name).borrowed}
             expense={b.spentThisPeriod}
@@ -759,6 +810,7 @@ export function FlowScreen() {
             key={p.name}
             name={`${p.name} (${p.percent}%)`}
             sub={`B/F: ${fmtTZS(p.broughtForward)}`}
+            heldIn={heldInName('growth', p.name)}
             loanLent={bucketLoanTotals(book?.transfers, 'growth', p.name).lent}
             loanBorrowed={bucketLoanTotals(book?.transfers, 'growth', p.name).borrowed}
             expense={p.spentThisPeriod}
@@ -809,6 +861,40 @@ export function FlowScreen() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 0' }}>
           <button className="miniBtn" type="button" onClick={openTransfer}>⇄ Transfer Between Buckets</button>
         </div>
+
+        {heldInSummary.groups.length > 0 && (
+          <div style={{ padding: '24px 16px 0' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: '#64748b', marginBottom: 8 }}>WHERE THE MONEY SITS</div>
+            {heldInSummary.groups.map(g => (
+              <div key={g.account.id} style={{ padding: '10px 12px', marginBottom: 8, borderRadius: 14, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{g.account.name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtTZS(g.total)}</div>
+                </div>
+                {g.buckets.map(b => (
+                  <div key={`${b.type}::${b.name}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                    <span>{b.name}</span>
+                    <span style={{ color: b.amount < 0 ? '#ef4444' : '#64748b' }}>{fmtTZS(b.amount)}</span>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, marginTop: 6, fontWeight: 600, color: g.actual - g.total < 0 ? '#ef4444' : '#94a3b8' }}>
+                  Account balance {fmtTZS(g.actual)} · {g.actual - g.total < 0 ? 'short by' : 'unassigned'} {fmtTZS(Math.abs(g.actual - g.total))}
+                </div>
+              </div>
+            ))}
+            {heldInSummary.unassigned.length > 0 && (
+              <div style={{ padding: '10px 12px', borderRadius: 14, border: '1px dashed #cbd5e1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>Not assigned</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#64748b' }}>{fmtTZS(heldInSummary.unassignedTotal)}</div>
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                  {heldInSummary.unassigned.map(b => b.name).join(', ')}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {editTarget && (
@@ -838,6 +924,16 @@ export function FlowScreen() {
               <input inputMode="decimal" value={editOpeningBalance} onChange={e => setEditOpeningBalance(e.target.value)} placeholder="e.g. 0" />
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
                 One-time top-up added straight into Balance, for money this bucket already held before you started tracking it here.
+              </div>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Held in (account)</label>
+              <select value={editHeldIn} onChange={e => setEditHeldIn(e.target.value)}>
+                <option value="">— Not set —</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                Where this bucket's money physically sits. Only a label — it doesn't move any money.
               </div>
             </div>
             <div className="modalActions">

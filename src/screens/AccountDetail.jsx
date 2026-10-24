@@ -203,6 +203,7 @@ export default function AccountDetail({
   const [creditToSubId, setCreditToSubId] = useState("");
   // Flow bucket that funds an issued loan ("type::name"); optional.
   const [creditBucket, setCreditBucket] = useState("");
+  const [editBucket, setEditBucket] = useState("");
   const { vault: appVault } = useAppContext();
   const loanBuckets = useMemo(() => {
     const flow = appVault?.flow;
@@ -378,6 +379,7 @@ export default function AccountDetail({
     setEditCreditType(selectedTxn.creditType || "simple");
     setEditReceiveDate(selectedTxn.receiveDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
     setEditInterestStartDate(selectedTxn.interestStartDate || selectedTxn.date || new Date().toISOString().slice(0, 10));
+    setEditBucket(selectedTxn.bucket ? `${selectedTxn.bucket.type}::${selectedTxn.bucket.name}` : "");
   }, [selectedTxn]);
 
   // Calculations for Hero Header
@@ -1026,6 +1028,9 @@ export default function AccountDetail({
         creditType: editCreditType,
         receiveDate: txnDate,
         interestStartDate: editCreditType !== 'none' ? (editInterestStartDate || txnDate) : null,
+        ...(effectiveType === 'loan' && {
+          bucket: editBucket ? { type: editBucket.split('::')[0], name: editBucket.split('::')[1] } : null,
+        }),
       });
     } else {
       onUpdateAccountTxn?.(selectedTxn.id, {
@@ -1939,6 +1944,17 @@ export default function AccountDetail({
                         value={editReceiveDate}
                         onChange={(e) => setEditReceiveDate(e.target.value)}
                       />
+                    </div>
+                  )}
+                  {selectedTxn.kind === "credit" && effectiveType === 'loan' && loanBuckets.length > 0 && (
+                    <div className="field">
+                      <label>From bucket (optional)</label>
+                      <select value={editBucket} onChange={(e) => setEditBucket(e.target.value)}>
+                        <option value="">— None —</option>
+                        {loanBuckets.map(b => (
+                          <option key={`${b.type}::${b.name}`} value={`${b.type}::${b.name}`}>{b.name}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                   {selectedTxn.kind === "credit" && editCreditType !== 'none' && (

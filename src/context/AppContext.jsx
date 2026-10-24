@@ -1041,7 +1041,19 @@ export function AppProvider({ children }) {
       }
     }
 
-    persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
+    // Changing a loan's bucket or amount re-books what the bucket is owed:
+    // the old bucket gets its unpaid part back, the new one is charged the new unpaid part.
+    const oldBucket = original.kind === 'credit' ? original.bucket : null
+    const newBucket = next.kind === 'credit' ? next.bucket : null
+    if (oldBucket || newBucket) {
+      let vaultUpdate = { ...vault, accounts: nextAccounts, accountTxns: nextAccountTxns }
+      if (nextBook) vaultUpdate[currentBookId] = { ...book, ...nextBook }
+      if (oldBucket) vaultUpdate = withBucketAdjust(vaultUpdate, oldBucket, accountLoanOutstanding(original))
+      if (newBucket) vaultUpdate = withBucketAdjust(vaultUpdate, newBucket, -accountLoanOutstanding(next))
+      persist(vaultUpdate)
+    } else {
+      persistBookAndAccounts({ bookId: currentBookId, nextAccounts, nextAccountTxns, nextBook })
+    }
     show('Updated.')
   }
 

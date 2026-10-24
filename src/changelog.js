@@ -1,5 +1,12 @@
 export const CHANGELOG = [
     {
+        version: "4.3.4",
+        date: "2026-10-24",
+        changes: [
+            'Family tab: removed the "Lifestyle + Growth" Balance summary card, which repeated what the bucket cards and "Where the money sits" already show.',
+        ]
+    },
+    {
         version: "4.3.3",
         date: "2026-10-24",
         changes: [

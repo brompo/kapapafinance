@@ -19,14 +19,30 @@ function upkeepTargetFor(ledger) {
 
 function cascadeForMonth(ledger, monthKey) {
   const monthTxns = (ledger?.txns || []).filter(t => (t.date || '').startsWith(monthKey))
-  const { income } = computeIncome(monthTxns)
-  let available = Math.max(0, income)
-
-  const upkeepTarget = upkeepTargetFor(ledger)
-  const upkeepDistributed = Math.min(upkeepTarget, available)
-  available -= upkeepDistributed
+  const { collectionRows } = computeIncome(monthTxns)
 
   const bucketNames = ledger?.categories?.allocation || []
+  const growthNames = ledger?.categories?.growth || []
+  // An income entry can carry a `routeTo` override ({ type, name }) that sends
+  // its whole net amount to one bucket instead of the cascade. A route pointing
+  // at a bucket that no longer exists is ignored and falls back to the cascade.
+  const isValidRoute = (r) => {
+    const rt = r.routeTo
+    if (!rt) return false
+    if (rt.type === 'upkeep') return true
+    if (rt.type === 'allocation') return bucketNames.includes(rt.name)
+    if (rt.type === 'growth') return growthNames.includes(rt.name)
+    return false
+  }
+  const routedRows = collectionRows.filter(r => r.net > 0 && isValidRoute(r))
+  const autoRows = collectionRows.filter(r => r.net > 0 && !isValidRoute(r))
+  const autoIncome = autoRows.reduce((s, r) => s + r.net, 0)
+  let available = Math.max(0, autoIncome)
+
+  const upkeepTarget = upkeepTargetFor(ledger)
+  let upkeepDistributed = Math.min(upkeepTarget, available)
+  available -= upkeepDistributed
+
   const allocationMeta = ledger?.categoryMeta?.allocation || {}
   const buckets = bucketNames
     .map(name => ({
@@ -44,7 +60,6 @@ function cascadeForMonth(ledger, monthKey) {
   }
 
   const growthPoolAmount = available
-  const growthNames = ledger?.categories?.growth || []
   const growthMeta = ledger?.categoryMeta?.growth || {}
   const growthDistributed = {}
   // A Growth pool flagged fundsUpkeep is a silent backstop: its share of the
@@ -53,21 +68,37 @@ function cascadeForMonth(ledger, monthKey) {
   // this redirected amount - Expenditure), rather than folded into Upkeep's
   // own Distribution figure, so the two stay visible as separate lines.
   const growthFundingUpkeep = {}
-  let growthUsedPercent = 0
+  // The Growth split follows the percent in effect on the day each income
+  // entry landed (percents can change mid-month), so the month's surplus is
+  // apportioned across its auto-distributed entries by their share of income.
+  let growthUnallocated = 0
   for (const name of growthNames) {
-    const percent = getGrowthPercentForMonth(growthMeta[name], monthKey)
-    const amt = growthPoolAmount * (percent / 100)
-    if (growthMeta[name]?.fundsUpkeep) {
-      growthDistributed[name] = 0
-      growthFundingUpkeep[name] = amt
-    } else {
-      growthDistributed[name] = amt
-    }
-    growthUsedPercent += percent
+    growthDistributed[name] = 0
+    growthFundingUpkeep[name] = 0
   }
-  // Whatever fraction of Growth pools' percentages doesn't add up to 100% sits
-  // here unassigned — same money, just not yet routed to a pool.
-  const growthUnallocated = growthPoolAmount * (Math.max(0, 100 - growthUsedPercent) / 100)
+  for (const row of autoRows) {
+    const share = autoIncome > 0 ? growthPoolAmount * (row.net / autoIncome) : 0
+    let usedPercent = 0
+    for (const name of growthNames) {
+      const percent = getGrowthPercentForMonth(growthMeta[name], row.date || monthKey)
+      const amt = share * (percent / 100)
+      if (growthMeta[name]?.fundsUpkeep) growthFundingUpkeep[name] += amt
+      else growthDistributed[name] += amt
+      usedPercent += percent
+    }
+    // Whatever fraction of Growth pools' percentages doesn't add up to 100% sits
+    // here unassigned — same money, just not yet routed to a pool.
+    growthUnallocated += share * (Math.max(0, 100 - usedPercent) / 100)
+  }
+
+  // Routed entries skip the cascade entirely and land straight in their bucket.
+  for (const row of routedRows) {
+    const { type, name } = row.routeTo
+    if (type === 'upkeep') upkeepDistributed += row.net
+    else if (type === 'allocation') lifestyleDistributed[name] = (lifestyleDistributed[name] || 0) + row.net
+    else if (growthMeta[name]?.fundsUpkeep) growthFundingUpkeep[name] += row.net
+    else growthDistributed[name] += row.net
+  }
 
   return { upkeepDistributed, lifestyleDistributed, growthDistributed, growthFundingUpkeep, growthUnallocated }
 }
@@ -195,7 +226,7 @@ export function computeEnvelopeSummary(ledger, period) {
     const balance = fundsUpkeep ? openingBalance : openingBalance + (growthCum[name] || 0) - spentTotal
     return {
       name,
-      percent: getGrowthPercentForMonth(growthMeta[name], cutoffMonth),
+      percent: getGrowthPercentForMonth(growthMeta[name], `${cutoffMonth}-31`),
       distributedThisPeriod,
       spentThisPeriod,
       spentTotal,

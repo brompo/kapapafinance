@@ -44,7 +44,7 @@ const GROWTH_PALETTE = ['#2bb06a', '#22c55e', '#34d399', '#10b981', '#4ade80', '
 // Pie split into one solid wedge per segment (Upkeep / Lifestyle / Growth), sized by
 // each segment's share of this period's total Distributed amount. Each wedge carries
 // its own % label, skipped when a slice is too thin to hold text.
-function SegmentedPie({ segments, size = 132 }) {
+function SegmentedPie({ segments, size = 132, showLabels = true }) {
   const cx = size / 2
   const cy = size / 2
   const r = size / 2
@@ -81,13 +81,13 @@ function SegmentedPie({ segments, size = 132 }) {
               d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
               fill={seg.color}
               stroke="#fff"
-              strokeWidth={2}
+              strokeWidth={size > 140 ? 4 : 2}
               strokeLinejoin="round"
             />
           )
         })}
       </svg>
-      {layout.filter(seg => seg.fraction >= 0.06).map(seg => {
+      {showLabels && layout.filter(seg => seg.fraction >= 0.06).map(seg => {
         const [x, y] = pointAt(seg.startFraction + seg.fraction / 2, r * 0.62)
         return (
           <div
@@ -150,12 +150,70 @@ function UpkeepProgressRing({ percent, size = 132 }) {
   )
 }
 
-function RingLegendItem({ color, label, percent }) {
+// The pie (% inside each wedge) with each segment's name and amount sitting just
+// outside its own wedge (at the wedge's mid-angle). While Upkeep is still being funded the ring isn't a split
+// of the three, so the labels fall back to fixed spots around it instead.
+function PieWithLabels({ segments, complete, progressPercent, size = 150 }) {
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0)
+  const FALLBACK = { Upkeep: 0.88, Lifestyle: 0.3, Growth: 0.62 }
+  let cumulative = 0
+  const labels = segments.map(seg => {
+    const value = Math.max(0, seg.value)
+    const fraction = total > 0 ? value / total : 0
+    const mid = total > 0 ? (cumulative + value / 2) / total : 0
+    cumulative += value
+    return { ...seg, percent: fraction * 100, at: complete ? mid : FALLBACK[seg.name] ?? 0, show: complete ? value > 0 : true }
+  }).filter(l => l.show)
+
+  const padTop = 8
+  const radius = size / 2 + 14
+  // Only reserve room under the pie when a label actually sits below it.
+  const hasBelowLabel = labels.some(l => {
+    const rad = ((-90 + l.at * 360) * Math.PI) / 180
+    return Math.abs(Math.cos(rad)) < 0.35 && Math.sin(rad) > 0
+  })
+  const padBottom = hasBelowLabel ? 46 : 6
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 12, color: '#64748b' }}>{label}</span>
-      <span style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{percent.toFixed(0)}%</span>
+    <div style={{ position: 'relative', height: size + padTop + padBottom, margin: '0 auto', maxWidth: 420 }}>
+      <div style={{ position: 'absolute', left: '50%', top: padTop, transform: 'translateX(-50%)' }}>
+        {complete
+          ? <SegmentedPie segments={segments} size={size} />
+          : <UpkeepProgressRing percent={progressPercent} size={size} />}
+      </div>
+      {labels.map(l => {
+        const rad = ((-90 + l.at * 360) * Math.PI) / 180
+        const dx = radius * Math.cos(rad)
+        const dy = radius * Math.sin(rad)
+        const right = dx >= 0
+        // Wedges whose mid-angle is near the top/bottom would have their label
+        // overlap the pie, so those sit centred just above/below it instead.
+        const vertical = Math.abs(Math.cos(rad)) < 0.35
+        const below = dy > 0
+        const style = vertical
+          ? {
+            left: `calc(50% + ${dx}px)`,
+            top: below ? padTop + size + 4 : padTop - 4,
+            transform: `translate(-50%, ${below ? '0' : '-100%'})`,
+            textAlign: 'center'
+          }
+          : {
+            left: `calc(50% + ${dx}px)`, top: padTop + size / 2 + dy,
+            transform: `translate(${right ? '0' : '-100%'}, -50%)`,
+            textAlign: right ? 'left' : 'right'
+          }
+        return (
+          <div
+            key={l.name}
+            style={{ position: 'absolute', whiteSpace: 'nowrap', ...style }}
+          >
+            <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, justifyContent: vertical ? 'center' : right ? 'flex-start' : 'flex-end' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 4, background: l.color, flexShrink: 0 }} />
+              {l.name}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', marginTop: 2 }}>{fmtTZS(Math.max(0, l.value))}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -303,6 +361,9 @@ export function FlowScreen() {
   const [editValue, setEditValue] = useState('')
   const [editOpeningBalance, setEditOpeningBalance] = useState('')
   const [editHeldIn, setEditHeldIn] = useState('')
+  // Growth % changes take effect from this exact date (YYYY-MM-DD), so a change
+  // made today doesn't reshuffle income already distributed earlier this month.
+  const [editEffectiveDate, setEditEffectiveDate] = useState(todayISO())
 
   // The Family Goal (Upkeep as a % of income) is a Family-tab-only concept
   // stored flat on settings, not per-category — its own small modal rather
@@ -375,6 +436,10 @@ export function FlowScreen() {
     setEditValue(String(currentValue || 0))
     setEditOpeningBalance(String(categoryMeta[metaType]?.[name]?.openingBalance || 0))
     setEditHeldIn(categoryMeta[metaType]?.[name]?.heldIn || '')
+    // Today when viewing the current period, otherwise the first day of the
+    // period being viewed (editing a past month shouldn't silently use today).
+    const today = todayISO()
+    setEditEffectiveDate(today.startsWith(statPeriod) ? today : `${statPeriod}${statPeriod.length === 4 ? '-01' : ''}-01`)
   }
 
   const saveEdit = () => {
@@ -389,7 +454,7 @@ export function FlowScreen() {
     // effect from the viewed period forward without rewriting earlier months.
     const nextMeta = {
       ...(metaType === 'growth' && field === 'percent'
-        ? withGrowthPercentForMonth(existingMeta, editMonthKey, nextValue)
+        ? withGrowthPercentForMonth(existingMeta, editEffectiveDate || todayISO(), nextValue)
         : metaType === 'allocation' && field === 'budget'
           ? withBudgetForMonth(existingMeta, editMonthKey, nextValue)
           : { ...existingMeta, [field]: nextValue }),
@@ -437,7 +502,7 @@ export function FlowScreen() {
   const otherGrowthPercentTotal = isEditingGrowthPercent
     ? (categories.growth || [])
       .filter(n => n !== editTarget.name)
-      .reduce((s, n) => s + getGrowthPercentForMonth(categoryMeta.growth?.[n], editMonthKey), 0)
+      .reduce((s, n) => s + getGrowthPercentForMonth(categoryMeta.growth?.[n], editEffectiveDate), 0)
     : 0
   const enteredGrowthPercent = Number(String(editValue).replace(/,/g, '')) || 0
   const projectedGrowthTotal = otherGrowthPercentTotal + enteredGrowthPercent
@@ -621,7 +686,9 @@ export function FlowScreen() {
   // rather than a single flat setting.
   const upkeepGoalPercent = getUpkeepGoalPercentForMonth(settings.familyUpkeepGoal, editMonthKey)
   const upkeepActualPercent = incomeInfo.income > 0 ? (upkeepDistributedTotal / incomeInfo.income) * 100 : 0
-  const upkeepGoalOver = upkeepActualPercent >= upkeepGoalPercent
+  const upkeepGoalOver = upkeepActualPercent > upkeepGoalPercent
+  // Goal is a ceiling (≤), so landing at or under it counts as met once there's income.
+  const upkeepGoalMet = incomeInfo.income > 0 && !upkeepGoalOver
 
   const openGoalEdit = () => {
     setEditGoalValue(String(upkeepGoalPercent))
@@ -683,40 +750,29 @@ export function FlowScreen() {
         <div style={{ width: 40 }} />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 14px' }}>
-        {upkeepFundingComplete
-          ? <SegmentedPie segments={ringSegments} />
-          : <UpkeepProgressRing percent={upkeepFundingPercent} />}
-      </div>
-
-      <div
-        onClick={() => setShowIncomeList(true)}
-        style={{ textAlign: 'center', padding: '0 16px 8px', cursor: 'pointer' }}
-        role="button"
-        aria-label="View income transactions"
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Income collected this {viewGranularity}</div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textDecoration: 'underline', textUnderlineOffset: 2 }}>
-          {fmtTZS(incomeInfo.income)} ›
+      <div style={{ textAlign: 'center', padding: '8px 16px 0' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Income</div>
+        <div
+          onClick={() => setShowIncomeList(true)}
+          role="button"
+          aria-label="View income transactions"
+          style={{ fontSize: 38, fontWeight: 800, color: '#1e293b', lineHeight: 1.15, marginTop: 2, cursor: 'pointer' }}
+        >
+          {fmtTZS(incomeInfo.income)} <span style={{ fontSize: 20, color: '#94a3b8' }}>›</span>
         </div>
+        <span
+          onClick={openGoalEdit}
+          role="button"
+          aria-label="Edit Family Goal"
+          style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, cursor: 'pointer', background: upkeepGoalOver ? '#fee2e2' : upkeepGoalMet ? '#dcfce7' : '#f1f5f9', color: upkeepGoalOver ? '#ef4444' : upkeepGoalMet ? '#16a34a' : '#64748b' }}
+        >
+          Goal: Upkeep ≤{upkeepGoalPercent}% ✎
+        </span>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 18, padding: '0 16px 8px' }}>
-        <RingLegendItem color={UPKEEP_COLOR} label="Upkeep" percent={percentOf(upkeepDistributedTotal)} />
-        <RingLegendItem color={LIFESTYLE_PALETTE[0]} label="Lifestyle" percent={percentOf(lifestyleDistributed)} />
-        <RingLegendItem color={GROWTH_PALETTE[0]} label="Growth" percent={percentOf(growthDistributed)} />
-      </div>
+      <PieWithLabels segments={ringSegments} complete={upkeepFundingComplete} progressPercent={upkeepFundingPercent} />
 
-      <div
-        onClick={openGoalEdit}
-        style={{ textAlign: 'center', fontSize: 11, color: upkeepGoalOver ? '#ef4444' : '#94a3b8', padding: '0 16px 4px', cursor: 'pointer' }}
-        role="button"
-        aria-label="Edit Family Goal"
-      >
-        Goal: ≤{upkeepGoalPercent}% ✎
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 16px 2px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
         <button className="miniBtn" type="button" onClick={() => setShowIncomePicker(true)}>+ Add Income</button>
       </div>
 
@@ -868,9 +924,18 @@ export function FlowScreen() {
             <div className="field">
               <label>{editTarget.field === 'percent' ? 'Target % of Surplus' : 'Monthly Target (TZS)'}</label>
               <input inputMode="decimal" value={editValue} onChange={e => setEditValue(e.target.value)} placeholder={editTarget.field === 'percent' ? 'e.g. 30' : 'e.g. 100000'} autoFocus />
-              {(editTarget.field === 'percent' || editTarget.field === 'budget') && (
+              {editTarget.field === 'percent' && (
+                <>
+                  <label style={{ marginTop: 10, display: 'block' }}>Effective from</label>
+                  <input type="date" value={editEffectiveDate} onChange={e => setEditEffectiveDate(e.target.value)} />
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                    Income received on or after this date uses the new %. Anything before it keeps its existing %.
+                  </div>
+                </>
+              )}
+              {editTarget.field === 'budget' && (
                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
-                  Applies from {periodLabel} onward — earlier months keep their existing {editTarget.field === 'percent' ? '%' : 'target'}.
+                  Applies from {periodLabel} onward — earlier months keep their existing target.
                 </div>
               )}
               {isEditingGrowthPercent && (
@@ -1101,7 +1166,7 @@ export function FlowScreen() {
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{t.category || 'Income'}</div>
                             <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                              {t.date}{t.note ? ` · ${t.note}` : ''}{t.pending ? ' · Pending compliance' : ''}
+                              {t.date}{t.note ? ` · ${t.note}` : ''}{t.pending ? ' · Pending compliance' : ''}{t.routeTo ? ` · → ${t.routeTo.type === 'upkeep' ? 'Upkeep' : t.routeTo.name}` : ''}
                             </div>
                           </div>
                           <div style={{ fontSize: 13, fontWeight: 800, color: '#16a34a', flexShrink: 0 }}>{fmtTZS(t.net)}</div>

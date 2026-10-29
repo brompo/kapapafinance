@@ -45,6 +45,9 @@ export function CategoryDetail({
   const [toAccountId, setToAccountId] = useState(meta?.defaultToAccountId || '')
   const [accountError, setAccountError] = useState(false)
   const [clientId, setClientId] = useState('')
+  // Optional override for a Collection: '' = automatic distribution, otherwise
+  // 'upkeep' | 'allocation:<bucket>' | 'growth:<pool>' (see decodeRoute).
+  const [routeValue, setRouteValue] = useState('')
   const [pendingClient, setPendingClient] = useState(null)
 
   const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
@@ -378,7 +381,14 @@ export function CategoryDetail({
     show('Transfer deleted — amounts reversed.')
   }
 
-  const onAddTxn = async (amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, projectTag) => {
+  const decodeRoute = (v) => {
+    if (!v || category.type !== 'collection') return null
+    if (v === 'upkeep') return { type: 'upkeep' }
+    const i = v.indexOf(':')
+    return { type: v.slice(0, i), name: v.slice(i + 1) }
+  }
+
+  const onAddTxn = async (amount, note, accountId, toAccountId, date, subAccountId, clientId, recurring, pendingClient, updateDefaultAccount, projectTag, routeTo) => {
     return addQuickTxn({
       type: category.type,
       amount,
@@ -397,7 +407,8 @@ export function CategoryDetail({
       // category needs compliance, new entries start pending until cleared.
       ...(category.type === 'collection' && {
         needsCompliance: !!meta?.needsCompliance,
-        complianceAmount: meta?.needsCompliance ? '' : 0
+        complianceAmount: meta?.needsCompliance ? '' : 0,
+        ...(routeTo && { routeTo })
       })
     });
   }
@@ -686,6 +697,18 @@ export function CategoryDetail({
               </button>
             </div>
 
+            {category.type === 'collection' && (
+              <div style={{ margin: '6px 4px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>Distribute to</span>
+                <select value={routeValue} onChange={e => setRouteValue(e.target.value)} style={{ flex: 1, fontSize: 12, padding: '6px 8px', borderRadius: 10, border: '1px solid #e2e8f0', background: routeValue ? '#fef08a' : '#fff' }}>
+                  <option value="">Automatic (Upkeep → Lifestyle → Growth)</option>
+                  <option value="upkeep">Upkeep</option>
+                  {allocationCats.length > 0 && <optgroup label="Lifestyle">{allocationCats.map(n => <option key={n} value={`allocation:${n}`}>{n}</option>)}</optgroup>}
+                  {growthCats.length > 0 && <optgroup label="Growth">{growthCats.map(n => <option key={n} value={`growth:${n}`}>{n}</option>)}</optgroup>}
+                </select>
+              </div>
+            )}
+
             {/* Contextual Options Row (Tiny Line) */}
             {(showSubAccountSelect || isRecurring) && (
               <div style={{
@@ -792,7 +815,8 @@ export function CategoryDetail({
                     if (prevValue && operator && amount) {
                       finalAmount = execCalc(prevValue, amount, operator);
                     }
-                    onAddTxn(finalAmount, note, accountId, toAccountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: recurringCount } : null, pendingClient, true, logExpenseTarget);
+                    onAddTxn(finalAmount, note, accountId, toAccountId, date, subAccountId, clientId, isRecurring ? { freq: recurringFreq, count: recurringCount } : null, pendingClient, true, logExpenseTarget, decodeRoute(routeValue));
+                    setRouteValue('');
                     setAmount(''); setNote(''); setPrevValue(''); setOperator(''); setShowAddForm(false); setLogExpenseTarget(null);
                   } else if (k === '⌫') {
                     setAmount(prev => prev.slice(0, -1));
@@ -1033,6 +1057,11 @@ export function CategoryDetail({
                         <div className="catHistoryMeta" style={{ fontSize: 11, textTransform: t._isTransfer ? 'uppercase' : 'none', letterSpacing: t._isTransfer ? 0.4 : 0 }}>
                           {t._isTransfer ? 'Bucket Transfer' : (t.accountId ? accounts.find(a => a.id === t.accountId)?.name : 'Unallocated')}
                         </div>
+                        {t.routeTo && (
+                          <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, marginTop: 4, padding: '2px 8px', borderRadius: 8, background: '#eef2ff', color: '#6366f1' }}>
+                            → {t.routeTo.type === 'upkeep' ? 'Upkeep' : t.routeTo.name}
+                          </div>
+                        )}
                         {t.reimbursedBy && t.reimbursedBy.length > 0 && (
                           <div className="reimbursedBadge" style={{ fontSize: 9, marginTop: 4 }}>
                             ✓ {fmtCompact(t.reimbursedBy.reduce((s, r) => s + Number(r.amount || 0), 0))} Reimbursed

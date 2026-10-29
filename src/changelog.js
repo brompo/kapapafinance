@@ -1,5 +1,13 @@
 export const CHANGELOG = [
     {
+        version: "4.3.6",
+        date: "2026-10-29",
+        changes: [
+            'Income can now skip the automatic distribution: pick "Distribute to" when adding or editing a Collection to send the whole amount to one Upkeep, Lifestyle or Growth bucket.',
+            'Growth % changes now have an "Effective from" date (defaults to today). Income received before that date keeps the old %, so a mid-month change no longer reshuffles earlier income.',
+        ]
+    },
+    {
         version: "4.3.5",
         date: "2026-10-24",
         changes: [

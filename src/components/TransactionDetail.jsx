@@ -19,6 +19,11 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
     txn.raw?.complianceAmount != null ? String(txn.raw.complianceAmount) : ''
   )
 
+  const initialRoute = txn.raw?.routeTo
+  const [routeValue, setRouteValue] = useState(
+    !initialRoute ? '' : initialRoute.type === 'upkeep' ? 'upkeep' : `${initialRoute.type}:${initialRoute.name}`
+  )
+
   const activeClients = pendingClient && !clients.find(c => c.id === pendingClient.id)
     ? [...clients, pendingClient]
     : clients;
@@ -82,8 +87,12 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
 
     const combinedNote = subCategory ? `${subCategory}${note ? ` • ${note}` : ''}` : note;
 
+    const { routeTo: _oldRoute, ...rawWithoutRoute } = txn.raw || {}
+    const routeTo = !isCollection || !routeValue ? null
+      : routeValue === 'upkeep' ? { type: 'upkeep' }
+      : { type: routeValue.slice(0, routeValue.indexOf(':')), name: routeValue.slice(routeValue.indexOf(':') + 1) }
     onSave?.({
-      ...txn.raw,
+      ...rawWithoutRoute,
       type,
       amount: amt,
       category: category || '',
@@ -96,7 +105,8 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
       date: date || todayISO(),
       ...(isCollection && {
         needsCompliance,
-        complianceAmount: needsCompliance ? complianceAmount : 0
+        complianceAmount: needsCompliance ? complianceAmount : 0,
+        ...(routeTo && { routeTo })
       })
     }, pendingClient)
     onClose()
@@ -218,6 +228,22 @@ export function TransactionDetail({ txn, accounts, expenseCats = [], incomeCats 
                 />
               ) : (
                 <div className="txnDetailValue">{complianceAmount !== '' ? complianceAmount : 'Pending'}</div>
+              )}
+            </div>
+          )}
+
+          {isCollection && (
+            <div className="txnDetailRow">
+              <div className="txnDetailLabel">Distribute to</div>
+              {isEditable ? (
+                <select className="txnDetailInput" value={routeValue} onChange={e => setRouteValue(e.target.value)}>
+                  <option value="">Automatic</option>
+                  <option value="upkeep">Upkeep</option>
+                  {allocationCats.length > 0 && <optgroup label="Lifestyle">{allocationCats.map(n => <option key={n} value={`allocation:${n}`}>{n}</option>)}</optgroup>}
+                  {growthCats.length > 0 && <optgroup label="Growth">{growthCats.map(n => <option key={n} value={`growth:${n}`}>{n}</option>)}</optgroup>}
+                </select>
+              ) : (
+                <div className="txnDetailValue">{routeValue ? routeValue.replace(/^\w+:/, '') : 'Automatic'}</div>
               )}
             </div>
           )}
